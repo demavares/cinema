@@ -135,7 +135,9 @@ if (!empty($purchase['payment_data'])) {
     $paymentReference = is_array($paymentData) && isset($paymentData['reference']) ? $paymentData['reference'] : 'N/A';
 }
 
-// Limpiar sesiones
+// ============================================
+// ✅ LIMPIAR SESIONES DE COMPRA
+// ============================================
 $sessionKeys = [
     'food_timeout_' . $showtimeId,
     'food_seats_' . $showtimeId,
@@ -146,13 +148,18 @@ $sessionKeys = [
     'total_seats_' . $showtimeId,
     'subtotal_' . $showtimeId,
     'tax_amount_' . $showtimeId,
-    'total_amount_' . $showtimeId
+    'total_amount_' . $showtimeId,
+    'purchase_token_' . $showtimeId
 ];
 foreach ($sessionKeys as $key) {
     if (isset($_SESSION[$key])) {
         unset($_SESSION[$key]);
     }
 }
+
+// ============================================
+// ✅ LIMPIAR SESSIONSTORAGE VÍA JAVASCRIPT
+// ============================================
 
 require_once 'header.php';
 ?>
@@ -935,3 +942,31 @@ require_once 'header.php';
 </div>
 
 <?php require_once 'footer.php'; ?>
+
+<script>
+// ============================================
+// ✅ LIMPIAR SESSIONSTORAGE AL CARGAR CONFIRMACIÓN
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    const showtimeId = <?= $showtimeId ?>;
+    
+    // Limpiar todas las claves relacionadas con este showtime
+    const keysToRemove = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && (
+            key.startsWith('selected_seats_' + showtimeId) ||
+            key.startsWith('selected_seats_count_' + showtimeId) ||
+            key.startsWith('food_timeout_' + showtimeId) ||
+            key.startsWith('food_seats_' + showtimeId) ||
+            key.startsWith('ticket_selection_' + showtimeId)
+        )) {
+            keysToRemove.push(key);
+        }
+    }
+    keysToRemove.forEach(key => sessionStorage.removeItem(key));
+    console.log('🗑️ SessionStorage limpiado para showtime:', showtimeId);
+});
+</script>
+</body>
+</html>

@@ -19,6 +19,10 @@ if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
 }
 
 $userId = $_SESSION['user_id'];
+
+// ============================================
+// ✅ OBTENER Y VALIDAR DATOS DEL POST
+// ============================================
 $showtimeId = intval($_POST['showtime_id'] ?? 0);
 $seats = trim($_POST['seats'] ?? '');
 $paymentMethod = isset($_POST['payment_method']) ? $_POST['payment_method'] : '';
@@ -41,6 +45,16 @@ $seatsArray = array_map('trim', explode(',', $seats));
 $token = $_POST['purchase_token'] ?? '';
 if (empty($token) || !verifyPurchaseToken($token, $showtimeId)) {
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido');
+    exit;
+}
+
+// ============================================
+// ✅ VERIFICAR TIMEOUT DE COMPRA
+// ============================================
+$timeoutKey = 'food_timeout_' . $showtimeId;
+if (isset($_SESSION[$timeoutKey]) && $_SESSION[$timeoutKey] <= 0) {
+    unset($_SESSION['pending_checkout']);
+    header('Location: index.php?timeout=1');
     exit;
 }
 
@@ -162,14 +176,30 @@ $ticketTypeMap = [
 ];
 
 // ============================================
-// ✅ INICIAR TRANSACCIÓN CON VALIDACIONES
+// ✅ INICIAR TRANSACCIÓN CON BLOQUEO Y CONTROL DE CONCURRENCIA
 // ============================================
-$pdo->beginTransaction();
+$purchaseId = null;
 
 try {
-    // 1. Verificar asientos disponibles nuevamente
+    $pdo->beginTransaction();
+    
+    // 1. Bloquear la fila del showtime para verificar disponibilidad
+    $stmt = $pdo->prepare("
+        SELECT s.*, r.capacity, r.seat_layout
+        FROM showtimes s
+        JOIN rooms r ON s.room_id = r.id
+        WHERE s.id = ? FOR UPDATE
+    ");
+    $stmt->execute([$showtimeId]);
+    $showtimeLocked = $stmt->fetch();
+    
+    if (!$showtimeLocked) {
+        throw new Exception("Función no encontrada");
+    }
+    
+    // 2. Verificar asientos disponibles nuevamente
     $placeholders = implode(',', array_fill(0, count($seatsArray), '?'));
-    $stmtCheck = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ? AND seat_code IN ($placeholders)");
+    $stmtCheck = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ? AND seat_code IN ($placeholders) FOR UPDATE");
     $stmtCheck->execute(array_merge([$showtimeId], $seatsArray));
     $existingSeats = $stmtCheck->fetchAll(PDO::FETCH_COLUMN);
     
@@ -177,8 +207,20 @@ try {
         throw new Exception("Asientos ocupados: " . implode(', ', $existingSeats));
     }
     
-    // 2. Insertar tickets
-    $pricePerTicket = $validation['prices']['adult']; // Usar precio recalculado
+    // 3. Verificar asientos bloqueados en el layout
+    $layout = json_decode($showtimeLocked['seat_layout'], true);
+    $blockedSeats = $layout['blockedSeats'] ?? [];
+    $blockedRequested = array_intersect($seatsArray, $blockedSeats);
+    
+    if (!empty($blockedRequested)) {
+        throw new Exception("Los siguientes asientos están bloqueados: " . implode(', ', $blockedRequested));
+    }
+    
+    // 4. Generar ID de transacción único
+    $transactionId = generateTransactionId();
+    
+    // 5. Insertar tickets
+    $pricePerTicket = $validation['prices']['adult'];
     $stmtInsert = $pdo->prepare("INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid) VALUES (?, ?, ?, ?)");
     $ticketIds = [];
     foreach ($seatsArray as $seat) {
@@ -186,7 +228,7 @@ try {
         $ticketIds[] = $pdo->lastInsertId();
     }
     
-    // 3. Insertar pedidos de comida
+    // 6. Insertar pedidos de comida
     if (!empty($foodItems)) {
         $stmtFood = $pdo->prepare("INSERT INTO food_orders (user_id, ticket_id, showtime_id, food_item_id, quantity, unit_price, total_price, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')");
         foreach ($foodItems as $item) {
@@ -203,7 +245,7 @@ try {
         }
     }
     
-    // 4. Insertar purchase_tickets con los tipos
+    // 7. Insertar purchase_tickets con los tipos
     $stmtPurchaseTicket = $pdo->prepare("
         INSERT INTO purchase_tickets (purchase_id, showtime_id, ticket_type_id, seat_code, price) 
         VALUES (?, ?, ?, ?, ?)
@@ -213,7 +255,6 @@ try {
     $ticketTypeCounts = ['adult' => 0, 'child' => 0, 'senior' => 0];
     
     foreach ($seatsArray as $index => $seat) {
-        // Determinar qué tipo de ticket corresponde a este asiento
         $type = 'adult';
         $remainingAdult = $ticketQuantities['adult'] ?? 0;
         $remainingChild = $ticketQuantities['child'] ?? 0;
@@ -229,7 +270,6 @@ try {
         $ticketTypeId = $ticketTypeMap[$type] ?? 1;
         $ticketTypeCounts[$type]++;
         
-        // Obtener precio por tipo (desde BD, no desde cliente)
         $priceByType = getTicketPriceByType($showtime, $type);
         
         if (in_array($seat, $accessibleSeats)) {
@@ -240,13 +280,14 @@ try {
     }
     $seatsFormatted = implode(',', $seatsWithMarkers);
     
-    // 5. Registrar la compra
+    // 8. Registrar la compra con ID de transacción
     $sessionToken = bin2hex(random_bytes(32));
     $expiresAt = date('Y-m-d H:i:s', strtotime('+10 minutes'));
     
     $reference = 'CMP-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6));
     
     $paymentData = json_encode([
+        'transaction_id' => $transactionId,
         'method' => $paymentMethod,
         'simulated' => true,
         'reference' => $reference,
@@ -259,8 +300,8 @@ try {
         INSERT INTO purchases (
             user_id, showtime_id, seats, total_tickets, total_food, 
             subtotal, tax_amount, tax_rate, total_amount, 
-            session_token, expires_at, status, payment_method, payment_data
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)
+            session_token, expires_at, status, payment_method, payment_data, transaction_token
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)
     ");
     $stmtPurchase->execute([
         $userId,
@@ -275,12 +316,13 @@ try {
         $sessionToken,
         $expiresAt,
         $paymentMethod,
-        $paymentData
+        $paymentData,
+        $transactionId
     ]);
     
     $purchaseId = $pdo->lastInsertId();
     
-    // 6. Insertar purchase_tickets con el purchase_id
+    // 9. Insertar purchase_tickets con el purchase_id
     foreach ($seatsArray as $index => $seat) {
         $type = 'adult';
         $remainingAdult = $ticketQuantities['adult'] ?? 0;
@@ -307,7 +349,12 @@ try {
     }
     
     // ============================================
-    // 7. LIMPIAR TODAS LAS SESIONES DE COMPRA
+    // 10. MARCAR TOKEN COMO USADO (PREVENIR REENVÍO)
+    // ============================================
+    markPurchaseTokenAsUsed($showtimeId);
+    
+    // ============================================
+    // 11. LIMPIAR TODAS LAS SESIONES DE COMPRA
     // ============================================
     $sessionKeys = [
         'food_timeout_' . $showtimeId,
@@ -320,7 +367,8 @@ try {
         'subtotal_' . $showtimeId,
         'tax_amount_' . $showtimeId,
         'total_amount_' . $showtimeId,
-        'purchase_token_' . $showtimeId
+        'purchase_token_' . $showtimeId,
+        'pending_checkout'
     ];
     foreach ($sessionKeys as $key) {
         if (isset($_SESSION[$key])) {
@@ -328,16 +376,26 @@ try {
         }
     }
     
+    // Confirmar la transacción
     $pdo->commit();
     
 } catch (Exception $e) {
     $pdo->rollBack();
+    error_log("ERROR en checkout: " . $e->getMessage() . " - Trace: " . $e->getTraceAsString());
     header('Location: seats.php?showtime_id=' . $showtimeId . '&error=' . urlencode($e->getMessage()));
     exit;
 }
 
 // ============================================
-// ✅ REDIRIGIR A CONFIRMACIÓN (SIN OUTPUT PREVIO)
+// ✅ VERIFICAR QUE $purchaseId NO SEA NULL
+// ============================================
+if ($purchaseId === null) {
+    header('Location: index.php?error=Error+al+procesar+la+compra');
+    exit;
+}
+
+// ============================================
+// ✅ REDIRIGIR A CONFIRMACIÓN
 // ============================================
 header('Location: confirmation.php?showtime_id=' . $showtimeId . '&purchase_id=' . $purchaseId);
 exit;

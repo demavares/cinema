@@ -175,10 +175,11 @@ $thousands_separator = $siteConfig['thousands_separator'] ?? '.';
 $decimal_separator = $siteConfig['decimal_separator'] ?? ',';
 $decimal_places = intval($siteConfig['decimal_places'] ?? 2);
 
-// Crear token de sesión única para esta compra si no existe
+// Asegurar que el token existe en sesión
 if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
     $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseToken();
 }
+$purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
 
 require_once 'header.php';
 ?>
@@ -412,7 +413,7 @@ body {
                 <input type="hidden" name="seats" value="<?= htmlspecialchars($seats) ?>">
                 <input type="hidden" name="payment_method" id="paymentMethodInput" value="">
                 <input type="hidden" name="food_order" id="foodOrderInput" value='<?= htmlspecialchars(json_encode($foodOrder)) ?>'>
-                <input type="hidden" name="purchase_token" value="<?= htmlspecialchars($token) ?>">
+                <input type="hidden" name="purchase_token" value="<?= htmlspecialchars($purchaseToken) ?>">
 
                 <div class="payment-methods">
                     <!-- Pago Móvil -->
@@ -658,6 +659,15 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
         }
     }
 
+    // ✅ Verificar que el token esté presente en el formulario
+    const tokenInput = this.querySelector('input[name="purchase_token"]');
+    if (!tokenInput || !tokenInput.value) {
+        e.preventDefault();
+        showNotification('Error de seguridad: Token de compra no encontrado.', 'error');
+        return false;
+    }
+
+    console.log('✅ Formulario de pago enviado con token:', tokenInput.value);
     return true;
 });
 

@@ -3,9 +3,10 @@
 date_default_timezone_set('America/Caracas');
 
 // ============================================
-// CONFIGURACIÓN DE SESIÓN
+// CONFIGURACIÓN DE SESIÓN - SESIÓN EXPIRA AL CERRAR NAVEGADOR
 // ============================================
 if (session_status() === PHP_SESSION_NONE) {
+    // Configurar cookie de sesión para que expire al cerrar el navegador
     ini_set('session.cookie_lifetime', 0);
     ini_set('session.gc_maxlifetime', 3600);
     ini_set('session.cookie_httponly', 1);
@@ -15,7 +16,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Verificar timeout de inactividad
+// Verificar si la sesión debe ser destruida por timeout de inactividad
 if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 3600)) {
     session_unset();
     session_destroy();
@@ -301,20 +302,43 @@ function verifyCSRFToken($token) {
 }
 
 // ============================================
-// ✅ NUEVO: GENERAR TOKEN DE COMPRA ÚNICO
+// ✅ GENERAR TOKEN DE COMPRA ÚNICO
 // ============================================
 function generatePurchaseToken() {
     return bin2hex(random_bytes(32));
 }
 
+// ============================================
+// ✅ VERIFICAR TOKEN DE COMPRA CON VALIDACIÓN DE CONCURRENCIA
+// ============================================
 function verifyPurchaseToken($token, $showtimeId) {
-    if (empty($token)) return false;
+    if (empty($token) || empty($showtimeId)) return false;
     
     // Verificar que el token corresponda al showtime actual
     $expectedToken = $_SESSION['purchase_token_' . $showtimeId] ?? null;
     if (!$expectedToken) return false;
     
+    // Verificar que no haya sido usado (prevenir reenvío)
+    $usedKey = 'purchase_token_used_' . $showtimeId;
+    if (isset($_SESSION[$usedKey]) && $_SESSION[$usedKey] === true) {
+        return false;
+    }
+    
     return hash_equals($expectedToken, $token);
+}
+
+// ============================================
+// ✅ MARCAR TOKEN COMO USADO (PREVENIR REENVÍO)
+// ============================================
+function markPurchaseTokenAsUsed($showtimeId) {
+    $_SESSION['purchase_token_used_' . $showtimeId] = true;
+}
+
+// ============================================
+// ✅ GENERAR ID DE TRANSACCIÓN ÚNICO
+// ============================================
+function generateTransactionId() {
+    return 'TXN-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -8));
 }
 
 // ============================================
@@ -535,7 +559,7 @@ function destroySession() {
 }
 
 // ============================================
-// ✅ NUEVO: VALIDAR Y RECALCULAR PRECIOS EN EL SERVIDOR
+// ✅ VALIDAR Y RECALCULAR PRECIOS EN EL SERVIDOR
 // ============================================
 function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
     // Obtener showtime con precios
