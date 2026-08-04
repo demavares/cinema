@@ -31,15 +31,27 @@ $taxAmount = floatval($_POST['tax_amount'] ?? 0);
 $totalAmount = floatval($_POST['total_amount'] ?? 0);
 
 // ============================================
-// LOGS DE DEBUG
+// ✅ CORREGIDO: DESHABILITADO - Permitir múltiples compras
 // ============================================
-error_log("=== PROCESS_SELECTION START ===");
-error_log("showtime_id: " . $showtimeId);
-error_log("tickets: " . $ticketsJson);
-error_log("total_seats: " . $totalSeats);
-error_log("subtotal: " . $subtotal);
-error_log("tax_amount: " . $taxAmount);
-error_log("total_amount: " . $totalAmount);
+// $stmt = $pdo->prepare("
+//     SELECT id FROM purchases
+//     WHERE user_id = ? AND showtime_id = ? AND status = 'completed'
+//     LIMIT 1
+// ");
+// $stmt->execute([$_SESSION['user_id'], $showtimeId]);
+// if ($stmt->rowCount() > 0) {
+//     header('Location: index.php?msg=Compra+ya+realizada');
+//     exit;
+// }
+
+// ============================================
+// ELIMINAR COMPRAS PENDIENTES ANTERIORES
+// ============================================
+$stmt = $pdo->prepare("
+    DELETE FROM purchases
+    WHERE user_id = ? AND showtime_id = ? AND status = 'pending'
+");
+$stmt->execute([$_SESSION['user_id'], $showtimeId]);
 
 // ============================================
 // VALIDACIONES
@@ -73,7 +85,7 @@ if ($total == 0) {
 }
 
 // ============================================
-// GUARDAR EN SESIÓN
+// GUARDAR EN SESIÓN (SEGURO)
 // ============================================
 $_SESSION['ticket_quantities_' . $showtimeId] = $tickets;
 $_SESSION['total_seats_' . $showtimeId] = $totalSeats;
@@ -81,23 +93,21 @@ $_SESSION['subtotal_' . $showtimeId] = $subtotal;
 $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
 $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
 
+// ============================================
+// LIMPIAR ASIENTOS GUARDADOS EN SESSIONSTORAGE
+// ============================================
+unset($_SESSION['food_seats_' . $showtimeId]);
+unset($_SESSION['food_timeout_' . $showtimeId]);
+unset($_SESSION['food_valid_' . $showtimeId]);
+unset($_SESSION['food_order_' . $showtimeId]);
+
 error_log("=== DATOS GUARDADOS EN SESIÓN ===");
 error_log("ticket_quantities_" . $showtimeId . ": " . print_r($tickets, true));
 error_log("total_seats_" . $showtimeId . ": " . $totalSeats);
-error_log("subtotal_" . $showtimeId . ": " . $subtotal);
-error_log("tax_amount_" . $showtimeId . ": " . $taxAmount);
-error_log("total_amount_" . $showtimeId . ": " . $totalAmount);
 
 // ============================================
-// ✅ LIMPIAR ASIENTOS GUARDADOS EN SESSIONSTORAGE
-// (el cliente los limpiará, pero aseguramos también desde el servidor)
+// REDIRIGIR A SEATS.PHP (URL LIMPIA)
 // ============================================
-// Los asientos se guardan en sessionStorage (cliente), no en sesión PHP
-// Por lo tanto, el cliente debe limpiarlos al cambiar la selección
-
-// ============================================
-// REDIRIGIR A SEATS.PHP (SIN DATOS EN URL)
-// ============================================
-header('Location: seats.php?showtime_id=' . $showtimeId);
+header('Location: seats.php?showtime_id=' . $showtimeId . '&from=price');
 exit;
 ?>

@@ -40,20 +40,52 @@ if (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'price_s
         'total_seats_' . $movie_id,
         'subtotal_' . $movie_id,
         'tax_amount_' . $movie_id,
-        'total_amount_' . $movie_id
+        'total_amount_' . $movie_id,
+        'food_seats_' . $movie_id,
+        'food_timeout_' . $movie_id,
+        'food_valid_' . $movie_id,
+        'food_order_' . $movie_id,
+        'purchase_token_' . $movie_id
     ];
     foreach ($sessionKeys as $key) {
         if (isset($_SESSION[$key])) {
             unset($_SESSION[$key]);
         }
     }
+    
     // Limpiar sessionStorage via JavaScript al cargar
     echo '<script>
         sessionStorage.removeItem("ticket_selection_' . $movie_id . '");
         sessionStorage.removeItem("selected_seats_' . $movie_id . '");
         sessionStorage.removeItem("selected_seats_count_' . $movie_id . '");
+        sessionStorage.removeItem("food_timeout_' . $movie_id . '");
+        sessionStorage.removeItem("food_seats_' . $movie_id . '");
         console.log("🗑️ Selección limpiada (viene de price_selection)");
     </script>';
+}
+
+// ============================================
+// LIMPIAR SESIÓN CUANDO EL USUARIO ENTRA DIRECTAMENTE DESDE INDEX
+// ============================================
+$referrer = $_SERVER['HTTP_REFERER'] ?? '';
+if (empty($referrer) || strpos($referrer, 'index.php') !== false) {
+    $sessionKeys = [
+        'ticket_quantities_' . $movie_id,
+        'total_seats_' . $movie_id,
+        'subtotal_' . $movie_id,
+        'tax_amount_' . $movie_id,
+        'total_amount_' . $movie_id,
+        'food_seats_' . $movie_id,
+        'food_timeout_' . $movie_id,
+        'food_valid_' . $movie_id,
+        'food_order_' . $movie_id,
+        'purchase_token_' . $movie_id
+    ];
+    foreach ($sessionKeys as $key) {
+        if (isset($_SESSION[$key])) {
+            unset($_SESSION[$key]);
+        }
+    }
 }
 
 // ============================================
