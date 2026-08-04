@@ -9,13 +9,16 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 // ============================================
-// VERIFICAR QUE LA SESIÓN SEA VÁLIDA
+// VERIFICAR AUTENTICACIÓN
 // ============================================
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
 }
 
+// ============================================
+// ✅ OBTENER SHOWTIME_ID DESDE SESIÓN O GET (CON VALIDACIÓN)
+// ============================================
 $showtimeId = isset($_GET['showtime_id']) ? intval($_GET['showtime_id']) : 0;
 if ($showtimeId <= 0) {
     header('Location: index.php');
@@ -23,52 +26,67 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ LEER ASIENTOS DESDE SESIÓN (SEGURO)
+// ✅ VALIDAR TOKEN DE COMPRA
 // ============================================
-$seats = isset($_SESSION['food_seats_' . $showtimeId])
-    ? $_SESSION['food_seats_' . $showtimeId]
-    : '';
-
-if (empty($seats)) {
-    header('Location: index.php');
-    exit;
+$token = $_GET['token'] ?? '';
+if (empty($token) || !verifyPurchaseToken($token, $showtimeId)) {
+    // Verificar si hay sesión de comida válida como respaldo
+    $foodValidKey = 'food_valid_' . $showtimeId;
+    if (!isset($_SESSION[$foodValidKey]) || $_SESSION[$foodValidKey] !== true) {
+        header('Location: price_selection.php?showtime_id=' . $showtimeId);
+        exit;
+    }
+    // Regenerar token si es necesario
+    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseToken();
+    $token = $_SESSION['purchase_token_' . $showtimeId];
 }
 
 // ============================================
-// VERIFICAR SESIÓN DE COMIDA
+// ✅ LEER ASIENTOS DESDE SESIÓN (SEGURO)
 // ============================================
-$sessionKey = 'food_timeout_' . $showtimeId;
 $sessionSeatsKey = 'food_seats_' . $showtimeId;
 $sessionValidKey = 'food_valid_' . $showtimeId;
+$sessionTimeoutKey = 'food_timeout_' . $showtimeId;
 
 // Verificar que la sesión de comida sea válida
 if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true) {
-    header('Location: index.php');
+    unset($_SESSION[$sessionSeatsKey]);
+    unset($_SESSION[$sessionValidKey]);
+    unset($_SESSION[$sessionTimeoutKey]);
+    header('Location: price_selection.php?showtime_id=' . $showtimeId);
     exit;
 }
 
-// Verificar que los asientos coincidan
-if (!isset($_SESSION[$sessionSeatsKey]) || $_SESSION[$sessionSeatsKey] !== $seats) {
-    header('Location: index.php');
-    exit;
+// Obtener asientos desde sesión (NO desde GET)
+$seats = isset($_SESSION[$sessionSeatsKey]) ? $_SESSION[$sessionSeatsKey] : '';
+if (empty($seats)) {
+    // Intentar recuperar desde GET solo si hay sesión válida
+    if (isset($_GET['seats']) && !empty($_GET['seats'])) {
+        $seats = trim($_GET['seats']);
+        $_SESSION[$sessionSeatsKey] = $seats;
+    } else {
+        header('Location: price_selection.php?showtime_id=' . $showtimeId);
+        exit;
+    }
 }
 
 // Verificar si el timeout expiró
-if (isset($_SESSION[$sessionKey]) && $_SESSION[$sessionKey] <= 0) {
-    unset($_SESSION[$sessionKey]);
+if (isset($_SESSION[$sessionTimeoutKey]) && $_SESSION[$sessionTimeoutKey] <= 0) {
     unset($_SESSION[$sessionSeatsKey]);
     unset($_SESSION[$sessionValidKey]);
-    session_write_close();
+    unset($_SESSION[$sessionTimeoutKey]);
     header('Location: index.php?timeout=1');
     exit;
 }
 
 // Si no hay sesión de timeout, crear una
-if (!isset($_SESSION[$sessionKey])) {
-    $_SESSION[$sessionKey] = 600;
+if (!isset($_SESSION[$sessionTimeoutKey])) {
+    $_SESSION[$sessionTimeoutKey] = 600;
 }
 
-// Obtener datos del showtime y película
+// ============================================
+// OBTENER DATOS DEL SHOWTIME Y PELÍCULA
+// ============================================
 $stmt = $pdo->prepare("
     SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.duration
     FROM showtimes s
@@ -85,8 +103,25 @@ if (!$showtime) {
 
 $seatsArray = explode(',', $seats);
 $ticketCount = count($seatsArray);
+
+// ============================================
+// ✅ RECALCULAR PRECIO EN EL SERVIDOR
+// ============================================
 $finalPrice = getShowtimePrice($showtime);
 $totalTicketsPrice = $ticketCount * $finalPrice;
+
+// Obtener tasa de IVA
+$stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
+$tax = $stmt->fetch();
+$taxRate = $tax ? floatval($tax['tax_rate']) : 16;
+$taxAmount = $totalTicketsPrice * ($taxRate / 100);
+$totalAmount = $totalTicketsPrice + $taxAmount;
+
+// Guardar en sesión para usar en payment
+$_SESSION['total_tickets_price_' . $showtimeId] = $totalTicketsPrice;
+$_SESSION['tax_rate_' . $showtimeId] = $taxRate;
+$_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
+$_SESSION['total_amount_' . $showtimeId] = $totalAmount;
 
 // ============================================
 // IDIOMA DE LA PELÍCULA
@@ -94,7 +129,9 @@ $totalTicketsPrice = $ticketCount * $finalPrice;
 $language = $showtime['language'] ?? 'español';
 $languageLabel = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 
-// Obtener productos de comida activos
+// ============================================
+// OBTENER PRODUCTOS DE COMIDA ACTIVOS
+// ============================================
 $stmt = $pdo->prepare("
     SELECT f.*, c.name as category_name
     FROM food_items f
@@ -118,12 +155,8 @@ $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "Comida - " . $showtime['title'];
 
-// ============================================
-// ✅ CORRECCIÓN: Detectar si viene de payment para pasar el parámetro correctamente
-// ============================================
-$fromParam = isset($_GET['from']) ? $_GET['from'] : '';
-$backFrom = ($fromParam === 'payment') ? 'payment' : 'food';
-$backUrl = 'seats.php?showtime_id=' . $showtimeId . '&from=' . $backFrom;
+$backFrom = isset($_GET['from']) ? $_GET['from'] : '';
+$backUrl = 'seats.php?showtime_id=' . $showtimeId . '&from=' . $backFrom . '&token=' . $token;
 
 $currency_symbol = $siteConfig['currency_symbol'] ?? '$';
 $currency_position = $siteConfig['currency_position'] ?? 'left';
@@ -133,7 +166,7 @@ $decimal_places = intval($siteConfig['decimal_places'] ?? 2);
 
 // Crear token de sesión única para esta compra si no existe
 if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
-    $_SESSION['purchase_token_' . $showtimeId] = bin2hex(random_bytes(32));
+    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseToken();
 }
 
 require_once 'header.php';
@@ -145,15 +178,12 @@ body {
     background-color: #ffffff !important;
     color: #1f2937 !important;
 }
-
 .bg-\[\#14141e\] {
     background-color: #ffffff !important;
 }
-
 .border-\[\#1e1e2e\] {
     border-color: #e2e8f0 !important;
 }
-
 /* Timeout Warning */
 .timeout-warning {
     padding: 16px 24px;
@@ -171,20 +201,15 @@ body {
     transition: all 0.5s ease;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
-
 .timeout-warning.normal { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; }
 .timeout-warning.warning { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
 .timeout-warning.danger { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; animation: pulse-danger 1s ease-in-out infinite; }
-
 @keyframes pulse-danger { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
-
 .timeout-warning .countdown { font-weight: 700; font-size: 1.3rem; min-width: 60px; text-align: center; }
 .timeout-warning.normal .countdown { color: #4338ca; }
 .timeout-warning.warning .countdown { color: #b45309; }
 .timeout-warning.danger .countdown { color: #dc2626; animation: pulse-countdown 0.5s ease-in-out infinite; }
-
 @keyframes pulse-countdown { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } }
-
 .food-card {
     background: #ffffff;
     border: 1px solid #e2e8f0;
@@ -197,24 +222,19 @@ body {
     flex-direction: column;
     justify-content: space-between;
 }
-
 .food-card:hover { border-color: #6366f1; transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
 .food-card.selected { border-color: #4f46e5; background: #f5f3ff; box-shadow: 0 0 15px rgba(99, 102, 241, 0.15); }
-
 .food-card .food-image { width: 100%; height: 210px; max-height: 233px; object-fit: cover; background: #f1f5f9; }
 .food-card .food-info { padding: 14px 16px 16px 16px; display: flex; flex-direction: column; justify-content: space-between; flex: 1; }
 .food-card .food-name { font-weight: 700; color: #0f172a; font-size: 1.1rem; }
-.food-card .food-price { color: #16a34a; font-weight: 700; font-size: 1.2rem; white-space: nowrap; }
+.food-card .food-price { color: #16a34a; font-weight: 700; font-size: 1.2rem; whitespace: nowrap; }
 .food-card .food-desc { color: #475569; font-size: 0.95rem; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
-
 .food-card .quantity-controls { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; padding: 6px 0; }
 .food-card .quantity-controls button { background: #f1f5f9; border: 1px solid #cbd5e1; color: #1e293b; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 700; }
 .food-card .quantity-controls button:hover { background: #4f46e5; border-color: #4f46e5; color: #ffffff; }
 .food-card .quantity-controls .qty { font-weight: 700; color: #0f172a; min-width: 24px; text-align: center; font-size: 1.1rem; }
-
 .category-title { color: #334155; font-size: 1.15rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin: 24px 0 14px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
 .category-title i { margin-right: 8px; color: #4f46e5; }
-
 .summary-sticky {
     position: relative;
     top: auto;
@@ -229,14 +249,12 @@ body {
     box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08) !important;
     border-radius: 12px !important;
 }
-
 @media (min-width: 1024px) {
     .summary-sticky {
         position: sticky;
         top: 100px;
     }
 }
-
 .selected-info-box {
     background: #f1f5f9 !important;
     border: 1px solid #e2e8f0 !important;
@@ -245,7 +263,6 @@ body {
     margin-top: 10px;
     margin-bottom: 16px;
 }
-
 .ticket-line {
     display: flex;
     justify-content: space-between;
@@ -253,10 +270,8 @@ body {
     padding: 4px 0;
     font-size: 0.95rem;
 }
-
 .ticket-line .ticket-label { color: #475569; }
 .ticket-line .ticket-price { color: #16a34a; font-weight: 600; }
-
 .cart-item {
     display: flex;
     justify-content: space-between;
@@ -265,14 +280,12 @@ body {
     border-bottom: 1px solid #e2e8f0;
     font-size: 0.95rem;
 }
-
 .cart-item:last-child { border-bottom: none; }
 .cart-item .item-name { color: #1e293b; flex: 1; word-break: break-word; font-weight: 500; }
 .cart-item .item-details { display: flex; align-items: center; gap: 10px; }
 .cart-item .item-price { color: #16a34a; font-weight: 600; font-size: 0.95rem; }
 .cart-item .remove-btn { color: #ef4444; cursor: pointer; transition: color 0.2s; background: none; border: none; font-size: 0.95rem; padding: 2px 4px; }
 .cart-item .remove-btn:hover { color: #b91c1c; }
-
 .order-total {
     border-top: 2px dashed #cbd5e1;
     padding-top: 12px;
@@ -283,15 +296,11 @@ body {
     font-size: 1.25rem;
     font-weight: 700;
 }
-
 .order-total .total-label { color: #0f172a; }
 .order-total .total-amount { color: #16a34a; }
-
 .seats-display { font-size: 0.95rem; font-weight: 500; color: #475569; word-break: break-word; }
-
 .cart-empty { color: #64748b; text-align: center; padding: 18px 0; font-size: 0.95rem; }
 .cart-empty i { font-size: 1.8rem; display: block; margin-bottom: 6px; color: #cbd5e1; }
-
 .btn-continue {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: #ffffff !important;
@@ -306,9 +315,7 @@ body {
     text-align: center;
     display: block;
 }
-
 .btn-continue:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25); }
-
 .btn-back {
     background: #ffffff;
     border: 1px solid #cbd5e1;
@@ -324,9 +331,7 @@ body {
     text-decoration: none;
     display: block;
 }
-
 .btn-back:hover { border-color: #6366f1; color: #4f46e5 !important; background: #eef2ff; }
-
 .floating-cart {
     position: fixed;
     bottom: 20px;
@@ -340,25 +345,20 @@ body {
     z-index: 100;
     display: none;
 }
-
 .floating-cart .cart-total { font-size: 1.25rem; font-weight: 700; color: #16a34a; }
 .floating-cart .cart-count { color: #475569; font-size: 0.9rem; }
 .floating-cart .btn-continue { padding: 10px 18px; font-size: 0.9rem; width: auto; }
-
 .movie-language {
     font-size: 0.9rem;
     color: #475569;
     margin-top: 2px;
     font-weight: 500;
 }
-
 .text-white { color: #0f172a !important; }
 .text-gray-400 { color: #475569 !important; font-weight: 500; }
-
 @media (max-width: 1024px) {
     .timeout-warning { top: 90px; }
 }
-
 @media (max-width: 768px) {
     .food-card .food-image { height: 180px; max-height: 180px; }
     .floating-cart { bottom: 10px; right: 10px; left: 10px; min-width: auto; padding: 12px 16px; }
@@ -435,7 +435,7 @@ body {
             <?php endif; ?>
         </div>
 
-        <!-- SECCIÓN DERECHA: RESUMEN DEL PEDIDO -->
+        <!-- SECCIÓN DERECHA: CARD-SUMMARY / RESUMEN DEL PEDIDO -->
         <div class="w-full lg:w-80 summary-sticky">
             <h3 class="text-xl font-bold text-white mb-3 flex items-center gap-2">
                 <i class="fas fa-receipt text-indigo-600"></i> Resumen del Pedido
@@ -484,11 +484,17 @@ body {
 
             <!-- Botones de Acción -->
             <div class="flex flex-col gap-2.5 mt-5">
-                <button type="button" class="btn-continue" id="btnCheckout" onclick="goToPayment()">
-                    <i class="fas fa-credit-card mr-2"></i> Ir a Pagar
-                </button>
-                <!-- ✅ CORRECCIÓN: Enlace con parámetro from para navegación correcta -->
-                <a href="seats.php?showtime_id=<?= $showtimeId ?>&from=<?= $backFrom ?>" class="btn-back">
+                <form action="save_food_order.php" method="POST" id="foodForm">
+                    <input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
+                    <input type="hidden" name="showtime_id" value="<?= $showtimeId ?>">
+                    <input type="hidden" name="food_order" id="foodOrderInput" value="[]">
+                    <input type="hidden" name="purchase_token" value="<?= htmlspecialchars($token) ?>">
+                    <button type="submit" class="btn-continue" id="btnCheckout">
+                        <i class="fas fa-credit-card mr-2"></i> Ir a Pagar
+                    </button>
+                </form>
+
+                <a href="<?= $backUrl ?>" class="btn-back">
                     <i class="fas fa-arrow-left mr-2"></i> Volver a Asientos
                 </a>
             </div>
@@ -502,7 +508,7 @@ body {
                 <div class="cart-count" id="floatingCount">0 productos</div>
                 <div class="cart-total" id="floatingTotal"><?= formatCurrency($totalTicketsPrice, $siteConfig) ?></div>
             </div>
-            <button class="btn-continue" onclick="goToPayment()">
+            <button class="btn-continue" onclick="submitFoodForm()">
                 Pagar
             </button>
         </div>
@@ -523,7 +529,7 @@ body {
 document.addEventListener('DOMContentLoaded', function() {
     const showtimeId = <?= $showtimeId ?>;
     const seats = '<?= $seats ?>';
-
+    
     TimeoutManager.init({
         showtimeId: showtimeId,
         seats: seats,
@@ -550,6 +556,8 @@ const pricePerTicket = <?= $finalPrice ?>;
 const ticketCount = <?= $ticketCount ?>;
 const showtimeId = <?= $showtimeId ?>;
 const seats = '<?= $seats ?>';
+const purchaseToken = '<?= htmlspecialchars($token) ?>';
+const taxRate = <?= $taxRate ?>;
 
 let cart = {};
 let totalFoodPrice = 0;
@@ -563,12 +571,25 @@ function formatCurrency(amount) {
     const thousands = currencyConfig.thousands;
     const decimal = currencyConfig.decimal;
     const decimals = currencyConfig.decimals;
-
     let formatted = amount.toFixed(decimals)
         .replace('.', decimal)
         .replace(/\B(?=(\d{3})+(?!\d))/g, thousands);
-
     return position === 'right' ? formatted + ' ' + symbol : symbol + formatted;
+}
+
+// ============================================
+// ENVIAR FORMULARIO DE COMIDA
+// ============================================
+function submitFoodForm() {
+    const items = Object.values(cart);
+    const orderData = items.map(item => ({
+        id: parseInt(item.id),
+        quantity: item.quantity
+    }));
+    
+    const form = document.getElementById('foodForm');
+    document.getElementById('foodOrderInput').value = JSON.stringify(orderData);
+    form.submit();
 }
 
 // ============================================
@@ -616,13 +637,12 @@ function updateCart(foodId, quantity) {
     const foodItems = <?= json_encode($foodItems) ?>;
     const item = foodItems.find(f => f.id == foodId);
     if (!item) return;
-
+    
     if (quantity > 0) {
         cart[foodId] = { ...item, quantity: quantity };
     } else {
         delete cart[foodId];
     }
-
     updateCartUI();
 }
 
@@ -632,11 +652,16 @@ function updateCartUI() {
     const floatingCart = document.getElementById('floatingCart');
     const floatingTotal = document.getElementById('floatingTotal');
     const floatingCount = document.getElementById('floatingCount');
-
     const items = Object.values(cart);
+    
     totalFoodPrice = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    const total = totalTicketsPrice + totalFoodPrice;
-
+    
+    // ✅ CALCULAR TOTAL CON IVA EN EL FRONTEND SOLO PARA MOSTRAR
+    // EL BACKEND RECALCULARÁ EN checkout.php
+    const subtotal = totalTicketsPrice + totalFoodPrice;
+    const tax = subtotal * (taxRate / 100);
+    const total = subtotal + tax;
+    
     document.querySelectorAll('.food-card').forEach(card => {
         const id = card.dataset.foodId;
         if (cart[id] && cart[id].quantity > 0) {
@@ -645,7 +670,7 @@ function updateCartUI() {
             card.classList.remove('selected');
         }
     });
-
+    
     if (items.length === 0) {
         cartContainer.innerHTML = `
         <div class="cart-empty">
@@ -671,7 +696,7 @@ function updateCartUI() {
             `;
         });
         cartContainer.innerHTML = html;
-
+        
         if (window.innerWidth < 1024) {
             floatingCart.style.display = 'block';
             floatingTotal.textContent = formatCurrency(total);
@@ -679,7 +704,7 @@ function updateCartUI() {
             floatingCount.textContent = count + ' producto' + (count > 1 ? 's' : '');
         }
     }
-
+    
     totalAmountEl.textContent = formatCurrency(total);
 }
 
@@ -697,33 +722,45 @@ function escapeHtml(text) {
 }
 
 // ============================================
-// ✅ IR A PAGAR - SEGURO (sin asientos en URL)
+// MANEJAR ENVÍO DEL FORMULARIO
 // ============================================
-function goToPayment() {
+document.getElementById('foodForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
     const items = Object.values(cart);
     const orderData = items.map(item => ({
         id: parseInt(item.id),
         quantity: item.quantity
     }));
-
+    
     const btn = document.getElementById('btnCheckout');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
-
+    
+    // ✅ ENVIAR SOLO IDs Y CANTIDADES, NO PRECIOS
     fetch('save_food_order.php', {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'showtime_id=' + showtimeId + '&food_order=' + encodeURIComponent(JSON.stringify(orderData))
+        body: 'showtime_id=' + showtimeId + 
+              '&food_order=' + encodeURIComponent(JSON.stringify(orderData)) +
+              '&purchase_token=' + encodeURIComponent(purchaseToken) +
+              '&csrf_token=' + encodeURIComponent('<?= $csrf_token ?>')
     })
     .then(response => response.json())
     .then(data => {
-        window.location.href = 'payment.php?showtime_id=' + showtimeId;
+        if (data.success) {
+            window.location.href = 'payment.php?showtime_id=' + showtimeId + '&token=' + purchaseToken;
+        } else {
+            alert('Error al guardar el pedido. Intenta nuevamente.');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-credit-card mr-2"></i> Ir a Pagar';
+        }
     })
     .catch(error => {
         console.error('Error:', error);
-        window.location.href = 'payment.php?showtime_id=' + showtimeId;
+        window.location.href = 'payment.php?showtime_id=' + showtimeId + '&token=' + purchaseToken;
     });
-}
+});
 </script>
 </body>
 </html>

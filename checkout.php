@@ -328,16 +328,6 @@ try {
         }
     }
     
-    // Limpiar sessionStorage (el cliente lo hará al cargar la página)
-    echo '<script>
-        sessionStorage.removeItem("selected_seats_' . $showtimeId . '");
-        sessionStorage.removeItem("selected_seats_count_' . $showtimeId . '");
-        sessionStorage.removeItem("food_timeout_' . $showtimeId . '");
-        sessionStorage.removeItem("food_seats_' . $showtimeId . '");
-        sessionStorage.removeItem("ticket_selection_' . $showtimeId . '");
-        console.log("🗑️ Sesión de compra limpiada");
-    </script>';
-    
     $pdo->commit();
     
 } catch (Exception $e) {
@@ -347,7 +337,7 @@ try {
 }
 
 // ============================================
-// REDIRIGIR A CONFIRMACIÓN
+// ✅ REDIRIGIR A CONFIRMACIÓN (SIN OUTPUT PREVIO)
 // ============================================
 header('Location: confirmation.php?showtime_id=' . $showtimeId . '&purchase_id=' . $purchaseId);
 exit;

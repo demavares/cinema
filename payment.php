@@ -9,7 +9,7 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 // ============================================
-// VERIFICAR QUE LA SESIÓN SEA VÁLIDA
+// VERIFICAR AUTENTICACIÓN
 // ============================================
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
@@ -23,60 +23,64 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ LEER ASIENTOS DESDE SESIÓN (SEGURO)
+// ✅ VALIDAR TOKEN DE COMPRA
 // ============================================
-$seats = isset($_SESSION['food_seats_' . $showtimeId])
-    ? $_SESSION['food_seats_' . $showtimeId]
-    : '';
-
-if (empty($seats)) {
-    header('Location: index.php');
+$token = $_GET['token'] ?? '';
+if (empty($token) || !verifyPurchaseToken($token, $showtimeId)) {
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido');
     exit;
 }
 
 // ============================================
-// VERIFICAR SESIÓN DE COMIDA
+// ✅ VERIFICAR SESIÓN DE COMIDA
 // ============================================
-$sessionKey = 'food_timeout_' . $showtimeId;
-$sessionSeatsKey = 'food_seats_' . $showtimeId;
 $sessionValidKey = 'food_valid_' . $showtimeId;
+$sessionSeatsKey = 'food_seats_' . $showtimeId;
+$sessionTimeoutKey = 'food_timeout_' . $showtimeId;
 $sessionFoodKey = 'food_order_' . $showtimeId;
 
-// Si la sesión no es válida para este showtime_id, redirigir a seats
+// Si la sesión no es válida, redirigir
 if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true) {
-    unset($_SESSION[$sessionKey]);
+    unset($_SESSION[$sessionTimeoutKey]);
     unset($_SESSION[$sessionSeatsKey]);
     unset($_SESSION[$sessionValidKey]);
     unset($_SESSION[$sessionFoodKey]);
-    session_write_close();
-    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=session_expired');
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=session_expired&token=' . $token);
     exit;
-}
-
-// Verificar que los asientos coincidan
-if (!isset($_SESSION[$sessionSeatsKey]) || $_SESSION[$sessionSeatsKey] !== $seats) {
-    $_SESSION[$sessionSeatsKey] = $seats;
 }
 
 // Verificar si el timeout expiró
-if (isset($_SESSION[$sessionKey]) && $_SESSION[$sessionKey] <= 0) {
-    unset($_SESSION[$sessionKey]);
+if (isset($_SESSION[$sessionTimeoutKey]) && $_SESSION[$sessionTimeoutKey] <= 0) {
+    unset($_SESSION[$sessionTimeoutKey]);
     unset($_SESSION[$sessionSeatsKey]);
     unset($_SESSION[$sessionValidKey]);
     unset($_SESSION[$sessionFoodKey]);
-    session_write_close();
     header('Location: index.php?timeout=1');
     exit;
 }
 
 // Si no hay timeout, crear uno
-if (!isset($_SESSION[$sessionKey])) {
-    $_SESSION[$sessionKey] = 600;
+if (!isset($_SESSION[$sessionTimeoutKey])) {
+    $_SESSION[$sessionTimeoutKey] = 600;
 }
 
+// ============================================
+// ✅ LEER ASIENTOS DESDE SESIÓN (SEGURO)
+// ============================================
+$seats = isset($_SESSION[$sessionSeatsKey]) ? $_SESSION[$sessionSeatsKey] : '';
+if (empty($seats)) {
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=no_seats&token=' . $token);
+    exit;
+}
+
+// ============================================
+// ✅ LEER PEDIDO DE COMIDA DESDE SESIÓN (SEGURO)
+// ============================================
 $foodOrder = isset($_SESSION[$sessionFoodKey]) ? json_decode($_SESSION[$sessionFoodKey], true) : [];
 
-// Obtener datos del showtime
+// ============================================
+// OBTENER DATOS DEL SHOWTIME
+// ============================================
 $stmt = $pdo->prepare("
     SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.duration
     FROM showtimes s
@@ -93,16 +97,16 @@ if (!$showtime) {
 
 $seatsArray = explode(',', $seats);
 $ticketCount = count($seatsArray);
+
+// ============================================
+// ✅ RECALCULAR PRECIOS EN EL SERVIDOR
+// ============================================
+
+// 1. Recalcular precio de boletos
 $finalPrice = getShowtimePrice($showtime);
 $totalTicketsPrice = $ticketCount * $finalPrice;
 
-// ============================================
-// IDIOMA DE LA PELÍCULA
-// ============================================
-$language = $showtime['language'] ?? 'español';
-$languageLabel = $language == 'español' ? 'Español' : 'Subtítulos en Español';
-
-// Calcular total de comida
+// 2. Recalcular precio de comida desde la base de datos
 $totalFoodPrice = 0;
 $foodItems = [];
 
@@ -110,10 +114,10 @@ if (!empty($foodOrder)) {
     $foodIds = array_column($foodOrder, 'id');
     if (!empty($foodIds)) {
         $placeholders = implode(',', array_fill(0, count($foodIds), '?'));
-        $stmt = $pdo->prepare("SELECT * FROM food_items WHERE id IN ($placeholders)");
+        $stmt = $pdo->prepare("SELECT * FROM food_items WHERE id IN ($placeholders) AND is_active = 1");
         $stmt->execute($foodIds);
         $availableFood = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
+        
         foreach ($availableFood as $item) {
             foreach ($foodOrder as $order) {
                 if ($order['id'] == $item['id']) {
@@ -134,16 +138,36 @@ if (!empty($foodOrder)) {
     }
 }
 
-$totalAmount = $totalTicketsPrice + $totalFoodPrice;
+// 3. Obtener tasa de IVA
+$stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
+$tax = $stmt->fetch();
+$taxRate = $tax ? floatval($tax['tax_rate']) : 16;
+
+// 4. Calcular subtotal, IVA y total
+$subtotal = $totalTicketsPrice + $totalFoodPrice;
+$taxAmount = $subtotal * ($taxRate / 100);
+$totalAmount = $subtotal + $taxAmount;
+
+// 5. Guardar en sesión para usar en checkout
+$_SESSION['subtotal_' . $showtimeId] = $subtotal;
+$_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
+$_SESSION['total_amount_' . $showtimeId] = $totalAmount;
+$_SESSION['tax_rate_' . $showtimeId] = $taxRate;
+$_SESSION['ticket_quantities_' . $showtimeId] = ['adult' => $ticketCount, 'child' => 0, 'senior' => 0];
+$_SESSION['total_seats_' . $showtimeId] = $ticketCount;
+
+// ============================================
+// IDIOMA DE LA PELÍCULA
+// ============================================
+$language = $showtime['language'] ?? 'español';
+$languageLabel = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 
 $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "Método de Pago - " . $showtime['title'];
 
-// ============================================
-// ✅ CORRECCIÓN: Enlace de regreso con parámetro from=payment
-// ============================================
-$backUrl = 'food_menu.php?showtime_id=' . $showtimeId . '&from=payment';
+// ✅ Enlace de regreso con parámetro from=payment
+$backUrl = 'food_menu.php?showtime_id=' . $showtimeId . '&from=payment&token=' . $token;
 
 $currency_symbol = $siteConfig['currency_symbol'] ?? '$';
 $currency_position = $siteConfig['currency_position'] ?? 'left';
@@ -151,11 +175,9 @@ $thousands_separator = $siteConfig['thousands_separator'] ?? '.';
 $decimal_separator = $siteConfig['decimal_separator'] ?? ',';
 $decimal_places = intval($siteConfig['decimal_places'] ?? 2);
 
-$isTestMode = true;
-
 // Crear token de sesión única para esta compra si no existe
 if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
-    $_SESSION['purchase_token_' . $showtimeId] = bin2hex(random_bytes(32));
+    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseToken();
 }
 
 require_once 'header.php';
@@ -167,15 +189,12 @@ body {
     background-color: #ffffff !important;
     color: #1f2937 !important;
 }
-
 .bg-\[\#14141e\] {
     background-color: #ffffff !important;
 }
-
 .border-\[\#1e1e2e\] {
     border-color: #e2e8f0 !important;
 }
-
 /* Timeout Warning */
 .timeout-warning {
     padding: 16px 24px;
@@ -193,22 +212,16 @@ body {
     transition: all 0.5s ease;
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
-
 .timeout-warning.normal { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; }
 .timeout-warning.warning { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
 .timeout-warning.danger { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; animation: pulse-danger 1s ease-in-out infinite; }
-
 @keyframes pulse-danger { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
-
 .timeout-warning .countdown { font-weight: 700; font-size: 1.3rem; min-width: 60px; text-align: center; }
 .timeout-warning.normal .countdown { color: #4338ca; }
 .timeout-warning.warning .countdown { color: #b45309; }
 .timeout-warning.danger .countdown { color: #dc2626; animation: pulse-countdown 0.5s ease-in-out infinite; }
-
 @keyframes pulse-countdown { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } }
-
 .payment-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
-
 .payment-method {
     background: #ffffff;
     border: 2px solid #e2e8f0;
@@ -219,14 +232,12 @@ body {
     text-align: center;
     box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
-
 .payment-method:hover { border-color: #6366f1; transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
 .payment-method.selected { border-color: #4f46e5; background: #f5f3ff; box-shadow: 0 0 20px rgba(99, 102, 241, 0.15); }
 .payment-method .icon { font-size: 2.5rem; margin-bottom: 8px; display: block; }
 .payment-method .name { color: #0f172a; font-weight: 700; font-size: 1.1rem; }
 .payment-method .description { color: #475569; font-size: 0.9rem; margin-top: 4px; }
 .payment-method input[type="radio"] { display: none; }
-
 .payment-details { display: none; margin-top: 20px; padding: 20px; background: #f8fafc; border-radius: 12px; border: 1px solid #cbd5e1; }
 .payment-details.active { display: block; }
 .payment-details label { color: #334155; font-size: 0.95rem; font-weight: 600; display: block; margin-bottom: 6px; }
@@ -242,7 +253,6 @@ body {
     transition: border-color 0.3s ease;
 }
 .payment-details input:focus, .payment-details select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
-
 .test-mode-badge {
     display: inline-block;
     background: #fef3c7;
@@ -254,7 +264,6 @@ body {
     border: 1px solid #fde68a;
     margin-left: 8px;
 }
-
 .btn-pay {
     background: linear-gradient(135deg, #22c55e, #16a34a);
     color: white;
@@ -268,10 +277,8 @@ body {
     font-size: 1.15rem;
     margin-top: 24px;
 }
-
 .btn-pay:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(34, 197, 94, 0.3); }
 .btn-pay:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-
 .summary-sticky {
     position: relative;
     top: auto;
@@ -286,14 +293,12 @@ body {
     box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08) !important;
     border-radius: 12px !important;
 }
-
 @media (min-width: 1024px) {
     .summary-sticky {
         position: sticky;
         top: 100px;
     }
 }
-
 .selected-info-box {
     background: #f1f5f9 !important;
     border: 1px solid #e2e8f0 !important;
@@ -302,7 +307,6 @@ body {
     margin-top: 10px;
     margin-bottom: 16px;
 }
-
 .ticket-line {
     display: flex;
     justify-content: space-between;
@@ -310,10 +314,8 @@ body {
     padding: 4px 0;
     font-size: 0.95rem;
 }
-
 .ticket-line .ticket-label { color: #475569; }
 .ticket-line .ticket-price { color: #16a34a; font-weight: 600; }
-
 .cart-item {
     display: flex;
     justify-content: space-between;
@@ -322,11 +324,9 @@ body {
     border-bottom: 1px solid #e2e8f0;
     font-size: 0.95rem;
 }
-
 .cart-item:last-child { border-bottom: none; }
 .cart-item .item-name { color: #1e293b; flex: 1; word-break: break-word; font-weight: 500; }
 .cart-item .item-price { color: #16a34a; font-weight: 600; font-size: 0.95rem; }
-
 .order-total {
     border-top: 2px dashed #cbd5e1;
     padding-top: 12px;
@@ -337,12 +337,9 @@ body {
     font-size: 1.25rem;
     font-weight: 700;
 }
-
 .order-total .total-label { color: #0f172a; }
 .order-total .total-amount { color: #16a34a; }
-
 .seats-display { font-size: 0.95rem; font-weight: 500; color: #475569; word-break: break-word; }
-
 .btn-back {
     background: #ffffff;
     border: 1px solid #cbd5e1;
@@ -358,23 +355,18 @@ body {
     text-decoration: none;
     display: block;
 }
-
 .btn-back:hover { border-color: #6366f1; color: #4f46e5 !important; background: #eef2ff; }
-
 .movie-language {
     font-size: 0.9rem;
     color: #475569;
     margin-top: 2px;
     font-weight: 500;
 }
-
 .text-white { color: #0f172a !important; }
 .text-gray-400 { color: #475569 !important; font-weight: 500; }
-
 @media (max-width: 1024px) {
     .timeout-warning { top: 90px; }
 }
-
 @media (max-width: 768px) {
     .payment-methods { grid-template-columns: 1fr 1fr; gap: 12px; }
     .payment-method { padding: 18px 12px; }
@@ -392,7 +384,6 @@ body {
         margin-left: 0 !important;
     }
 }
-
 @media (max-width: 480px) {
     .payment-methods { grid-template-columns: 1fr 1fr; gap: 10px; }
     .timeout-warning { top: 75px; padding: 14px 16px; }
@@ -421,6 +412,7 @@ body {
                 <input type="hidden" name="seats" value="<?= htmlspecialchars($seats) ?>">
                 <input type="hidden" name="payment_method" id="paymentMethodInput" value="">
                 <input type="hidden" name="food_order" id="foodOrderInput" value='<?= htmlspecialchars(json_encode($foodOrder)) ?>'>
+                <input type="hidden" name="purchase_token" value="<?= htmlspecialchars($token) ?>">
 
                 <div class="payment-methods">
                     <!-- Pago Móvil -->
@@ -456,6 +448,7 @@ body {
                     </div>
                     <label for="movil_reference">Número de Referencia *</label>
                     <input type="text" id="movil_reference" name="movil_reference" placeholder="Ej: 1234567890" value="123456" required>
+
                     <label for="movil_phone">Teléfono de Origen *</label>
                     <input type="text" id="movil_phone" name="movil_phone" placeholder="0412-1234567" value="0412-1234567" required>
                 </div>
@@ -464,6 +457,7 @@ body {
                 <div class="payment-details" id="details-tarjeta">
                     <label for="card_number">Número de Tarjeta *</label>
                     <input type="text" id="card_number" name="card_number" placeholder="1234 5678 9012 3456" value="1234 5678 9012 3456" maxlength="19" required>
+
                     <div class="grid grid-cols-2 gap-4">
                         <div>
                             <label for="card_expiry">Fecha de Expiración *</label>
@@ -474,6 +468,7 @@ body {
                             <input type="password" id="card_cvv" name="card_cvv" placeholder="123" value="123" maxlength="4" required>
                         </div>
                     </div>
+
                     <label for="card_holder">Nombre del Titular *</label>
                     <input type="text" id="card_holder" name="card_holder" placeholder="Como aparece en la tarjeta" value="Cliente Prueba" required>
                 </div>
@@ -484,7 +479,7 @@ body {
             </form>
         </div>
 
-        <!-- SECCIÓN DERECHA: RESUMEN DEL PEDIDO -->
+        <!-- SECCIÓN DERECHA: CARD-SUMMARY / RESUMEN DEL PEDIDO -->
         <div class="w-full lg:w-80 summary-sticky">
             <h3 class="text-xl font-bold text-white mb-3 flex items-center gap-2">
                 <i class="fas fa-receipt text-indigo-600"></i> Resumen del Pedido
@@ -538,8 +533,8 @@ body {
                 <div class="text-xs text-gray-500 text-center font-medium">
                     <i class="fas fa-shield-alt text-green-600 mr-1"></i> Pago seguro y encriptado
                 </div>
-                <!-- ✅ CORRECCIÓN: Enlace con parámetro from=payment para navegación correcta -->
-                <a href="food_menu.php?showtime_id=<?= $showtimeId ?>&from=payment" class="btn-back">
+
+                <a href="<?= $backUrl ?>" class="btn-back">
                     <i class="fas fa-arrow-left mr-2"></i> Volver a Comida
                 </a>
             </div>
@@ -625,13 +620,11 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
     if (selectedPayment === 'movil') {
         const reference = document.getElementById('movil_reference').value.trim();
         const phone = document.getElementById('movil_phone').value.trim();
-
         if (!reference || !phone) {
             e.preventDefault();
             showNotification('Por favor, completa todos los campos de Pago Móvil.', 'warning');
             return false;
         }
-
         if (reference.length < 4) {
             e.preventDefault();
             showNotification('La referencia debe tener al menos 4 dígitos.', 'warning');
@@ -648,19 +641,16 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
             showNotification('Por favor, completa todos los campos de la tarjeta.', 'warning');
             return false;
         }
-
         if (cardNumber.length < 16) {
             e.preventDefault();
             showNotification('Número de tarjeta inválido.', 'warning');
             return false;
         }
-
         if (!/^\d{2}\/\d{2}$/.test(expiry)) {
             e.preventDefault();
             showNotification('Formato de fecha inválido. Usa MM/AA.', 'warning');
             return false;
         }
-
         if (cvv.length < 3) {
             e.preventDefault();
             showNotification('CVV inválido.', 'warning');
@@ -681,14 +671,12 @@ function showNotification(message, type = 'info') {
         warning: 'bg-yellow-600',
         error: 'bg-red-600'
     };
-
     const icons = {
         info: 'fa-info-circle',
         success: 'fa-check-circle',
         warning: 'fa-exclamation-triangle',
         error: 'fa-times-circle'
     };
-
     const notification = document.createElement('div');
     notification.className = `fixed bottom-4 left-1/2 transform -translate-x-1/2 ${colors[type] || 'bg-gray-600'} text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-lg z-50 transition-all duration-300 max-w-[90%] sm:max-w-md text-center text-sm flex items-center gap-3`;
     notification.innerHTML = `
@@ -696,7 +684,6 @@ function showNotification(message, type = 'info') {
         <span>${message}</span>
     `;
     document.body.appendChild(notification);
-
     setTimeout(() => {
         notification.style.opacity = '0';
         notification.style.transform = 'translate(-50%, 20px)';
