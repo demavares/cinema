@@ -25,24 +25,46 @@ if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
 // ============================================
 $showtimeId = intval($_POST['showtime_id'] ?? 0);
 $ticketsJson = $_POST['tickets'] ?? '';
-$totalSeats = intval($_POST['total_seats'] ?? 0);
-$subtotal = floatval($_POST['subtotal'] ?? 0);
-$taxAmount = floatval($_POST['tax_amount'] ?? 0);
-$totalAmount = floatval($_POST['total_amount'] ?? 0);
+$totalSeatsFromClient = intval($_POST['total_seats'] ?? 0);
 
 // ============================================
-// ✅ CORREGIDO: DESHABILITADO - Permitir múltiples compras
+// ✅ VALIDACIÓN EN EL SERVIDOR - RECALCULAR PRECIOS
 // ============================================
-// $stmt = $pdo->prepare("
-//     SELECT id FROM purchases
-//     WHERE user_id = ? AND showtime_id = ? AND status = 'completed'
-//     LIMIT 1
-// ");
-// $stmt->execute([$_SESSION['user_id'], $showtimeId]);
-// if ($stmt->rowCount() > 0) {
-//     header('Location: index.php?msg=Compra+ya+realizada');
-//     exit;
-// }
+if ($showtimeId <= 0 || empty($ticketsJson)) {
+    error_log("ERROR: Datos incompletos en process_selection");
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+incompletos');
+    exit;
+}
+
+// Decodificar tickets del cliente
+$ticketsData = json_decode($ticketsJson, true);
+if (!$ticketsData || !is_array($ticketsData)) {
+    error_log("ERROR: Tickets inválidos en process_selection");
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+invalidos');
+    exit;
+}
+
+// ✅ RECALCULAR PRECIOS EN EL SERVIDOR (IGNORAR VALORES DEL CLIENTE)
+$validation = validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData);
+
+if (isset($validation['error'])) {
+    error_log("ERROR de validación: " . $validation['error']);
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=' . urlencode($validation['error']));
+    exit;
+}
+
+// Usar los valores recalculados por el servidor
+$totalSeats = $validation['total_seats'];
+$subtotal = $validation['subtotal'];
+$taxRate = $validation['tax_rate'];
+$taxAmount = $validation['tax_amount'];
+$totalAmount = $validation['total_amount'];
+
+// Verificar que coincida con lo enviado por el cliente (opcional, pero buena práctica)
+if ($totalSeats != $totalSeatsFromClient) {
+    error_log("ADVERTENCIA: Discrepancia en número de asientos. Cliente: $totalSeatsFromClient, Servidor: $totalSeats");
+    // Usar el valor del servidor
+}
 
 // ============================================
 // ELIMINAR COMPRAS PENDIENTES ANTERIORES
@@ -54,60 +76,36 @@ $stmt = $pdo->prepare("
 $stmt->execute([$_SESSION['user_id'], $showtimeId]);
 
 // ============================================
-// VALIDACIONES
+// ✅ GENERAR TOKEN DE COMPRA ÚNICO
 // ============================================
-if ($showtimeId <= 0 || empty($ticketsJson) || $totalSeats <= 0) {
-    error_log("ERROR: Datos incompletos");
-    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+incompletos');
-    exit;
-}
-
-// Decodificar tickets
-$tickets = json_decode($ticketsJson, true);
-if (!$tickets || !is_array($tickets)) {
-    error_log("ERROR: Tickets inválidos");
-    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+invalidos');
-    exit;
-}
-
-// Verificar que haya al menos un boleto
-$total = ($tickets['adult'] ?? 0) + ($tickets['child'] ?? 0) + ($tickets['senior'] ?? 0);
-if ($total != $totalSeats) {
-    error_log("ERROR: No coincide el número de boletos. Esperado: $totalSeats, Recibido: $total");
-    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=No+coincide+el+número+de+boletos');
-    exit;
-}
-
-if ($total == 0) {
-    error_log("ERROR: No hay boletos seleccionados");
-    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Selecciona+al+menos+un+boleto');
-    exit;
-}
+$purchaseToken = generatePurchaseToken();
+$_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
 
 // ============================================
 // GUARDAR EN SESIÓN (SEGURO)
 // ============================================
-$_SESSION['ticket_quantities_' . $showtimeId] = $tickets;
+$_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
 $_SESSION['total_seats_' . $showtimeId] = $totalSeats;
 $_SESSION['subtotal_' . $showtimeId] = $subtotal;
 $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
 $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
+$_SESSION['tax_rate_' . $showtimeId] = $taxRate;
 
-// ============================================
-// LIMPIAR ASIENTOS GUARDADOS EN SESSIONSTORAGE
-// ============================================
+// Limpiar asientos guardados
 unset($_SESSION['food_seats_' . $showtimeId]);
 unset($_SESSION['food_timeout_' . $showtimeId]);
 unset($_SESSION['food_valid_' . $showtimeId]);
 unset($_SESSION['food_order_' . $showtimeId]);
 
-error_log("=== DATOS GUARDADOS EN SESIÓN ===");
-error_log("ticket_quantities_" . $showtimeId . ": " . print_r($tickets, true));
-error_log("total_seats_" . $showtimeId . ": " . $totalSeats);
+error_log("=== PROCESO SELECTION EXITOSO ===");
+error_log("showtime_id: $showtimeId");
+error_log("total_seats: $totalSeats");
+error_log("subtotal: $subtotal");
+error_log("total_amount: $totalAmount");
 
 // ============================================
-// REDIRIGIR A SEATS.PHP (URL LIMPIA)
+// REDIRIGIR A SEATS.PHP CON TOKEN
 // ============================================
-header('Location: seats.php?showtime_id=' . $showtimeId . '&from=price');
+header('Location: seats.php?showtime_id=' . $showtimeId . '&token=' . $purchaseToken);
 exit;
 ?>

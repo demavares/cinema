@@ -1,6 +1,9 @@
 <?php
 require_once 'config.php';
 
+// ============================================
+// VERIFICAR AUTENTICACIÓN
+// ============================================
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
@@ -33,28 +36,64 @@ if (empty($paymentMethod)) {
 $seatsArray = array_map('trim', explode(',', $seats));
 
 // ============================================
-// OBTENER DATOS DE TICKETS DESDE SESIÓN
+// ✅ VERIFICAR TOKEN DE COMPRA
 // ============================================
+$token = $_POST['purchase_token'] ?? '';
+if (empty($token) || !verifyPurchaseToken($token, $showtimeId)) {
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido');
+    exit;
+}
+
+// ============================================
+// ✅ OBTENER Y RECALCULAR TODO EN EL SERVIDOR
+// ============================================
+
+// 1. Obtener datos del showtime
+$stmt = $pdo->prepare("
+    SELECT s.*, m.title, m.duration 
+    FROM showtimes s
+    JOIN movies m ON s.movie_id = m.id
+    WHERE s.id = ? AND s.is_active = 1
+");
+$stmt->execute([$showtimeId]);
+$showtime = $stmt->fetch();
+
+if (!$showtime) {
+    header('Location: index.php?error=Horario+no+disponible');
+    exit;
+}
+
+// 2. Obtener cantidades de tickets desde sesión (SEGURO)
 $ticketQuantities = isset($_SESSION['ticket_quantities_' . $showtimeId]) 
     ? $_SESSION['ticket_quantities_' . $showtimeId] 
     : null;
 
 if (!$ticketQuantities) {
-    header('Location: index.php');
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+de+boletos+no+encontrados');
     exit;
 }
 
-// Obtener subtotal, IVA y total desde sesión
-$subtotal = isset($_SESSION['subtotal_' . $showtimeId]) ? floatval($_SESSION['subtotal_' . $showtimeId]) : 0;
-$taxAmount = isset($_SESSION['tax_amount_' . $showtimeId]) ? floatval($_SESSION['tax_amount_' . $showtimeId]) : 0;
-$totalTicketsAmount = isset($_SESSION['total_amount_' . $showtimeId]) ? floatval($_SESSION['total_amount_' . $showtimeId]) : 0;
+// 3. ✅ RECALCULAR PRECIOS EN EL SERVIDOR (ignorar valores del cliente)
+$validation = validateAndRecalculatePrices($pdo, $showtimeId, $ticketQuantities);
 
-// Obtener tasa de IVA
-$stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
-$tax = $stmt->fetch();
-$taxRate = $tax ? floatval($tax['tax_rate']) : 16;
+if (isset($validation['error'])) {
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=' . urlencode($validation['error']));
+    exit;
+}
 
-// Obtener información de la sala para verificar asientos de discapacidad
+$subtotal = $validation['subtotal'];
+$taxRate = $validation['tax_rate'];
+$taxAmount = $validation['tax_amount'];
+$totalTicketsAmount = $validation['total_amount'];
+$totalSeats = $validation['total_seats'];
+
+// 4. Verificar que los asientos seleccionados coincidan con la cantidad
+if (count($seatsArray) != $totalSeats) {
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=La+cantidad+de+asientos+no+coincide');
+    exit;
+}
+
+// 5. Obtener información de la sala para verificar asientos de discapacidad
 $stmt = $pdo->prepare("
     SELECT s.*, r.seat_layout
     FROM showtimes s
@@ -70,25 +109,7 @@ if ($showtimeData && !empty($showtimeData['seat_layout'])) {
     $accessibleSeats = $layout['wheelchairSeats'] ?? $layout['accessibleSeats'] ?? [];
 }
 
-// Obtener datos del showtime
-$stmt = $pdo->prepare("
-    SELECT s.*, m.title, m.duration 
-    FROM showtimes s
-    JOIN movies m ON s.movie_id = m.id
-    WHERE s.id = ? AND s.is_active = 1
-");
-$stmt->execute([$showtimeId]);
-$showtime = $stmt->fetch();
-
-if (!$showtime) {
-    header('Location: index.php?error=Horario+no+disponible');
-    exit;
-}
-
-$price = getShowtimePrice($showtime);
-$ticketCount = count($seatsArray);
-
-// Procesar comida
+// 6. Procesar comida (calcular desde BD, no desde cliente)
 $foodItems = [];
 $totalFood = 0;
 
@@ -122,29 +143,31 @@ if (!empty($foodData) && is_array($foodData)) {
     }
 }
 
-// Calcular total general (boletos + comida)
+// 7. Calcular total general (boletos + comida) - recalculado en servidor
 $totalGeneral = $totalTicketsAmount + $totalFood;
 
-// Identificar asientos de discapacidad
+// 8. Identificar asientos de discapacidad
 $accessibleSeatsSelected = [];
-
 foreach ($seatsArray as $seat) {
     if (in_array($seat, $accessibleSeats)) {
         $accessibleSeatsSelected[] = $seat;
     }
 }
 
-// Mapeo de tipos de boleto
+// 9. Mapeo de tipos de boleto
 $ticketTypeMap = [
     'adult' => 1,
     'child' => 2,
     'senior' => 3
 ];
 
+// ============================================
+// ✅ INICIAR TRANSACCIÓN CON VALIDACIONES
+// ============================================
 $pdo->beginTransaction();
 
 try {
-    // Verificar asientos disponibles nuevamente
+    // 1. Verificar asientos disponibles nuevamente
     $placeholders = implode(',', array_fill(0, count($seatsArray), '?'));
     $stmtCheck = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ? AND seat_code IN ($placeholders)");
     $stmtCheck->execute(array_merge([$showtimeId], $seatsArray));
@@ -154,15 +177,16 @@ try {
         throw new Exception("Asientos ocupados: " . implode(', ', $existingSeats));
     }
     
-    // Insertar tickets
+    // 2. Insertar tickets
+    $pricePerTicket = $validation['prices']['adult']; // Usar precio recalculado
     $stmtInsert = $pdo->prepare("INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid) VALUES (?, ?, ?, ?)");
     $ticketIds = [];
     foreach ($seatsArray as $seat) {
-        $stmtInsert->execute([$userId, $showtimeId, $seat, $price]);
+        $stmtInsert->execute([$userId, $showtimeId, $seat, $pricePerTicket]);
         $ticketIds[] = $pdo->lastInsertId();
     }
     
-    // Insertar pedidos de comida
+    // 3. Insertar pedidos de comida
     if (!empty($foodItems)) {
         $stmtFood = $pdo->prepare("INSERT INTO food_orders (user_id, ticket_id, showtime_id, food_item_id, quantity, unit_price, total_price, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'completed')");
         foreach ($foodItems as $item) {
@@ -179,13 +203,12 @@ try {
         }
     }
     
-    // Insertar purchase_tickets con los tipos
+    // 4. Insertar purchase_tickets con los tipos
     $stmtPurchaseTicket = $pdo->prepare("
         INSERT INTO purchase_tickets (purchase_id, showtime_id, ticket_type_id, seat_code, price) 
         VALUES (?, ?, ?, ?, ?)
     ");
     
-    // Guardar asientos con marcador ♿ en la BD
     $seatsWithMarkers = [];
     $ticketTypeCounts = ['adult' => 0, 'child' => 0, 'senior' => 0];
     
@@ -206,7 +229,7 @@ try {
         $ticketTypeId = $ticketTypeMap[$type] ?? 1;
         $ticketTypeCounts[$type]++;
         
-        // Obtener precio por tipo
+        // Obtener precio por tipo (desde BD, no desde cliente)
         $priceByType = getTicketPriceByType($showtime, $type);
         
         if (in_array($seat, $accessibleSeats)) {
@@ -217,7 +240,7 @@ try {
     }
     $seatsFormatted = implode(',', $seatsWithMarkers);
     
-    // Registrar la compra
+    // 5. Registrar la compra
     $sessionToken = bin2hex(random_bytes(32));
     $expiresAt = date('Y-m-d H:i:s', strtotime('+10 minutes'));
     
@@ -243,7 +266,7 @@ try {
         $userId,
         $showtimeId,
         $seatsFormatted,
-        $ticketCount,
+        $totalSeats,
         $totalFood,
         $subtotal,
         $taxAmount,
@@ -257,7 +280,7 @@ try {
     
     $purchaseId = $pdo->lastInsertId();
     
-    // Ahora insertar purchase_tickets con el purchase_id
+    // 6. Insertar purchase_tickets con el purchase_id
     foreach ($seatsArray as $index => $seat) {
         $type = 'adult';
         $remainingAdult = $ticketQuantities['adult'] ?? 0;
@@ -284,7 +307,7 @@ try {
     }
     
     // ============================================
-    // LIMPIAR TODAS LAS SESIONES DE COMPRA
+    // 7. LIMPIAR TODAS LAS SESIONES DE COMPRA
     // ============================================
     $sessionKeys = [
         'food_timeout_' . $showtimeId,
@@ -326,10 +349,6 @@ try {
 // ============================================
 // REDIRIGIR A CONFIRMACIÓN
 // ============================================
-$foodOrderJson = !empty($foodItems) ? json_encode(array_map(function($item) {
-    return ['id' => $item['id'], 'quantity' => $item['quantity']];
-}, $foodItems)) : '[]';
-
 header('Location: confirmation.php?showtime_id=' . $showtimeId . '&purchase_id=' . $purchaseId);
 exit;
 ?>

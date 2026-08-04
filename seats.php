@@ -16,99 +16,144 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ CORREGIDO: DESHABILITADO - Permitir múltiples compras
+// ✅ VALIDAR TOKEN DE COMPRA
 // ============================================
-// $stmt = $pdo->prepare("
-//     SELECT id, status FROM purchases
-//     WHERE user_id = ? AND showtime_id = ? AND status IN ('completed', 'pending')
-//     ORDER BY id DESC LIMIT 1
-// ");
-// $stmt->execute([$_SESSION['user_id'], $showtimeId]);
-// $purchase = $stmt->fetch();
-// if ($purchase && $purchase['status'] === 'completed') {
-//     ... redirigir a index ...
-// }
-
-// ============================================
-// LEER DATOS DE SESIÓN
-// ============================================
-$ticketsData = isset($_SESSION['ticket_quantities_' . $showtimeId])
-    ? $_SESSION['ticket_quantities_' . $showtimeId]
-    : null;
-$totalSeats = isset($_SESSION['total_seats_' . $showtimeId])
-    ? intval($_SESSION['total_seats_' . $showtimeId])
-    : 0;
-$subtotal = isset($_SESSION['subtotal_' . $showtimeId])
-    ? floatval($_SESSION['subtotal_' . $showtimeId])
-    : 0;
-$taxAmount = isset($_SESSION['tax_amount_' . $showtimeId])
-    ? floatval($_SESSION['tax_amount_' . $showtimeId])
-    : 0;
-$totalAmount = isset($_SESSION['total_amount_' . $showtimeId])
-    ? floatval($_SESSION['total_amount_' . $showtimeId])
-    : 0;
-
-// ============================================
-// ✅ CORREGIDO: Si no hay datos de tickets pero hay sesión de comida
-// activa, recuperar los datos (usuario viene de food_menu o payment)
-// ============================================
+$token = $_GET['token'] ?? '';
 $foodValidKey = 'food_valid_' . $showtimeId;
-$foodSeatsKey = 'food_seats_' . $showtimeId;
+$hasFoodSession = isset($_SESSION[$foodValidKey]) && $_SESSION[$foodValidKey] === true;
 
-if ((!$ticketsData || $totalSeats <= 0)
-    && isset($_SESSION[$foodValidKey])
-    && $_SESSION[$foodValidKey] === true
-    && isset($_SESSION[$foodSeatsKey])
-    && !empty($_SESSION[$foodSeatsKey])) {
+// Si no hay token válido y no hay sesión de comida activa, redirigir a price_selection
+if (empty($token) || !verifyPurchaseToken($token, $showtimeId)) {
+    if (!$hasFoodSession) {
+        header('Location: price_selection.php?showtime_id=' . $showtimeId);
+        exit;
+    }
+    // Si hay sesión de comida, regenerar token
+    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseToken();
+    $token = $_SESSION['purchase_token_' . $showtimeId];
+}
 
-    $foodSeats = $_SESSION[$foodSeatsKey];
-    $seatsArrayTemp = array_filter(array_map('trim', explode(',', $foodSeats)));
-    $totalSeats = count($seatsArrayTemp);
+// ============================================
+// VERIFICAR QUE LA COMPRA NO ESTÉ COMPLETADA
+// ============================================
+$stmt = $pdo->prepare("
+    SELECT id, status FROM purchases
+    WHERE user_id = ? AND showtime_id = ? AND status IN ('completed', 'pending')
+    ORDER BY id DESC LIMIT 1
+");
+$stmt->execute([$_SESSION['user_id'], $showtimeId]);
+$purchase = $stmt->fetch();
 
-    if ($totalSeats > 0) {
-        // Obtener datos del showtime para calcular precios
-        $stmtTemp = $pdo->prepare("
-            SELECT s.*, m.title, m.poster_url, m.description, m.duration,
-                   r.name as room_name, r.capacity, r.seat_layout, r.seat_image, r.aisle_config
-            FROM showtimes s
-            JOIN movies m ON s.movie_id = m.id
-            JOIN rooms r ON s.room_id = r.id
-            WHERE s.id = ? AND s.is_active = 1
-        ");
-        $stmtTemp->execute([$showtimeId]);
-        $showtimeTemp = $stmtTemp->fetch();
-
-        if ($showtimeTemp) {
-            $ticketsData = ['adult' => $totalSeats, 'child' => 0, 'senior' => 0];
-            $priceTemp = getShowtimePrice($showtimeTemp);
-            $subtotal = $totalSeats * $priceTemp;
-
-            $stmtTax = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
-            $taxTemp = $stmtTax->fetch();
-            $taxRateTemp = $taxTemp ? floatval($taxTemp['tax_rate']) : 16;
-
-            $taxAmount = $subtotal * ($taxRateTemp / 100);
-            $totalAmount = $subtotal + $taxAmount;
-
-            // Guardar en sesión para uso posterior
-            $_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
-            $_SESSION['total_seats_' . $showtimeId] = $totalSeats;
-            $_SESSION['subtotal_' . $showtimeId] = $subtotal;
-            $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
-            $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
-
-            error_log("✅ Datos de tickets recuperados desde sesión de comida para showtime $showtimeId");
+// Si hay una compra pendiente (sin completar), limpiarla para permitir nueva compra
+if ($purchase && $purchase['status'] === 'pending') {
+    $stmt = $pdo->prepare("DELETE FROM purchases WHERE id = ?");
+    $stmt->execute([$purchase['id']]);
+    
+    $stmt = $pdo->prepare("DELETE FROM tickets WHERE showtime_id = ? AND user_id = ?");
+    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
+    
+    $sessionKeys = [
+        'ticket_quantities_' . $showtimeId,
+        'total_seats_' . $showtimeId,
+        'subtotal_' . $showtimeId,
+        'tax_amount_' . $showtimeId,
+        'total_amount_' . $showtimeId,
+        'food_seats_' . $showtimeId,
+        'food_timeout_' . $showtimeId,
+        'food_valid_' . $showtimeId,
+        'food_order_' . $showtimeId,
+        'purchase_token_' . $showtimeId
+    ];
+    foreach ($sessionKeys as $key) {
+        if (isset($_SESSION[$key])) {
+            unset($_SESSION[$key]);
         }
     }
 }
 
-// Si aún no hay datos en sesión, redirigir a price_selection
+// ============================================
+// LEER DATOS DE SESIÓN
+// ============================================
+$ticketsData = isset($_SESSION['ticket_quantities_' . $showtimeId]) 
+    ? $_SESSION['ticket_quantities_' . $showtimeId] 
+    : null;
+$totalSeats = isset($_SESSION['total_seats_' . $showtimeId]) 
+    ? intval($_SESSION['total_seats_' . $showtimeId]) 
+    : 0;
+$subtotal = isset($_SESSION['subtotal_' . $showtimeId]) 
+    ? floatval($_SESSION['subtotal_' . $showtimeId]) 
+    : 0;
+$taxAmount = isset($_SESSION['tax_amount_' . $showtimeId]) 
+    ? floatval($_SESSION['tax_amount_' . $showtimeId]) 
+    : 0;
+$totalAmount = isset($_SESSION['total_amount_' . $showtimeId]) 
+    ? floatval($_SESSION['total_amount_' . $showtimeId]) 
+    : 0;
+
+// ============================================
+// ✅ RECUPERAR DATOS DESDE SESIÓN DE COMIDA SI ES NECESARIO
+// ============================================
+$foodSeatsKey = 'food_seats_' . $showtimeId;
+$foodTimeoutKey = 'food_timeout_' . $showtimeId;
+
 if (!$ticketsData || $totalSeats <= 0) {
+    if ($hasFoodSession && isset($_SESSION[$foodSeatsKey]) && !empty($_SESSION[$foodSeatsKey])) {
+        $foodSeats = $_SESSION[$foodSeatsKey];
+        $seatsArrayTemp = array_filter(array_map('trim', explode(',', $foodSeats)));
+        $totalSeatsFromFood = count($seatsArrayTemp);
+        
+        if ($totalSeatsFromFood > 0) {
+            // Obtener datos del showtime para calcular precios
+            $stmtTemp = $pdo->prepare("
+                SELECT s.*, m.title, m.poster_url, m.description, m.duration,
+                       r.name as room_name, r.capacity, r.seat_layout, r.seat_image, r.aisle_config
+                FROM showtimes s
+                JOIN movies m ON s.movie_id = m.id
+                JOIN rooms r ON s.room_id = r.id
+                WHERE s.id = ? AND s.is_active = 1
+            ");
+            $stmtTemp->execute([$showtimeId]);
+            $showtimeTemp = $stmtTemp->fetch();
+            
+            if ($showtimeTemp) {
+                $ticketsData = ['adult' => $totalSeatsFromFood, 'child' => 0, 'senior' => 0];
+                $priceTemp = getShowtimePrice($showtimeTemp);
+                $subtotal = $totalSeatsFromFood * $priceTemp;
+                
+                $stmtTax = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
+                $taxTemp = $stmtTax->fetch();
+                $taxRateTemp = $taxTemp ? floatval($taxTemp['tax_rate']) : 16;
+                
+                $taxAmount = $subtotal * ($taxRateTemp / 100);
+                $totalAmount = $subtotal + $taxAmount;
+                $totalSeats = $totalSeatsFromFood;
+                
+                $_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
+                $_SESSION['total_seats_' . $showtimeId] = $totalSeats;
+                $_SESSION['subtotal_' . $showtimeId] = $subtotal;
+                $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
+                $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
+                
+                error_log("✅ Datos de tickets recuperados desde sesión de comida para showtime $showtimeId");
+            }
+        }
+    }
+}
+
+// Si aún no hay datos y no hay sesión de comida válida, redirigir a price_selection
+if (!$ticketsData || $totalSeats <= 0) {
+    if ($hasFoodSession) {
+        unset($_SESSION[$foodValidKey]);
+        unset($_SESSION[$foodSeatsKey]);
+        unset($_SESSION[$foodTimeoutKey]);
+    }
     header('Location: price_selection.php?showtime_id=' . $showtimeId);
     exit;
 }
 
-// Obtener datos del showtime, película y sala con layout
+// ============================================
+// OBTENER DATOS DEL SHOWTIME
+// ============================================
 $stmt = $pdo->prepare("
     SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.description, m.duration,
            r.name as room_name, r.capacity, r.seat_layout, r.seat_image, r.aisle_config
@@ -127,12 +172,12 @@ if (!$showtime) {
 
 $finalPrice = getShowtimePrice($showtime);
 
-// Obtener asientos ocupados para este showtime
+// Obtener asientos ocupados
 $stmtSeats = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ?");
 $stmtSeats->execute([$showtimeId]);
 $occupiedSeats = $stmtSeats->fetchAll(PDO::FETCH_COLUMN);
 
-// Decodificar layout de asientos desde la sala del showtime
+// Decodificar layout
 $seatLayout = null;
 if (!empty($showtime['seat_layout'])) {
     $seatLayout = json_decode($showtime['seat_layout'], true);
@@ -161,7 +206,6 @@ $availableSeatsCount = $totalSeatsRoom - count($blockedSeats);
 $occupiedCount = count($occupiedSeats);
 $realAvailable = $availableSeatsCount - $occupiedCount;
 
-// Si no hay suficientes asientos disponibles, redirigir
 if ($realAvailable < $totalSeats) {
     header('Location: index.php?error=No+hay+suficientes+asientos+disponibles');
     exit;
@@ -169,11 +213,9 @@ if ($realAvailable < $totalSeats) {
 
 $csrf_token = generateCSRFToken();
 
-// Obtener datos de TMDb para la película
 $tmdb_data = getMovieFromTMDB($showtime['title']);
 $tmdb_poster = $tmdb_data['poster_path'] ?? null;
 
-// Obtener promociones del showtime
 $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
 $hasMondayPromo = in_array('lunes_mitad', $promotions);
 $hasPresale = in_array('preventa', $promotions);
@@ -181,45 +223,32 @@ $hasPresale = in_array('preventa', $promotions);
 $language = $showtime['language'] ?? 'español';
 $lang_label = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 
-// Variables para configurar el header en seats.php
 $pageTitle = "Selección de Asientos - " . $showtime['title'];
 $backUrl = 'price_selection.php?showtime_id=' . $showtimeId;
 
-// Obtener configuración del sitio
 $siteConfig = getSiteConfig($pdo);
 
-// Crear token de sesión única para esta compra
+// Asegurar que el token existe
 if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
-    $_SESSION['purchase_token_' . $showtimeId] = bin2hex(random_bytes(32));
+    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseToken();
 }
+$purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
+
+// Guardar URL de regreso en sesión para navegación consistente
+$_SESSION['seats_return_url_' . $showtimeId] = 'seats.php?showtime_id=' . $showtimeId . '&token=' . $purchaseToken;
 
 require_once 'header.php';
 ?>
 
 <style>
-/* Configuración Global - Fondo blanco y texto oscuro */
 body {
     background-color: #ffffff !important;
     color: #1f2937 !important;
 }
-
-.bg-\[\#14141e\] {
-    background-color: #ffffff !important;
-}
-
-.border-\[\#1e1e2e\] {
-    border-color: #e2e8f0 !important;
-}
-
-.section-title {
-    color: #374151 !important;
-    font-weight: 700;
-}
-
-.section-subtitle {
-    color: #6b7280 !important;
-}
-
+.bg-\[\#14141e\] { background-color: #ffffff !important; }
+.border-\[\#1e1e2e\] { border-color: #e2e8f0 !important; }
+.section-title { color: #374151 !important; font-weight: 700; }
+.section-subtitle { color: #6b7280 !important; }
 .cinema-screen {
     box-shadow: none !important;
     background: #4f46e5 !important;
@@ -235,7 +264,6 @@ body {
     width: 100%;
     order: 2;
 }
-
 .seat {
     width: clamp(1.2rem, 2.2vw, 1.8rem);
     height: clamp(1.2rem, 2.2vw, 1.8rem);
@@ -251,43 +279,29 @@ body {
     padding: 0 !important;
     overflow: hidden;
 }
-
-.seat:disabled {
-    cursor: not-allowed;
-}
-
-.seat-available {
-    background-color: #cbd5e1 !important;
-}
-
+.seat:disabled { cursor: not-allowed; }
+.seat-available { background-color: #cbd5e1 !important; }
 .seat-available:hover:not(.seat-occupied):not(.seat-blocked):not(.seat-accessible):not(.seat-selected) {
     background-color: #6366f1 !important;
     transform: scale(1.1);
     box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
 }
-
 .seat-selected {
     background-color: #4f46e5 !important;
     box-shadow: 0 0 10px rgba(79, 70, 229, 0.5);
     transform: scale(1.05);
 }
-
 .seat-occupied {
     background-color: #ef4444 !important;
     cursor: not-allowed !important;
     opacity: 0.65;
 }
-
-.seat-accessible {
-    background-color: #0284c7 !important;
-}
-
+.seat-accessible { background-color: #0284c7 !important; }
 .seat-accessible:hover:not(.seat-occupied):not(.seat-blocked):not(.seat-selected) {
     background-color: #0369a1 !important;
     transform: scale(1.1);
     box-shadow: 0 0 12px rgba(2, 132, 199, 0.4);
 }
-
 .seat-accessible .seat-label {
     position: static !important;
     transform: none !important;
@@ -300,7 +314,6 @@ body {
     line-height: 1 !important;
     color: #ffffff !important;
 }
-
 .seat-blocked {
     background-color: #f1f5f9 !important;
     cursor: not-allowed !important;
@@ -308,11 +321,7 @@ body {
     box-shadow: none !important;
     transform: none !important;
 }
-
-.seat-blocked .seat-label {
-    display: none !important;
-}
-
+.seat-blocked .seat-label { display: none !important; }
 .seat-label {
     font-size: clamp(0.5rem, 1vw, 0.7rem);
     color: #0f172a;
@@ -324,20 +333,17 @@ body {
     font-weight: bold;
     white-space: nowrap;
 }
-
 .seat-selected .seat-label,
 .seat-occupied .seat-label {
     color: #ffffff !important;
     text-shadow: 0 1px 2px rgba(0,0,0,0.4);
 }
-
 .bg-\[\#1a1a2e\].border-\[\#2a2a3e\].text-gray-500 {
     background-color: #4f46e5 !important;
     color: #ffffff !important;
     border: none !important;
     font-weight: 600;
 }
-
 .legend {
     display: flex;
     gap: clamp(8px, 2vw, 20px);
@@ -345,7 +351,6 @@ body {
     flex-wrap: wrap;
     margin-top: 20px;
 }
-
 .legend-item {
     display: flex;
     align-items: center;
@@ -354,7 +359,6 @@ body {
     color: #475569;
     font-weight: 500;
 }
-
 .legend-item .color-box {
     width: clamp(14px, 2vw, 20px);
     height: clamp(14px, 2vw, 20px);
@@ -366,7 +370,6 @@ body {
     font-size: 10px;
     color: #fff;
 }
-
 .seat-row {
     display: flex;
     gap: clamp(2px, 0.4vw, 4px);
@@ -374,7 +377,6 @@ body {
     justify-content: center;
     flex-wrap: nowrap;
 }
-
 .row-label {
     width: clamp(20px, 2.5vw, 28px);
     font-size: clamp(0.6rem, 1vw, 0.75rem);
@@ -388,19 +390,8 @@ body {
     background: #ffffff;
     z-index: 5;
 }
-
-.seat-grid-wrapper {
-    display: inline-block;
-    min-width: 100%;
-}
-
-.seats-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
-}
-
+.seat-grid-wrapper { display: inline-block; min-width: 100%; }
+.seats-container { display: flex; flex-direction: column; align-items: center; width: 100%; }
 .seat-grid-scroll-wrapper {
     width: 100%;
     max-height: 60vh;
@@ -409,7 +400,6 @@ body {
     padding: 8px;
     position: relative;
 }
-
 .seat-grid-container {
     display: grid;
     gap: clamp(2px, 0.4vw, 4px);
@@ -419,34 +409,11 @@ body {
     transform-origin: top left;
     transition: transform 0.2s ease-out;
 }
-
-.seat-grid-scroll-wrapper::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-}
-
-.seat-grid-scroll-wrapper::-webkit-scrollbar-track {
-    background: #f1f5f9;
-    border-radius: 4px;
-}
-
-.seat-grid-scroll-wrapper::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
-    border-radius: 4px;
-}
-
-.selected-info {
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 12px;
-    min-height: 60px;
-}
-
-#subtotal {
-    color: #0f172a !important;
-}
-
+.seat-grid-scroll-wrapper::-webkit-scrollbar { width: 6px; height: 6px; }
+.seat-grid-scroll-wrapper::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+.seat-grid-scroll-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.selected-info { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; min-height: 60px; }
+#subtotal { color: #0f172a !important; }
 .summary-sticky {
     background-color: #f8fafc !important;
     border: 1px solid #cbd5e1 !important;
@@ -458,16 +425,10 @@ body {
     top: 100px;
     align-self: flex-start;
 }
-
 .summary-sticky .text-white { color: #0f172a !important; }
 .summary-sticky .text-gray-400 { color: #475569 !important; font-weight: 500; }
 .summary-sticky .text-gray-500 { color: #64748b !important; }
-.summary-sticky .text-indigo-400 {
-    color: #334155 !important;
-    font-size: 1rem !important;
-    font-weight: 700 !important;
-}
-
+.summary-sticky .text-indigo-400 { color: #334155 !important; font-size: 1rem !important; font-weight: 700 !important; }
 .btn-continue-food {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: #ffffff !important;
@@ -480,19 +441,8 @@ body {
     width: 100%;
     font-size: 1rem;
 }
-
-.btn-continue-food:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
-}
-
-.btn-continue-food:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    transform: none !important;
-    box-shadow: none !important;
-}
-
+.btn-continue-food:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25); }
+.btn-continue-food:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
 .btn-back {
     background: #ffffff;
     border: 1px solid #cbd5e1;
@@ -508,212 +458,46 @@ body {
     text-decoration: none;
     display: block;
 }
-
-.btn-back:hover {
-    border-color: #6366f1;
-    color: #4f46e5 !important;
-    background: #eef2ff;
-}
-
-.promotion-tag {
-    display: inline-block;
-    padding: 3px 12px;
-    border-radius: 12px;
-    font-size: 12px !important;
-    font-weight: 600;
-    margin: 2px;
-}
-
-.promotion-tag.lunes {
-    background: #dcfce7;
-    color: #15803d;
-    border: 1px solid #86efac;
-}
-
-.promotion-tag.preventa {
-    background: #fef3c7;
-    color: #b45309;
-    border: 1px solid #fde68a;
-}
-
-.language-tag {
-    display: inline-block;
-    padding: 3px 12px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: 600;
-    background: #dbeafe;
-    color: #1d4ed8;
-    border: 1px solid #bfdbfe;
-}
-
-.info-text {
-    font-size: 13px;
-    color: #475569;
-}
-
-.info-text strong {
-    color: #0f172a;
-}
-
-.summary-movie-poster {
-    width: 80px;
-    height: 120px;
-    object-fit: cover;
-    border-radius: 8px;
-    flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
-
-.summary-movie-title {
-    font-weight: 700;
-    color: #0f172a;
-    font-size: 1.1rem;
-    line-height: 1.3;
-}
-
-.summary-movie-details {
-    font-size: 0.85rem;
-    color: #475569;
-    margin-top: 2px;
-}
-
-.summary-movie-details strong {
-    color: #0f172a;
-}
-
-.summary-promo-badge {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 12px;
-    font-size: 0.65rem;
-    font-weight: 600;
-    margin-top: 4px;
-}
-
-.summary-promo-badge.lunes {
-    background: #dcfce7;
-    color: #15803d;
-    border: 1px solid #bbf7d0;
-}
-
-.summary-promo-badge.preventa {
-    background: #fef3c7;
-    color: #b45309;
-    border: 1px solid #fde68a;
-}
-
-.summary-language-tag {
-    display: inline-block;
-    padding: 2px 12px;
-    border-radius: 12px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    margin-top: 4px;
-    background: #dbeafe;
-    color: #1d4ed8;
-    border: 1px solid #bfdbfe;
-}
-
-.summary-total-price {
-    font-size: 1.3rem;
-    font-weight: 700;
-    color: #16a34a;
-    margin-top: 2px;
-}
-
-.selected-info-box {
-    background: #f1f5f9 !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 8px !important;
-    padding: 14px !important;
-    margin-top: 12px;
-    margin-bottom: 16px;
-}
-
-.summary-sticky .bg-\[\#1a1a2e\] {
-    background-color: #f1f5f9 !important;
-}
-
-.summary-sticky .border-\[\#2a2a3e\] {
-    border-color: #cbd5e1 !important;
-}
-
+.btn-back:hover { border-color: #6366f1; color: #4f46e5 !important; background: #eef2ff; }
+.promotion-tag { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 12px !important; font-weight: 600; margin: 2px; }
+.promotion-tag.lunes { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+.promotion-tag.preventa { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+.language-tag { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.info-text { font-size: 13px; color: #475569; }
+.info-text strong { color: #0f172a; }
+.summary-movie-poster { width: 80px; height: 120px; object-fit: cover; border-radius: 8px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+.summary-movie-title { font-weight: 700; color: #0f172a; font-size: 1.1rem; line-height: 1.3; }
+.summary-movie-details { font-size: 0.85rem; color: #475569; margin-top: 2px; }
+.summary-movie-details strong { color: #0f172a; }
+.summary-promo-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.65rem; font-weight: 600; margin-top: 4px; }
+.summary-promo-badge.lunes { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+.summary-promo-badge.preventa { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+.summary-language-tag { display: inline-block; padding: 2px 12px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; margin-top: 4px; background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; }
+.summary-total-price { font-size: 1.3rem; font-weight: 700; color: #16a34a; margin-top: 2px; }
+.selected-info-box { background: #f1f5f9 !important; border: 1px solid #e2e8f0 !important; border-radius: 8px !important; padding: 14px !important; margin-top: 12px; margin-bottom: 16px; }
+.summary-sticky .bg-\[\#1a1a2e\] { background-color: #f1f5f9 !important; }
+.summary-sticky .border-\[\#2a2a3e\] { border-color: #cbd5e1 !important; }
 @media (max-width: 768px) {
-    .seat-grid-scroll-wrapper {
-        max-height: 50vh;
-    }
-    .summary-sticky {
-        padding: 16px;
-        position: relative;
-        top: auto;
-    }
-    .summary-movie-poster {
-        width: 60px;
-        height: 90px;
-    }
-    .summary-movie-title {
-        font-size: 0.95rem;
-    }
+    .seat-grid-scroll-wrapper { max-height: 50vh; }
+    .summary-sticky { padding: 16px; position: relative; top: auto; }
+    .summary-movie-poster { width: 60px; height: 90px; }
+    .summary-movie-title { font-size: 0.95rem; }
 }
-
 @media (max-width: 640px) {
-    .seat {
-        width: 1.35rem;
-        height: 1.35rem;
-        border-radius: 3px;
-    }
-    .seat-label {
-        font-size: 0.5rem;
-        bottom: 0px;
-    }
-    .row-label {
-        width: 18px;
-        font-size: 0.55rem;
-        padding-right: 4px;
-    }
-    .seat-grid-container {
-        gap: 3px;
-        padding: 4px;
-    }
-    .seat-row {
-        gap: 3px;
-    }
-    .cinema-screen {
-        margin-top: 20px;
-        padding: 8px;
-        font-size: 0.6rem;
-    }
+    .seat { width: 1.35rem; height: 1.35rem; border-radius: 3px; }
+    .seat-label { font-size: 0.5rem; bottom: 0px; }
+    .row-label { width: 18px; font-size: 0.55rem; padding-right: 4px; }
+    .seat-grid-container { gap: 3px; padding: 4px; }
+    .seat-row { gap: 3px; }
+    .cinema-screen { margin-top: 20px; padding: 8px; font-size: 0.6rem; }
 }
-
 @media (max-width: 480px) {
-    .seat {
-        width: 1.2rem;
-        height: 1.2rem;
-        border-radius: 2px;
-    }
-    .seat-label {
-        font-size: 0.45rem;
-        bottom: 0px;
-    }
-    .row-label {
-        width: 16px;
-        font-size: 0.5rem;
-        padding-right: 3px;
-    }
-    .seat-grid-container {
-        gap: 2.5px;
-        padding: 3px;
-    }
-    .seat-row {
-        gap: 2.5px;
-    }
-    .cinema-screen {
-        margin-top: 16px;
-        padding: 6px;
-        font-size: 0.5rem;
-        letter-spacing: 2px;
-    }
+    .seat { width: 1.2rem; height: 1.2rem; border-radius: 2px; }
+    .seat-label { font-size: 0.45rem; bottom: 0px; }
+    .row-label { width: 16px; font-size: 0.5rem; padding-right: 3px; }
+    .seat-grid-container { gap: 2.5px; padding: 3px; }
+    .seat-row { gap: 2.5px; }
+    .cinema-screen { margin-top: 16px; padding: 6px; font-size: 0.5rem; letter-spacing: 2px; }
 }
 </style>
 
@@ -725,8 +509,8 @@ body {
                 <div>
                     <h2 class="text-xl font-bold section-title">🎫 Selecciona tus asientos</h2>
                     <p class="text-sm section-subtitle">
-                        <?= htmlspecialchars($showtime['room_name']) ?> ·
-                        <?= formatDateShort($showtime['show_date']) ?> ·
+                        <?= htmlspecialchars($showtime['room_name']) ?> · 
+                        <?= formatDateShort($showtime['show_date']) ?> · 
                         <?= formatTimeVenezuela($showtime['show_time']) ?>
                     </p>
                 </div>
@@ -735,7 +519,6 @@ body {
                 </span>
             </div>
 
-            <!-- Botones de Zoom (Móviles) -->
             <div class="flex sm:hidden justify-end gap-2 mb-3 items-center">
                 <span class="text-xs text-gray-400 mr-auto"><i class="fas fa-search-plus mr-1"></i> Zoom:</span>
                 <button type="button" id="btn-zoom-out" class="bg-[#1a1a2e] border border-[#2a2a3e] text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition-all">
@@ -749,7 +532,6 @@ body {
                 </button>
             </div>
 
-            <!-- Contenedor con scroll -->
             <div class="seats-container">
                 <div class="seat-grid-scroll-wrapper">
                     <div class="seat-grid-wrapper">
@@ -758,18 +540,18 @@ body {
                             $rows = $seatLayout['rows'] ?? [];
                             $seatMap = $seatLayout['seatMap'] ?? [];
                             $reversedRows = array_reverse($rows);
-
+                            
                             foreach ($reversedRows as $row):
                                 $seatNumbers = $seatMap[$row] ?? range(1, 21);
                             ?>
                             <div class="seat-row">
                                 <span class="row-label"><?= $row ?></span>
-                                <?php foreach ($seatNumbers as $seatNumber):
+                                <?php foreach ($seatNumbers as $seatNumber): 
                                     $seatId = $row . $seatNumber;
                                     $isOccupied = in_array($seatId, $occupiedSeats);
                                     $isBlocked = in_array($seatId, $blockedSeats);
                                     $isAccessible = in_array($seatId, $accessibleSeats);
-
+                                    
                                     $seatClass = 'seat-available';
                                     if ($isBlocked) {
                                         $seatClass = 'seat-blocked';
@@ -778,11 +560,11 @@ body {
                                     } elseif ($isAccessible) {
                                         $seatClass = 'seat-accessible';
                                     }
-
+                                    
                                     $seatTitle = $isBlocked ? 'Pasillo' : ($isOccupied ? 'Ocupado' : ($isAccessible ? "Asiento $seatId (Discapacidad ♿)" : "Asiento $seatId"));
                                 ?>
-                                <button
-                                    data-seat="<?= $seatId ?>"
+                                <button 
+                                    data-seat="<?= $seatId ?>" 
                                     class="seat <?= $seatClass ?>"
                                     <?= ($isOccupied || $isBlocked) ? 'disabled' : '' ?>
                                     title="<?= htmlspecialchars($seatTitle) ?>"
@@ -797,27 +579,14 @@ body {
                         </div>
                     </div>
                 </div>
-                <!-- PANTALLA -->
                 <div class="cinema-screen">PANTALLA</div>
             </div>
 
             <div class="legend">
-                <div class="legend-item">
-                    <div class="color-box bg-gray-500"></div>
-                    Disponible
-                </div>
-                <div class="legend-item">
-                    <div class="color-box bg-sky-600">♿</div>
-                    Discapacidad
-                </div>
-                <div class="legend-item">
-                    <div class="color-box bg-indigo-500"></div>
-                    Seleccionado
-                </div>
-                <div class="legend-item">
-                    <div class="color-box bg-red-600"></div>
-                    Ocupado
-                </div>
+                <div class="legend-item"><div class="color-box bg-gray-500"></div> Disponible</div>
+                <div class="legend-item"><div class="color-box bg-sky-600">♿</div> Discapacidad</div>
+                <div class="legend-item"><div class="color-box bg-indigo-500"></div> Seleccionado</div>
+                <div class="legend-item"><div class="color-box bg-red-600"></div> Ocupado</div>
             </div>
         </div>
 
@@ -825,33 +594,23 @@ body {
         <div class="w-full xl:w-96 summary-sticky">
             <div>
                 <div class="flex gap-4 mb-4">
-                    <img src="<?= $tmdb_poster ? 'https://image.tmdb.org/t/p/w200' . $tmdb_poster : ($showtime['poster_url'] ? htmlspecialchars($showtime['poster_url']) : '') ?>"
-                         alt="<?= htmlspecialchars($showtime['title']) ?>"
+                    <img src="<?= $tmdb_poster ? 'https://image.tmdb.org/t/p/w200' . $tmdb_poster : ($showtime['poster_url'] ? htmlspecialchars($showtime['poster_url']) : '') ?>" 
+                         alt="<?= htmlspecialchars($showtime['title']) ?>" 
                          class="summary-movie-poster"
                          onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22150%22 viewBox=%220 0 100 150%22%3E%3Crect fill=%22%231a1a2e%22 width=%22100%22 height=%22150%22/%3E%3Ctext x=%2250%22 y=%2275%22 text-anchor=%22middle%22 fill=%22%236b7280%22 font-size=%2240%22 font-family=%22Arial%22%3E🎬%3C/text%3E%3C/svg%3E'">
                     <div class="flex-1 min-w-0">
                         <h3 class="summary-movie-title"><?= htmlspecialchars($showtime['title']) ?></h3>
                         <div class="flex flex-wrap gap-1 mt-1">
-                            <?php if($hasMondayPromo): ?>
-                            <span class="promotion-tag lunes">Lunes ½ Precio</span>
-                            <?php endif; ?>
-                            <?php if($hasPresale): ?>
-                            <span class="promotion-tag preventa">Preventa</span>
-                            <?php endif; ?>
-                            <?php if(!$hasMondayPromo && !$hasPresale): ?>
-                            <span class="text-gray-500 text-xs">Sin promociones</span>
-                            <?php endif; ?>
+                            <?php if($hasMondayPromo): ?><span class="promotion-tag lunes">Lunes ½ Precio</span><?php endif; ?>
+                            <?php if($hasPresale): ?><span class="promotion-tag preventa">Preventa</span><?php endif; ?>
+                            <?php if(!$hasMondayPromo && !$hasPresale): ?><span class="text-gray-500 text-xs">Sin promociones</span><?php endif; ?>
                         </div>
-                        <div class="mt-2">
-                            <span class="language-tag"><?= $lang_label ?></span>
-                        </div>
+                        <div class="mt-2"><span class="language-tag"><?= $lang_label ?></span></div>
                         <div class="mt-2 info-text">
-                            <strong><?= formatDateShort($showtime['show_date']) ?></strong> ·
+                            <strong><?= formatDateShort($showtime['show_date']) ?></strong> · 
                             <strong><?= formatTimeVenezuela($showtime['show_time']) ?></strong>
                         </div>
-                        <p class="text-sm text-indigo-400 font-semibold mt-1">
-                            <?= formatCurrency($totalAmount, $siteConfig) ?>
-                        </p>
+                        <p class="text-sm text-indigo-400 font-semibold mt-1"><?= formatCurrency($totalAmount, $siteConfig) ?></p>
                         <p class="text-xs text-gray-400 mt-1 truncate"><?= htmlspecialchars($showtime['room_name']) ?></p>
                     </div>
                 </div>
@@ -860,12 +619,10 @@ body {
 
                 <div class="selected-info-box">
                     <p class="text-sm text-gray-600">
-                        Asientos elegidos:
-                        <span id="selected-seats-list" class="font-bold text-slate-900">-</span>
+                        Asientos elegidos: <span id="selected-seats-list" class="font-bold text-slate-900">-</span>
                     </p>
                     <p class="text-sm text-gray-600 mt-1">
-                        Cantidad de boletos:
-                        <span id="ticket-count" class="font-bold text-slate-900">0 de <?= $totalSeats ?></span>
+                        Cantidad de boletos: <span id="ticket-count" class="font-bold text-slate-900">0 de <?= $totalSeats ?></span>
                     </p>
                 </div>
             </div>
@@ -874,11 +631,12 @@ body {
                 <form action="food_menu.php" method="GET" id="foodForm" onsubmit="return handleFormSubmit(event)">
                     <input type="hidden" name="showtime_id" value="<?= $showtime['id'] ?>">
                     <input type="hidden" name="seats" id="seats-input" value="">
+                    <input type="hidden" name="token" value="<?= htmlspecialchars($purchaseToken) ?>">
                     <button type="submit" id="btn-continue" disabled class="btn-continue-food">
                         <i class="fas fa-utensils mr-2"></i> Continuar a Comida
                     </button>
                 </form>
-                <a href="price_selection.php?showtime_id=<?= $showtimeId ?>" class="btn-back">
+                <a href="price_selection.php?showtime_id=<?= $showtimeId ?>&token=<?= htmlspecialchars($purchaseToken) ?>" class="btn-back">
                     <i class="fas fa-arrow-left mr-2"></i> Regresar a Boletos
                 </a>
             </div>
@@ -890,7 +648,7 @@ body {
 
 <script>
 // ============================================
-// CONFIGURACIÓN
+// CONFIGURACIÓN DESDE PHP (SEGURO)
 // ============================================
 const totalSeatsNeeded = <?= $totalSeats ?>;
 const showtimeId = <?= $showtime['id'] ?>;
@@ -899,7 +657,7 @@ const totalAmount = <?= $totalAmount ?>;
 const occupiedSeats = <?= json_encode($occupiedSeats) ?>;
 const blockedSeats = <?= json_encode($blockedSeats) ?>;
 const accessibleSeats = <?= json_encode($accessibleSeats) ?>;
-
+const purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
 const currencyConfig = {
     symbol: '<?= $siteConfig['currency_symbol'] ?? '$' ?>',
     position: '<?= $siteConfig['currency_position'] ?? 'left' ?>',
@@ -907,61 +665,45 @@ const currencyConfig = {
     decimal: '<?= $siteConfig['decimal_separator'] ?? ',' ?>',
     decimals: <?= intval($siteConfig['decimal_places'] ?? 2) ?>
 };
-
 let selectedSeats = [];
 const maxSeats = totalSeatsNeeded;
 
 // ============================================
-// FUNCIÓN PARA GUARDAR EN SESSIONSTORAGE
+// FUNCIONES DE ALMACENAMIENTO
 // ============================================
 function saveSeatsToStorage() {
     try {
         sessionStorage.setItem('selected_seats_' + showtimeId, JSON.stringify(selectedSeats));
         sessionStorage.setItem('selected_seats_count_' + showtimeId, selectedSeats.length);
-        console.log('✅ Asientos guardados en sessionStorage:', selectedSeats);
-    } catch (e) {
-        console.warn('Error guardando en sessionStorage:', e);
-    }
+    } catch (e) { console.warn('Error guardando en sessionStorage:', e); }
 }
 
-// ============================================
-// FUNCIÓN PARA CARGAR DESDE SESSIONSTORAGE
-// ============================================
 function loadSeatsFromStorage() {
     try {
         const saved = sessionStorage.getItem('selected_seats_' + showtimeId);
         if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                const validSeats = parsed.filter(seat => !occupiedSeats.includes(seat));
+                const validSeats = parsed.filter(seat => !occupiedSeats.includes(seat) && !blockedSeats.includes(seat));
                 if (validSeats.length > 0) {
                     selectedSeats = validSeats;
-                    console.log('✅ Asientos cargados desde sessionStorage:', selectedSeats);
                     return true;
                 }
             }
         }
-    } catch (e) {
-        console.warn('Error cargando desde sessionStorage:', e);
-    }
+    } catch (e) { console.warn('Error cargando desde sessionStorage:', e); }
     return false;
 }
 
-// ============================================
-// FUNCIÓN PARA LIMPIAR ASIENTOS
-// ============================================
 function clearSeatsStorage() {
     try {
         sessionStorage.removeItem('selected_seats_' + showtimeId);
         sessionStorage.removeItem('selected_seats_count_' + showtimeId);
-        console.log('🗑️ Asientos eliminados de sessionStorage');
-    } catch (e) {
-        console.warn('Error limpiando sessionStorage:', e);
-    }
+    } catch (e) { console.warn('Error limpiando sessionStorage:', e); }
 }
 
 // ============================================
-// FORMATO DE MONEDA
+// FUNCIONES DE FORMATO
 // ============================================
 function formatCurrency(amount) {
     const symbol = currencyConfig.symbol;
@@ -969,20 +711,12 @@ function formatCurrency(amount) {
     const thousands = currencyConfig.thousands;
     const decimal = currencyConfig.decimal;
     const decimals = currencyConfig.decimals;
-
-    let formatted = amount.toFixed(decimals)
-        .replace('.', decimal)
-        .replace(/\B(?=(\d{3})+(?!\d))/g, thousands);
-
-    if (position === 'right') {
-        return formatted + ' ' + symbol;
-    } else {
-        return symbol + formatted;
-    }
+    let formatted = amount.toFixed(decimals).replace('.', decimal).replace(/\B(?=(\d{3})+(?!\d))/g, thousands);
+    return position === 'right' ? formatted + ' ' + symbol : symbol + formatted;
 }
 
 // ============================================
-// ACTUALIZAR UI
+// ACTUALIZAR RESUMEN
 // ============================================
 function updateSummary() {
     const count = selectedSeats.length;
@@ -990,16 +724,11 @@ function updateSummary() {
     const ticketCountEl = document.getElementById('ticket-count');
     const seatsInput = document.getElementById('seats-input');
     const btnContinue = document.getElementById('btn-continue');
-
-    if (count > 0) {
-        selectedSeatsList.innerText = selectedSeats.join(', ');
-    } else {
-        selectedSeatsList.innerText = '-';
-    }
-
+    
+    selectedSeatsList.innerText = count > 0 ? selectedSeats.join(', ') : '-';
     ticketCountEl.innerText = count + ' de ' + maxSeats;
     seatsInput.value = selectedSeats.join(',');
-
+    
     if (count >= maxSeats) {
         btnContinue.removeAttribute('disabled');
         btnContinue.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -1009,261 +738,191 @@ function updateSummary() {
         btnContinue.classList.add('opacity-50', 'cursor-not-allowed');
         btnContinue.innerHTML = '<i class="fas fa-utensils mr-2"></i> Selecciona ' + (maxSeats - count) + ' asiento' + (maxSeats - count !== 1 ? 's' : '') + ' más';
     }
-
     saveSeatsToStorage();
 }
 
+// ============================================
+// VALIDAR ASIENTOS
+// ============================================
 function validateSeats() {
-    if (selectedSeats.length === 0) {
-        showNotification('Por favor, selecciona al menos un asiento.', 'warning');
-        return false;
-    }
-
-    if (selectedSeats.length < maxSeats) {
-        showNotification(`Debes seleccionar ${maxSeats} asientos. Has seleccionado ${selectedSeats.length}.`, 'warning');
-        return false;
-    }
-
+    if (selectedSeats.length === 0) { showNotification('Por favor, selecciona al menos un asiento.', 'warning'); return false; }
+    if (selectedSeats.length < maxSeats) { showNotification('Debes seleccionar ' + maxSeats + ' asientos. Has seleccionado ' + selectedSeats.length + '.', 'warning'); return false; }
     const stillOccupied = selectedSeats.filter(seat => occupiedSeats.includes(seat));
-    if (stillOccupied.length > 0) {
-        showNotification(`Asientos no disponibles: ${stillOccupied.join(', ')}`, 'error');
-        return false;
-    }
-
+    if (stillOccupied.length > 0) { showNotification('Asientos no disponibles: ' + stillOccupied.join(', '), 'error'); return false; }
     return true;
 }
 
 // ============================================
-// SELECCIÓN DE ASIENTOS
+// NOTIFICACIONES
+// ============================================
+function showNotification(message, type = 'info') {
+    const colors = { info: 'bg-blue-600', success: 'bg-green-600', warning: 'bg-yellow-600', error: 'bg-red-600' };
+    const icons = { info: 'fa-info-circle', success: 'fa-check-circle', warning: 'fa-exclamation-triangle', error: 'fa-times-circle' };
+    const notification = document.createElement('div');
+    notification.className = 'fixed bottom-4 left-1/2 transform -translate-x-1/2 ' + (colors[type] || 'bg-gray-600') + ' text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-lg z-50 transition-all duration-300 max-w-[90%] sm:max-w-md text-center text-sm flex items-center gap-3';
+    notification.innerHTML = '<i class="fas ' + (icons[type] || 'fa-info-circle') + '"></i><span>' + message + '</span>';
+    document.body.appendChild(notification);
+    setTimeout(() => { notification.style.opacity = '0'; notification.style.transform = 'translate(-50%, 20px)'; setTimeout(() => notification.remove(), 300); }, 3500);
+}
+
+// ============================================
+// MANEJAR ENVÍO DEL FORMULARIO
+// ============================================
+window.handleFormSubmit = function(event) {
+    event.preventDefault();
+    if (!validateSeats()) return false;
+    
+    const seats = document.getElementById('seats-input').value;
+    const showtimeId = document.querySelector('input[name="showtime_id"]').value;
+    const token = document.querySelector('input[name="token"]')?.value || purchaseToken;
+    const btnContinue = document.getElementById('btn-continue');
+    btnContinue.disabled = true;
+    btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
+    
+    fetch('create_food_session.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'showtime_id=' + encodeURIComponent(showtimeId) + '&seats=' + encodeURIComponent(seats) + '&token=' + encodeURIComponent(token)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            window.location.href = 'food_menu.php?showtime_id=' + showtimeId + '&token=' + token;
+        } else {
+            showNotification('Error al crear la sesión. Intenta nuevamente.', 'error');
+            btnContinue.disabled = false;
+            btnContinue.innerHTML = '<i class="fas fa-utensils mr-2"></i> Continuar a Comida';
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        window.location.href = 'food_menu.php?showtime_id=' + showtimeId + '&token=' + token;
+    });
+    return false;
+};
+
+// ============================================
+// INICIALIZACIÓN
 // ============================================
 document.addEventListener('DOMContentLoaded', function() {
     const seats = document.querySelectorAll('.seat:not(.seat-occupied):not(.seat-blocked)');
-
-    // ============================================
-    // ✅ CORREGIDO: Detectar de dónde viene el usuario
-    // Usar parámetro GET 'from' (confiable) + referrer (respaldo)
-    // ============================================
-    const urlParams = new URLSearchParams(window.location.search);
-    const fromParam = urlParams.get('from') || '';
-    const referrer = document.referrer || '';
-
-    const isFromFoodMenu = fromParam === 'food' || fromParam === 'payment' || referrer.includes('food_menu.php') || referrer.includes('payment.php');
-    const isFromPriceSelection = fromParam === 'price' || (fromParam === '' && (referrer.includes('price_selection.php') || referrer.includes('process_selection.php')));
-
-    console.log('🔍 fromParam:', fromParam, '| referrer:', referrer);
-    console.log('🔍 isFromFoodMenu:', isFromFoodMenu, '| isFromPriceSelection:', isFromPriceSelection);
-
-    // SI VIENE DE PRICE_SELECTION, LIMPIAR ASIENTOS GUARDADOS
-    if (isFromPriceSelection && !isFromFoodMenu) {
-        clearSeatsStorage();
-        console.log('🗑️ Asientos limpiados (viene de price_selection)');
-    }
-
-    // ============================================
-    // CARGAR ASIENTOS GUARDADOS (si viene de food_menu o payment)
-    // ============================================
-    let hasSavedSeats = false;
-    if (isFromFoodMenu) {
-        hasSavedSeats = loadSeatsFromStorage();
-        if (hasSavedSeats) {
-            console.log('✅ Asientos restaurados (viene de food_menu/payment)');
-        } else {
-            console.log('⚠️ No se encontraron asientos en sessionStorage');
-        }
-    }
-
-    // ============================================
-    // RESTAURAR ESTADO VISUAL DE LOS ASIENTOS
-    // ============================================
+    
+    console.log('🔍 Inicializando seats.php, totalSeatsNeeded:', totalSeatsNeeded);
+    console.log('🔍 Ocupados:', occupiedSeats);
+    console.log('🔍 Bloqueados:', blockedSeats);
+    
+    // Intentar cargar asientos guardados
+    const hasSavedSeats = loadSeatsFromStorage();
     if (hasSavedSeats) {
-        seats.forEach(seat => {
-            const seatId = seat.getAttribute('data-seat');
-            if (selectedSeats.includes(seatId)) {
-                seat.classList.remove('seat-available', 'seat-accessible');
-                seat.classList.add('seat-selected');
+        console.log('✅ Asientos restaurados desde sessionStorage (' + selectedSeats.length + ' asientos):', selectedSeats);
+    } else {
+        // Si no hay asientos guardados, verificar si hay sesión de comida activa
+        <?php if ($hasFoodSession && isset($_SESSION[$foodSeatsKey]) && !empty($_SESSION[$foodSeatsKey])): ?>
+        const foodSeats = '<?= addslashes($_SESSION[$foodSeatsKey]) ?>';
+        console.log('🔍 Asientos desde sesión de comida:', foodSeats);
+        if (foodSeats) {
+            const seatsFromFood = foodSeats.split(',').filter(s => s.trim());
+            const validSeats = seatsFromFood.filter(seat => !occupiedSeats.includes(seat) && !blockedSeats.includes(seat));
+            if (validSeats.length > 0) {
+                selectedSeats = validSeats;
+                saveSeatsToStorage();
+                console.log('✅ Asientos restaurados desde sesión de comida (' + selectedSeats.length + ' asientos):', selectedSeats);
             }
-        });
-        updateSummary();
+        }
+        <?php endif; ?>
     }
-
-    // ============================================
-    // EVENTOS DE CLIC EN ASIENTOS
-    // ============================================
+    
+    // Restaurar estado visual
+    seats.forEach(seat => {
+        const seatId = seat.getAttribute('data-seat');
+        if (selectedSeats.includes(seatId)) {
+            seat.classList.remove('seat-available', 'seat-accessible');
+            seat.classList.add('seat-selected');
+        }
+    });
+    updateSummary();
+    
+    // Eventos de clic en asientos
     seats.forEach(seat => {
         seat.addEventListener('click', function() {
             const seatId = this.getAttribute('data-seat');
-
-            if (blockedSeats.includes(seatId)) {
-                showNotification('Este es un pasillo, no se puede seleccionar', 'warning');
-                return;
+            console.log('🖱️ Clic en asiento:', seatId);
+            
+            if (blockedSeats.includes(seatId)) { 
+                showNotification('Este es un pasillo, no se puede seleccionar', 'warning'); 
+                return; 
             }
-
-            if (occupiedSeats.includes(seatId)) {
-                this.classList.add('seat-occupied');
-                this.disabled = true;
-                showNotification('Este asiento ya ha sido reservado.', 'error');
-                return;
+            if (occupiedSeats.includes(seatId)) { 
+                this.classList.add('seat-occupied'); 
+                this.disabled = true; 
+                showNotification('Este asiento ya ha sido reservado.', 'error'); 
+                return; 
             }
-
+            
             const index = selectedSeats.indexOf(seatId);
             const isAccessible = accessibleSeats.includes(seatId);
-
+            
             if (index > -1) {
                 selectedSeats.splice(index, 1);
                 this.classList.remove('seat-selected');
-                if (isAccessible) {
-                    this.classList.add('seat-accessible');
-                } else {
-                    this.classList.add('seat-available');
-                }
+                this.classList.add(isAccessible ? 'seat-accessible' : 'seat-available');
+                console.log('➖ Asiento removido:', seatId);
             } else {
-                if (selectedSeats.length >= maxSeats) {
-                    showNotification(`Máximo ${maxSeats} asientos.`, 'warning');
-                    return;
+                if (selectedSeats.length >= maxSeats) { 
+                    showNotification('Máximo ' + maxSeats + ' asientos.', 'warning'); 
+                    return; 
                 }
-
                 selectedSeats.push(seatId);
                 this.classList.remove('seat-available', 'seat-accessible');
                 this.classList.add('seat-selected');
+                console.log('➕ Asiento agregado:', seatId);
             }
-
+            console.log('📋 Asientos seleccionados:', selectedSeats);
             updateSummary();
         });
     });
-
-    // ============================================
-    // MANEJO DEL FORMULARIO - SEGURO (sin asientos en URL)
-    // ============================================
-    window.handleFormSubmit = function(event) {
-        event.preventDefault();
-
-        if (!validateSeats()) {
-            return false;
-        }
-
-        const seats = document.getElementById('seats-input').value;
-        const showtimeId = document.querySelector('input[name="showtime_id"]').value;
-        const btnContinue = document.getElementById('btn-continue');
-
-        btnContinue.disabled = true;
-        btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
-
-        // Guardar en sesión a través del servidor
-        fetch('create_food_session.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: 'showtime_id=' + encodeURIComponent(showtimeId) + '&seats=' + encodeURIComponent(seats)
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                window.location.href = 'food_menu.php?showtime_id=' + showtimeId;
-            } else {
-                showNotification('Error al crear la sesión. Intenta nuevamente.', 'error');
-                btnContinue.disabled = false;
-                btnContinue.innerHTML = '<i class="fas fa-utensils mr-2"></i> Continuar a Comida';
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            window.location.href = 'food_menu.php?showtime_id=' + showtimeId;
-        });
-
-        return false;
-    };
-
-    // ============================================
-    // NOTIFICACIONES
-    // ============================================
-    function showNotification(message, type = 'info') {
-        const colors = {
-            info: 'bg-blue-600',
-            success: 'bg-green-600',
-            warning: 'bg-yellow-600',
-            error: 'bg-red-600'
-        };
-
-        const icons = {
-            info: 'fa-info-circle',
-            success: 'fa-check-circle',
-            warning: 'fa-exclamation-triangle',
-            error: 'fa-times-circle'
-        };
-
-        const notification = document.createElement('div');
-        notification.className = `fixed bottom-4 left-1/2 transform -translate-x-1/2 ${colors[type] || 'bg-gray-600'} text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-lg z-50 transition-all duration-300 max-w-[90%] sm:max-w-md text-center text-sm flex items-center gap-3`;
-        notification.innerHTML = `
-            <i class="fas ${icons[type] || 'fa-info-circle'}"></i>
-            <span>${message}</span>
-        `;
-        document.body.appendChild(notification);
-
-        setTimeout(() => {
-            notification.style.opacity = '0';
-            notification.style.transform = 'translate(-50%, 20px)';
-            setTimeout(() => notification.remove(), 300);
-        }, 3500);
-    }
-
-    // ============================================
-    // ZOOM PARA MÓVILES
-    // ============================================
+    
+    // Zoom para móviles
     let currentZoom = 1;
-    const minZoom = 0.8;
-    const maxZoom = 1.8;
-    const stepZoom = 0.2;
-
+    const minZoom = 0.8, maxZoom = 1.8, stepZoom = 0.2;
     const seatGridContainer = document.querySelector('.seat-grid-container');
     const seatGridWrapper = document.querySelector('.seat-grid-wrapper');
     const btnZoomIn = document.getElementById('btn-zoom-in');
     const btnZoomOut = document.getElementById('btn-zoom-out');
     const btnZoomReset = document.getElementById('btn-zoom-reset');
-
+    
     function applyZoom(newZoom) {
         currentZoom = Math.min(Math.max(newZoom, minZoom), maxZoom);
-        seatGridContainer.style.transform = `scale(${currentZoom})`;
-
+        seatGridContainer.style.transform = 'scale(' + currentZoom + ')';
         if (currentZoom > 1) {
-            const extraWidth = seatGridContainer.offsetWidth * (currentZoom - 1);
-            const extraHeight = seatGridContainer.offsetHeight * (currentZoom - 1);
-            seatGridWrapper.style.paddingRight = `${extraWidth}px`;
-            seatGridWrapper.style.paddingBottom = `${extraHeight}px`;
+            seatGridWrapper.style.paddingRight = (seatGridContainer.offsetWidth * (currentZoom - 1)) + 'px';
+            seatGridWrapper.style.paddingBottom = (seatGridContainer.offsetHeight * (currentZoom - 1)) + 'px';
         } else {
             seatGridWrapper.style.paddingRight = '0px';
             seatGridWrapper.style.paddingBottom = '0px';
         }
-
-        if (btnZoomReset) {
-            btnZoomReset.innerText = `${Math.round(currentZoom * 100)}%`;
-        }
+        if (btnZoomReset) btnZoomReset.innerText = Math.round(currentZoom * 100) + '%';
     }
-
+    
     if (btnZoomIn && btnZoomOut && btnZoomReset) {
         btnZoomIn.addEventListener('click', () => applyZoom(currentZoom + stepZoom));
         btnZoomOut.addEventListener('click', () => applyZoom(currentZoom - stepZoom));
         btnZoomReset.addEventListener('click', () => applyZoom(1));
     }
-
-    // ============================================
-    // ACTUALIZAR ASIENTOS CADA 30 SEGUNDOS
-    // ============================================
+    
+    // Actualizar asientos cada 30 segundos
     setInterval(function() {
         fetch('check_seats.php?showtime_id=<?= $showtime['id'] ?>')
             .then(response => response.json())
             .then(data => {
                 data.occupied.forEach(seatId => {
-                    const seatEl = document.querySelector(`[data-seat="${seatId}"]`);
+                    const seatEl = document.querySelector('[data-seat="' + seatId + '"]');
                     if (seatEl && !seatEl.classList.contains('seat-occupied')) {
                         seatEl.classList.remove('seat-selected', 'seat-available', 'seat-accessible');
                         seatEl.classList.add('seat-occupied');
                         seatEl.disabled = true;
-
                         const index = selectedSeats.indexOf(seatId);
-                        if (index > -1) {
-                            selectedSeats.splice(index, 1);
-                        }
+                        if (index > -1) selectedSeats.splice(index, 1);
                     }
                 });
                 updateSummary();

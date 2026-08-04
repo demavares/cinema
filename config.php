@@ -3,10 +3,9 @@
 date_default_timezone_set('America/Caracas');
 
 // ============================================
-// CONFIGURACIÓN DE SESIÓN - SESIÓN EXPIRA AL CERRAR NAVEGADOR
+// CONFIGURACIÓN DE SESIÓN
 // ============================================
 if (session_status() === PHP_SESSION_NONE) {
-    // Configurar cookie de sesión para que expire al cerrar el navegador
     ini_set('session.cookie_lifetime', 0);
     ini_set('session.gc_maxlifetime', 3600);
     ini_set('session.cookie_httponly', 1);
@@ -16,7 +15,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Verificar si la sesión debe ser destruida por timeout de inactividad
+// Verificar timeout de inactividad
 if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 3600)) {
     session_unset();
     session_destroy();
@@ -287,7 +286,9 @@ function releaseExpiredSeats($pdo) {
 // Ejecutar liberación automática al cargar cualquier página
 $released_count = releaseExpiredSeats($pdo);
 
-// Funciones CSRF
+// ============================================
+// FUNCIONES CSRF
+// ============================================
 function generateCSRFToken() {
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
@@ -297,6 +298,23 @@ function generateCSRFToken() {
 
 function verifyCSRFToken($token) {
     return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+}
+
+// ============================================
+// ✅ NUEVO: GENERAR TOKEN DE COMPRA ÚNICO
+// ============================================
+function generatePurchaseToken() {
+    return bin2hex(random_bytes(32));
+}
+
+function verifyPurchaseToken($token, $showtimeId) {
+    if (empty($token)) return false;
+    
+    // Verificar que el token corresponda al showtime actual
+    $expectedToken = $_SESSION['purchase_token_' . $showtimeId] ?? null;
+    if (!$expectedToken) return false;
+    
+    return hash_equals($expectedToken, $token);
 }
 
 // ============================================
@@ -361,7 +379,9 @@ function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration
     return ['conflict' => false];
 }
 
+// ============================================
 // FUNCIONES DE FORMATO
+// ============================================
 function formatTimeVenezuela($time) {
     if (empty($time)) return '';
     return date('h:i A', strtotime($time));
@@ -512,5 +532,116 @@ function destroySession() {
     }
     
     session_destroy();
+}
+
+// ============================================
+// ✅ NUEVO: VALIDAR Y RECALCULAR PRECIOS EN EL SERVIDOR
+// ============================================
+function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
+    // Obtener showtime con precios
+    $stmt = $pdo->prepare("
+        SELECT s.*, m.duration
+        FROM showtimes s
+        JOIN movies m ON s.movie_id = m.id
+        WHERE s.id = ? AND s.is_active = 1
+    ");
+    $stmt->execute([$showtimeId]);
+    $showtime = $stmt->fetch();
+    
+    if (!$showtime) {
+        return ['error' => 'Función no encontrada o inactiva'];
+    }
+    
+    // Obtener tasa de IVA
+    $stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
+    $tax = $stmt->fetch();
+    $taxRate = $tax ? floatval($tax['tax_rate']) : 16;
+    
+    // Obtener precios del showtime (desde BD, NO desde el cliente)
+    $priceAdult = floatval($showtime['price_adult'] ?? $showtime['price'] ?? 0);
+    $priceChild = floatval($showtime['price_child'] ?? 0);
+    $priceSenior = floatval($showtime['price_senior'] ?? 0);
+    
+    // Aplicar descuento de lunes si aplica
+    $currentDay = date('N');
+    $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
+    if (in_array('lunes_mitad', $promotions) && $currentDay == 1) {
+        $priceAdult = $priceAdult / 2;
+        $priceChild = $priceChild / 2;
+        $priceSenior = $priceSenior / 2;
+    }
+    
+    // Validar que los tipos de ticket existan
+    $validTypes = ['adult', 'child', 'senior'];
+    $totalSeats = 0;
+    $subtotal = 0;
+    
+    foreach ($validTypes as $type) {
+        $count = intval($ticketsData[$type] ?? 0);
+        if ($count < 0) $count = 0;
+        $totalSeats += $count;
+        
+        switch ($type) {
+            case 'adult':
+                $subtotal += $count * $priceAdult;
+                break;
+            case 'child':
+                $subtotal += $count * $priceChild;
+                break;
+            case 'senior':
+                $subtotal += $count * $priceSenior;
+                break;
+        }
+    }
+    
+    if ($totalSeats <= 0) {
+        return ['error' => 'Debes seleccionar al menos un boleto'];
+    }
+    
+    // Verificar disponibilidad de asientos
+    $stmt = $pdo->prepare("
+        SELECT r.capacity, r.seat_layout
+        FROM showtimes s
+        JOIN rooms r ON s.room_id = r.id
+        WHERE s.id = ?
+    ");
+    $stmt->execute([$showtimeId]);
+    $room = $stmt->fetch();
+    
+    if (!$room) {
+        return ['error' => 'Sala no encontrada'];
+    }
+    
+    // Obtener asientos ocupados
+    $stmt = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ?");
+    $stmt->execute([$showtimeId]);
+    $occupiedSeats = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    $layout = json_decode($room['seat_layout'], true);
+    $blockedSeats = $layout['blockedSeats'] ?? [];
+    $totalAvailable = ($layout['totalSeats'] ?? 0) - count($blockedSeats) - count($occupiedSeats);
+    
+    if ($totalAvailable < $totalSeats) {
+        return ['error' => 'No hay suficientes asientos disponibles'];
+    }
+    
+    // Calcular impuestos y total
+    $taxAmount = $subtotal * ($taxRate / 100);
+    $totalAmount = $subtotal + $taxAmount;
+    
+    return [
+        'success' => true,
+        'subtotal' => $subtotal,
+        'tax_rate' => $taxRate,
+        'tax_amount' => $taxAmount,
+        'total_amount' => $totalAmount,
+        'total_seats' => $totalSeats,
+        'prices' => [
+            'adult' => $priceAdult,
+            'child' => $priceChild,
+            'senior' => $priceSenior
+        ],
+        'available_seats' => $totalAvailable
+    ];
 }
 ?>
