@@ -1,6 +1,9 @@
 <?php
 require_once 'config.php';
 
+// ============================================
+// VERIFICAR AUTENTICACIÓN
+// ============================================
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
@@ -22,7 +25,17 @@ $paymentMethod = isset($_POST['payment_method']) ? $_POST['payment_method'] : ''
 $foodOrder = isset($_POST['food_order']) ? $_POST['food_order'] : '[]';
 $token = $_POST['purchase_token'] ?? '';
 
+// ============================================
+// ✅ DEBUG - Registrar datos recibidos
+// ============================================
+error_log("=== CHECKOUT.PHP ===");
+error_log("showtime_id: $showtimeId");
+error_log("token recibido: " . substr($token, 0, 16) . "...");
+error_log("seats: $seats");
+error_log("payment_method: $paymentMethod");
+
 if (empty($seats) || $showtimeId <= 0) {
+    error_log("ERROR: Datos incompletos - seats: $seats, showtime_id: $showtimeId");
     header('Location: index.php?error=Datos+incompletos');
     exit;
 }
@@ -37,6 +50,7 @@ $seatsArray = array_map('trim', explode(',', $seats));
 // ✅ VERIFICAR TIMEOUT DEL TOKEN
 // ============================================
 if (isPurchaseTokenExpired($showtimeId)) {
+    error_log("ERROR: Token expirado para showtime $showtimeId");
     clearPurchaseSession($showtimeId);
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=El+tiempo+para+la+reserva+ha+expirado');
     exit;
@@ -46,15 +60,20 @@ if (isPurchaseTokenExpired($showtimeId)) {
 // ✅ VALIDAR TOKEN DE COMPRA
 // ============================================
 if (empty($token) || !verifyPurchaseTokenWithTimeout($token, $showtimeId)) {
+    error_log("ERROR: Token inválido en checkout - token: " . substr($token, 0, 16) . "...");
+    error_log("Token esperado: " . substr($_SESSION['purchase_token_' . $showtimeId] ?? '', 0, 16) . "...");
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
     exit;
 }
+
+error_log("✅ Token validado correctamente");
 
 // ============================================
 // ✅ VERIFICAR TIMEOUT DE COMIDA
 // ============================================
 $timeoutKey = 'food_timeout_' . $showtimeId;
 if (isset($_SESSION[$timeoutKey]) && $_SESSION[$timeoutKey] <= 0) {
+    error_log("ERROR: Timeout de comida expirado");
     clearPurchaseSession($showtimeId);
     header('Location: index.php?timeout=1');
     exit;
@@ -74,6 +93,7 @@ $stmt->execute([$showtimeId]);
 $showtime = $stmt->fetch();
 
 if (!$showtime) {
+    error_log("ERROR: Showtime no encontrado: $showtimeId");
     header('Location: index.php?error=Horario+no+disponible');
     exit;
 }
@@ -83,6 +103,7 @@ $ticketQuantities = isset($_SESSION['ticket_quantities_' . $showtimeId])
     : null;
 
 if (!$ticketQuantities) {
+    error_log("ERROR: ticket_quantities no encontrado en sesión para showtime $showtimeId");
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+de+boletos+no+encontrados');
     exit;
 }
@@ -90,6 +111,7 @@ if (!$ticketQuantities) {
 $validation = validateAndRecalculatePrices($pdo, $showtimeId, $ticketQuantities);
 
 if (isset($validation['error'])) {
+    error_log("ERROR de validación: " . $validation['error']);
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=' . urlencode($validation['error']));
     exit;
 }
@@ -101,6 +123,7 @@ $totalTicketsAmount = $validation['total_amount'];
 $totalSeats = $validation['total_seats'];
 
 if (count($seatsArray) != $totalSeats) {
+    error_log("ERROR: Cantidad de asientos no coincide - esperado: $totalSeats, recibido: " . count($seatsArray));
     header('Location: seats.php?showtime_id=' . $showtimeId . '&error=La+cantidad+de+asientos+no+coincide');
     exit;
 }
@@ -154,7 +177,6 @@ if (!empty($foodData) && is_array($foodData)) {
 }
 
 $totalGeneral = $totalTicketsAmount + $totalFood;
-
 $ticketTypeMap = ['adult' => 1, 'child' => 2, 'senior' => 3];
 
 $purchaseId = null;
@@ -262,13 +284,14 @@ try {
         'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null
     ]);
     
-    $stmtPurchase = $pdo->prepare("
+$stmtPurchase = $pdo->prepare("
         INSERT INTO purchases (
             user_id, showtime_id, seats, total_tickets, total_food, 
             subtotal, tax_amount, tax_rate, total_amount, 
-            session_token, expires_at, status, payment_method, payment_data, transaction_token
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?)
+            session_token, expires_at, status, payment_method, payment_data
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)
     ");
+
     $stmtPurchase->execute([
         $userId,
         $showtimeId,
@@ -282,8 +305,7 @@ try {
         $sessionToken,
         $expiresAt,
         $paymentMethod,
-        $paymentData,
-        $transactionId
+        $paymentData
     ]);
     
     $purchaseId = $pdo->lastInsertId();
@@ -313,9 +335,6 @@ try {
         ]);
     }
     
-    // ============================================
-    // ✅ LIMPIAR LA SESIÓN DE COMPRA
-    // ============================================
     $_SESSION['last_order_id'] = $purchaseId;
     $_SESSION['last_showtime_id'] = $showtimeId;
     
@@ -324,8 +343,11 @@ try {
     
     $pdo->commit();
     
+    error_log("✅ Compra completada - purchase_id: $purchaseId, transaction_id: $transactionId");
+    
 } catch (Exception $e) {
     $pdo->rollBack();
+    error_log("ERROR en checkout: " . $e->getMessage());
     header('Location: seats.php?showtime_id=' . $showtimeId . '&error=' . urlencode($e->getMessage()));
     exit;
 }

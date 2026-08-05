@@ -1,6 +1,9 @@
 <?php
 require_once 'config.php';
 
+// ============================================
+// VERIFICAR QUE EL USUARIO TENGA SESIÓN
+// ============================================
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
@@ -126,51 +129,108 @@ if (!empty($purchase['payment_data'])) {
     $paymentReference = is_array($paymentData) && isset($paymentData['reference']) ? $paymentData['reference'] : 'N/A';
 }
 
+$currency_symbol = $siteConfig['currency_symbol'] ?? '$';
+$currency_position = $siteConfig['currency_position'] ?? 'left';
+$thousands_separator = $siteConfig['thousands_separator'] ?? '.';
+$decimal_separator = $siteConfig['decimal_separator'] ?? ',';
+$decimal_places = intval($siteConfig['decimal_places'] ?? 2);
+
 require_once 'header.php';
 ?>
 
 <style>
+/* ============================================
+   ESTILOS UNIFICADOS - Fondo blanco y texto oscuro
+   Mismo estilo que seats.php, food_menu.php y payment.php
+   ============================================ */
+body {
+    background-color: #ffffff !important;
+    color: #1f2937 !important;
+}
+
+.bg-\[\#14141e\] {
+    background-color: #ffffff !important;
+}
+.border-\[\#1e1e2e\] {
+    border-color: #e2e8f0 !important;
+}
+
 .confirmation-card {
-    background: #14141e;
-    border: 1px solid #1e1e2e;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 16px;
     padding: 32px;
-    max-width: 640px;
+    max-width: 680px;
     margin: 0 auto;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
 }
+
 .success-icon {
     width: 72px;
     height: 72px;
-    background: #22c55e20;
-    border: 2px solid #22c55e40;
+    background: #dcfce7;
+    border: 2px solid #86efac;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 32px;
-    color: #22c55e;
+    color: #16a34a;
     margin: 0 auto 20px auto;
 }
+
+.confirmation-title {
+    color: #0f172a;
+    font-size: 1.75rem;
+    font-weight: 800;
+    text-align: center;
+}
+
+.confirmation-subtitle {
+    color: #475569;
+    text-align: center;
+    font-size: 0.95rem;
+    margin-bottom: 24px;
+}
+
 .movie-summary {
-    background: #0f0f1a;
+    background: #f8fafc;
     border-radius: 12px;
     padding: 16px;
-    border: 1px solid #1a1a2e;
+    border: 1px solid #e2e8f0;
     margin-bottom: 20px;
 }
-.movie-summary .movie-title { font-size: 1.1rem; font-weight: 700; color: #ffffff; }
+
+.movie-summary .movie-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #0f172a;
+}
+
 .movie-summary .movie-details {
     display: flex;
     flex-wrap: wrap;
     gap: 4px 16px;
     margin-top: 4px;
     font-size: 0.9rem;
-    color: #9ca3af;
+    color: #475569;
 }
-.movie-summary .movie-details span { display: flex; align-items: center; gap: 4px; }
-.movie-summary .movie-details .separator { color: #374151; }
-.movie-summary .movie-details .language-text { font-weight: 400; color: #9ca3af; }
+
+.movie-summary .movie-details span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.movie-summary .movie-details .separator {
+    color: #cbd5e1;
+}
+
+.movie-summary .movie-details .language-text {
+    font-weight: 400;
+    color: #475569;
+}
+
 .movie-summary .promo-badge {
     display: inline-block;
     padding: 2px 12px;
@@ -179,58 +239,174 @@ require_once 'header.php';
     font-weight: 600;
     margin-top: 6px;
 }
-.movie-summary .promo-badge.lunes { background: #22c55e20; color: #86efac; border: 1px solid #22c55e40; }
-.movie-summary .promo-badge.preventa { background: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40; }
-.movie-summary .promo-badge.none { background: #6b728030; color: #9ca3af; border: 1px solid #6b728040; }
+
+.movie-summary .promo-badge.lunes {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #86efac;
+}
+
+.movie-summary .promo-badge.preventa {
+    background: #fef3c7;
+    color: #b45309;
+    border: 1px solid #fde68a;
+}
+
+.movie-summary .promo-badge.none {
+    background: #f1f5f9;
+    color: #64748b;
+    border: 1px solid #e2e8f0;
+}
+
+.detail-section {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #e2e8f0;
+}
+
+.detail-section .detail-title {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+}
+
 .detail-row {
     display: flex;
     justify-content: space-between;
-    padding: 8px 0;
-    border-bottom: 1px solid #1a1a2e;
+    padding: 6px 0;
+    border-bottom: 1px solid #e2e8f0;
     font-size: 0.95rem;
 }
-.detail-row .label { color: #9ca3af; }
-.detail-row .value { color: #e5e7eb; font-weight: 500; }
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-row .label {
+    color: #475569;
+}
+
+.detail-row .value {
+    color: #0f172a;
+    font-weight: 600;
+}
+
 .detail-row.total {
     border-top: 2px solid #4f46e5;
     border-bottom: none;
-    padding-top: 16px;
-    margin-top: 8px;
-    font-size: 1.2rem;
+    padding-top: 12px;
+    margin-top: 4px;
+    font-size: 1.1rem;
 }
-.detail-row.total .value { color: #22c55e; font-weight: 700; }
+
+.detail-row.total .value {
+    color: #16a34a;
+    font-weight: 700;
+}
+
 .tax-row {
     display: flex;
     justify-content: space-between;
     padding: 4px 0;
-    font-size: 0.9rem;
-    color: #9ca3af;
-    border-bottom: 1px solid #1a1a2e;
+    font-size: 0.85rem;
+    color: #475569;
+    border-bottom: 1px solid #e2e8f0;
 }
-.tax-row .tax-label { color: #9ca3af; }
-.tax-row .tax-value { color: #fbbf24; font-weight: 600; }
+
+.tax-row .tax-value {
+    color: #b45309;
+    font-weight: 600;
+}
+
 .food-item {
     display: flex;
     justify-content: space-between;
-    padding: 4px 0 4px 20px;
+    padding: 4px 0 4px 16px;
     font-size: 0.9rem;
-    color: #9ca3af;
-    border-bottom: 1px solid #111827;
+    color: #475569;
+    border-bottom: 1px solid #e2e8f0;
 }
-.food-item .food-name { color: #d1d5db; }
-.food-item .food-total { color: #e5e7eb; font-weight: 500; }
+
+.food-item:last-child {
+    border-bottom: none;
+}
+
+.food-item .food-name {
+    color: #0f172a;
+}
+
+.food-item .food-total {
+    color: #0f172a;
+    font-weight: 500;
+}
+
+.payment-box {
+    background: #f8fafc;
+    border-radius: 12px;
+    padding: 16px;
+    border: 1px solid #e2e8f0;
+    margin-top: 16px;
+}
+
+.payment-box .payment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.payment-box .payment-header .payment-label {
+    color: #475569;
+    font-size: 0.9rem;
+}
+
+.payment-box .payment-header .payment-value {
+    color: #0f172a;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.payment-box .payment-detail {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 0.85rem;
+    color: #475569;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.payment-box .payment-detail:last-child {
+    border-bottom: none;
+}
+
+.payment-box .payment-detail .detail-label {
+    color: #94a3b8;
+}
+
+.payment-box .payment-detail .detail-value {
+    color: #0f172a;
+    font-weight: 500;
+}
+
 .btn-actions {
     display: flex;
     flex-direction: column;
     gap: 10px;
     margin-top: 24px;
 }
+
 .btn-actions .btn-primary {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
-    color: white;
-    padding: 12px;
+    color: #ffffff !important;
+    padding: 12px 20px;
     border-radius: 8px;
     font-weight: 700;
+    font-size: 1rem;
     text-align: center;
     transition: all 0.3s ease;
     border: none;
@@ -238,172 +414,391 @@ require_once 'header.php';
     text-decoration: none;
     display: block;
 }
-.btn-actions .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3); }
+
+.btn-actions .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
+}
+
 .btn-actions .btn-secondary {
-    background: transparent;
-    border: 1px solid #374151;
-    color: #9ca3af;
-    padding: 12px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155 !important;
+    padding: 11px 20px;
     border-radius: 8px;
     font-weight: 600;
+    font-size: 0.95rem;
     text-align: center;
     transition: all 0.3s ease;
     text-decoration: none;
     display: block;
 }
-.btn-actions .btn-secondary:hover { border-color: #4f46e5; color: #e5e7eb; background: rgba(79, 70, 229, 0.1); }
+
+.btn-actions .btn-secondary:hover {
+    border-color: #6366f1;
+    color: #4f46e5 !important;
+    background: #eef2ff;
+}
+
 .confirmation-poster {
-    width: 100px;
-    height: 150px;
+    width: 80px;
+    height: 120px;
     object-fit: cover;
     border-radius: 8px;
-    background: #1a1a2e;
+    background: #f1f5f9;
     flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
-.payment-box {
-    background: #0f0f1a;
-    border-radius: 12px;
-    padding: 16px;
-    border: 1px solid #1a1a2e;
-    margin-top: 16px;
-}
-.payment-box .payment-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #1a1a2e;
-}
-.payment-box .payment-header .payment-label { color: #9ca3af; font-size: 0.9rem; }
-.payment-box .payment-header .payment-value { color: #e5e7eb; font-weight: 600; font-size: 0.95rem; }
-.payment-box .payment-detail {
-    display: flex;
-    justify-content: space-between;
-    padding: 6px 0;
-    font-size: 0.85rem;
-    color: #9ca3af;
-    border-bottom: 1px solid #111827;
-}
-.payment-box .payment-detail:last-child { border-bottom: none; }
-.payment-box .payment-detail .detail-label { color: #6b7280; }
-.payment-box .payment-detail .detail-value { color: #d1d5db; font-weight: 500; }
-.info-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 6px;
-    font-size: 0.85rem;
-    color: #9ca3af;
-}
-.info-tags .tag-item { color: #9ca3af; }
-.info-tags .tag-item strong { color: #e5e7eb; font-weight: 600; }
+
 .purchase-id {
     font-family: 'Courier New', monospace;
-    background: #1a1a2e;
-    padding: 2px 10px;
-    border-radius: 4px;
-    color: #818cf8;
-    font-size: 0.85rem;
+    background: #f1f5f9;
+    padding: 4px 14px;
+    border-radius: 6px;
+    color: #4f46e5;
+    font-size: 0.9rem;
+    font-weight: 700;
+    border: 1px solid #e2e8f0;
 }
+
 .seat-accessible-badge {
     display: inline-block;
-    background: #0284c720;
-    color: #38bdf8;
-    border: 1px solid #0284c740;
+    background: #dbeafe;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
     padding: 0px 8px;
     border-radius: 12px;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 600;
     margin-left: 4px;
 }
+
 .seat-list {
     display: flex;
     flex-wrap: wrap;
     gap: 6px 12px;
     margin-top: 4px;
 }
+
 .seat-item {
     display: inline-flex;
     align-items: center;
     gap: 2px;
-    font-weight: 500;
-    color: #e5e7eb;
-    background: #1a1a2e;
+    font-weight: 600;
+    color: #0f172a;
+    background: #f1f5f9;
     padding: 2px 10px 2px 8px;
     border-radius: 6px;
-    border: 1px solid #2a2a3e;
+    border: 1px solid #e2e8f0;
+    font-size: 0.85rem;
 }
-.seat-item.accessible { color: #38bdf8; border-color: #0284c740; background: #0f1a2e; }
-.seat-item .accessible-icon { font-size: 0.8rem; }
-.seat-item .seat-label { font-weight: 600; }
+
+.seat-item.accessible {
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+    background: #dbeafe;
+}
+
+.seat-item .accessible-icon {
+    font-size: 0.8rem;
+}
+
+.seat-item .seat-label {
+    font-weight: 700;
+}
+
 .ticket-type-badge {
     display: inline-block;
     padding: 1px 10px;
     border-radius: 10px;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 600;
     margin-left: 4px;
 }
-.ticket-type-badge.adult { background: #4f46e520; color: #818cf8; border: 1px solid #4f46e540; }
-.ticket-type-badge.child { background: #22c55e20; color: #86efac; border: 1px solid #22c55e40; }
-.ticket-type-badge.senior { background: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40; }
+
+.ticket-type-badge.adult {
+    background: #eef2ff;
+    color: #4f46e5;
+    border: 1px solid #c7d2fe;
+}
+
+.ticket-type-badge.child {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #86efac;
+}
+
+.ticket-type-badge.senior {
+    background: #fef3c7;
+    color: #b45309;
+    border: 1px solid #fde68a;
+}
+
+.info-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 6px;
+    font-size: 0.85rem;
+    color: #475569;
+}
+
+.info-tags .tag-item {
+    color: #475569;
+}
+
+.info-tags .tag-item strong {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.info-box {
+    padding: 12px 16px;
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    color: #3730a3;
+}
+
+.info-box strong {
+    color: #1e1b4b;
+}
+
+.info-box .text-sky-400 {
+    color: #0369a1;
+}
 
 @media (max-width: 640px) {
-    .confirmation-card { padding: 16px; margin: 0 8px; border-radius: 12px; }
-    .success-icon { width: 48px; height: 48px; font-size: 20px; margin-bottom: 14px; }
-    .confirmation-card h1 { font-size: 1.2rem; }
-    .confirmation-card p { font-size: 0.8rem; margin-bottom: 14px; }
-    .movie-summary { padding: 12px; }
-    .movie-summary .flex { flex-direction: column; align-items: center; gap: 10px; }
-    .movie-summary .flex .flex-1 { width: 100%; text-align: center; }
-    .confirmation-poster { width: 80px; height: 120px; }
-    .movie-summary .movie-title { font-size: 0.95rem; text-align: center; }
-    .movie-summary .movie-details { font-size: 0.8rem; gap: 2px 8px; justify-content: center; }
-    .movie-summary .promo-badge { font-size: 0.6rem; padding: 1px 10px; }
-    .info-tags { font-size: 0.75rem; gap: 6px; justify-content: center; }
-    .detail-row { font-size: 0.82rem; padding: 6px 0; flex-direction: column; align-items: flex-start; gap: 2px; }
-    .detail-row .value { width: 100%; }
-    .detail-row.total { font-size: 0.95rem; padding-top: 12px; flex-direction: row; align-items: center; }
-    .tax-row { font-size: 0.78rem; padding: 3px 0; }
-    .food-item { font-size: 0.78rem; padding: 3px 0 3px 14px; }
-    .payment-box { padding: 12px; margin-top: 12px; }
-    .payment-box .payment-header { flex-direction: column; align-items: flex-start; gap: 4px; padding-bottom: 6px; }
-    .payment-box .payment-header .payment-label { font-size: 0.8rem; }
-    .payment-box .payment-header .payment-value { font-size: 0.85rem; }
-    .payment-box .payment-detail { font-size: 0.75rem; padding: 4px 0; }
-    .btn-actions { gap: 8px; margin-top: 16px; }
-    .btn-actions .btn-primary, .btn-actions .btn-secondary { padding: 10px; font-size: 0.85rem; }
-    .mt-4.p-3 { padding: 10px; font-size: 0.7rem; }
-    .seat-list { gap: 4px 8px; }
-    .seat-item { padding: 1px 8px 1px 6px; font-size: 0.8rem; }
-    .ticket-type-badge { font-size: 0.6rem; padding: 0px 6px; }
+    .confirmation-card {
+        padding: 20px;
+        margin: 0 8px;
+        border-radius: 12px;
+    }
+
+    .success-icon {
+        width: 56px;
+        height: 56px;
+        font-size: 24px;
+        margin-bottom: 14px;
+    }
+
+    .confirmation-title {
+        font-size: 1.3rem;
+    }
+
+    .confirmation-subtitle {
+        font-size: 0.85rem;
+        margin-bottom: 18px;
+    }
+
+    .movie-summary .flex {
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .movie-summary .flex .flex-1 {
+        width: 100%;
+        text-align: center;
+    }
+
+    .confirmation-poster {
+        width: 70px;
+        height: 105px;
+    }
+
+    .movie-summary .movie-title {
+        font-size: 0.95rem;
+        text-align: center;
+    }
+
+    .movie-summary .movie-details {
+        font-size: 0.8rem;
+        gap: 2px 8px;
+        justify-content: center;
+    }
+
+    .detail-row {
+        font-size: 0.85rem;
+        padding: 5px 0;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+
+    .detail-row .value {
+        width: 100%;
+    }
+
+    .detail-row.total {
+        font-size: 1rem;
+        padding-top: 10px;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .tax-row {
+        font-size: 0.78rem;
+        padding: 3px 0;
+    }
+
+    .food-item {
+        font-size: 0.8rem;
+        padding: 3px 0 3px 12px;
+    }
+
+    .payment-box {
+        padding: 12px;
+        margin-top: 12px;
+    }
+
+    .payment-box .payment-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding-bottom: 6px;
+    }
+
+    .payment-box .payment-header .payment-label {
+        font-size: 0.8rem;
+    }
+
+    .payment-box .payment-header .payment-value {
+        font-size: 0.85rem;
+    }
+
+    .payment-box .payment-detail {
+        font-size: 0.75rem;
+        padding: 4px 0;
+    }
+
+    .btn-actions {
+        gap: 8px;
+        margin-top: 18px;
+    }
+
+    .btn-actions .btn-primary,
+    .btn-actions .btn-secondary {
+        padding: 10px;
+        font-size: 0.85rem;
+    }
+
+    .info-box {
+        padding: 10px 14px;
+        font-size: 0.7rem;
+    }
+
+    .seat-list {
+        gap: 4px 8px;
+    }
+
+    .seat-item {
+        padding: 1px 8px 1px 6px;
+        font-size: 0.75rem;
+    }
+
+    .ticket-type-badge {
+        font-size: 0.55rem;
+        padding: 0px 6px;
+    }
+
+    .purchase-id {
+        font-size: 0.8rem;
+        padding: 3px 10px;
+    }
+}
+
+@media (max-width: 400px) {
+    .confirmation-card {
+        padding: 14px;
+        margin: 0 4px;
+    }
+
+    .confirmation-poster {
+        width: 60px;
+        height: 90px;
+    }
+
+    .movie-summary .movie-title {
+        font-size: 0.85rem;
+    }
+
+    .movie-summary .movie-details {
+        font-size: 0.7rem;
+    }
+
+    .detail-row {
+        font-size: 0.75rem;
+        padding: 4px 0;
+    }
+
+    .detail-row.total {
+        font-size: 0.85rem;
+        padding-top: 8px;
+    }
+
+    .tax-row {
+        font-size: 0.7rem;
+        padding: 2px 0;
+    }
+
+    .payment-box .payment-detail {
+        font-size: 0.7rem;
+        padding: 3px 0;
+    }
+
+    .btn-actions .btn-primary,
+    .btn-actions .btn-secondary {
+        padding: 8px;
+        font-size: 0.75rem;
+    }
+
+    .seat-item {
+        font-size: 0.7rem;
+        padding: 1px 6px 1px 4px;
+    }
 }
 </style>
 
-<div class="container mx-auto px-4 py-8 max-w-4xl">
+<div class="container mx-auto px-4 py-6 sm:py-10 max-w-4xl">
     <div class="confirmation-card">
-        <div class="success-icon"><i class="fas fa-check"></i></div>
-        <h1 class="text-2xl font-bold text-center text-white mb-2">¡Compra Confirmada!</h1>
-        <p class="text-center text-gray-400 text-sm mb-6">Tu compra se ha realizado con éxito. Revisa los detalles a continuación.</p>
-        
-        <div class="text-center mb-4">
-            <span class="text-xs text-gray-500">ID de Compra</span>
-            <div class="purchase-id">#<?= str_pad($purchase['id'], 8, '0', STR_PAD_LEFT) ?></div>
+        <!-- Icono de éxito -->
+        <div class="success-icon">
+            <i class="fas fa-check"></i>
         </div>
-        
+
+        <h1 class="confirmation-title">¡Compra Confirmada!</h1>
+        <p class="confirmation-subtitle">
+            Tu compra se ha realizado con éxito. Revisa los detalles a continuación.
+        </p>
+
+        <!-- ID de Compra -->
+        <div class="text-center mb-4">
+            <span class="text-xs text-gray-500 font-semibold uppercase tracking-wider">ID de Compra</span>
+            <div class="purchase-id inline-block mt-1">#<?= str_pad($purchase['id'], 8, '0', STR_PAD_LEFT) ?></div>
+        </div>
+
+        <!-- Resumen de la Película -->
         <div class="movie-summary">
             <div class="flex gap-4">
                 <?php if ($display_poster): ?>
-                    <img src="<?= htmlspecialchars($display_poster) ?>" alt="<?= htmlspecialchars($showtime['title']) ?>" class="confirmation-poster">
+                    <img src="<?= htmlspecialchars($display_poster) ?>"
+                         alt="<?= htmlspecialchars($showtime['title']) ?>"
+                         class="confirmation-poster">
                 <?php else: ?>
-                    <div class="confirmation-poster flex items-center justify-center text-4xl bg-gray-800">🎬</div>
+                    <div class="confirmation-poster flex items-center justify-center text-4xl bg-gray-100 text-gray-400">
+                        🎬
+                    </div>
                 <?php endif; ?>
+
                 <div class="flex-1 min-w-0">
                     <div class="movie-title"><?= htmlspecialchars($showtime['title']) ?></div>
+
                     <div class="movie-details">
                         <span>Idioma: <span class="language-text"><?= htmlspecialchars($languageLabel) ?></span></span>
                     </div>
+
                     <div class="movie-details">
                         <span><?= htmlspecialchars($showtime['room_name']) ?></span>
                         <span class="separator">·</span>
@@ -411,11 +806,19 @@ require_once 'header.php';
                         <span class="separator">·</span>
                         <span><?= formatTimeVenezuela($showtime['show_time']) ?></span>
                     </div>
+
                     <div class="movie-details">
-                        <?php if ($hasMondayPromo): ?><span class="promo-badge lunes">Lunes ½ Precio</span><?php endif; ?>
-                        <?php if ($hasPresale): ?><span class="promo-badge preventa">Preventa</span><?php endif; ?>
-                        <?php if (!$hasMondayPromo && !$hasPresale): ?><span class="promo-badge none">Sin promociones</span><?php endif; ?>
+                        <?php if ($hasMondayPromo): ?>
+                            <span class="promo-badge lunes">🌙 Lunes ½ Precio</span>
+                        <?php endif; ?>
+                        <?php if ($hasPresale): ?>
+                            <span class="promo-badge preventa">🎫 Preventa</span>
+                        <?php endif; ?>
+                        <?php if (!$hasMondayPromo && !$hasPresale): ?>
+                            <span class="promo-badge none">Sin promociones</span>
+                        <?php endif; ?>
                     </div>
+
                     <div class="info-tags">
                         <span class="tag-item"><strong><?= $ticketCount ?></strong> boleto<?= $ticketCount > 1 ? 's' : '' ?></span>
                         <?php if (!empty($foodOrders)): ?>
@@ -425,40 +828,47 @@ require_once 'header.php';
                 </div>
             </div>
         </div>
-        
-        <div class="bg-[#0f0f1a] p-4 rounded-xl border border-[#1a1a2e]">
-            <h3 class="text-sm font-semibold text-gray-400 mb-3">📋 Detalle de tu compra</h3>
-            
+
+        <!-- Detalle de la Compra -->
+        <div class="detail-section">
+            <p class="detail-title">📋 Detalle de tu compra</p>
+
+            <!-- ✅ BOLETOS POR TIPO -->
             <?php if (!empty($purchaseTickets)): ?>
                 <div class="mb-2">
-                    <p class="text-xs text-gray-500 font-semibold uppercase mb-1">🎟️ Boletos</p>
-                    <?php 
+                    <?php
                     $ticketTypes = [];
                     foreach ($purchaseTickets as $pt) {
                         $code = $pt['ticket_type_code'] ?? 'adult';
                         if (!isset($ticketTypes[$code])) {
-                            $ticketTypes[$code] = ['count' => 0, 'name' => $pt['ticket_type_name'] ?? ucfirst($code), 'price' => $pt['price']];
+                            $ticketTypes[$code] = [
+                                'count' => 0,
+                                'name' => $pt['ticket_type_name'] ?? ucfirst($code),
+                                'price' => $pt['price']
+                            ];
                         }
                         $ticketTypes[$code]['count']++;
                     }
-                    foreach ($ticketTypes as $code => $info): 
+                    foreach ($ticketTypes as $code => $info):
                         $badgeClass = $code == 'adult' ? 'adult' : ($code == 'child' ? 'child' : 'senior');
+                        $icon = $code == 'adult' ? '👤' : ($code == 'child' ? '🧒' : '👴');
                     ?>
-                        <div class="detail-row" style="border-bottom: 1px solid #1a1a2e;">
+                        <div class="detail-row">
                             <span class="label">
                                 <?= htmlspecialchars($info['name']) ?> x<?= $info['count'] ?>
-                                <span class="ticket-type-badge <?= $badgeClass ?>"><?= $code == 'adult' ? '👤' : ($code == 'child' ? '🧒' : '👴') ?></span>
+                                <span class="ticket-type-badge <?= $badgeClass ?>"><?= $icon ?></span>
                             </span>
                             <span class="value"><?= formatCurrency($info['count'] * $info['price'], $siteConfig) ?></span>
                         </div>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
-            
-            <div class="detail-row" style="flex-direction: column; align-items: stretch; gap: 4px; border-bottom: 1px solid #1a1a2e;">
+
+            <!-- Asientos -->
+            <div class="detail-row" style="flex-direction: column; align-items: stretch; gap: 4px; border-bottom: 1px solid #e2e8f0;">
                 <span class="label">🎫 Asientos</span>
                 <div class="seat-list">
-                    <?php foreach ($seatsArray as $seat): 
+                    <?php foreach ($seatsArray as $seat):
                         $isAccessible = strpos($seat, '♿') !== false;
                         $cleanSeat = str_replace('♿', '', $seat);
                     ?>
@@ -472,10 +882,11 @@ require_once 'header.php';
                     <?php endforeach; ?>
                 </div>
             </div>
-            
+
+            <!-- Comida -->
             <?php if (!empty($foodOrders)): ?>
-                <div class="mt-2 pt-2 border-t border-[#1a1a2e]">
-                    <p class="text-sm font-semibold text-gray-400 mb-1">🍿 Comida</p>
+                <div class="mt-2 pt-2 border-t border-[#e2e8f0]">
+                    <p class="text-sm font-semibold text-gray-700 mb-1">🍿 Comida</p>
                     <?php foreach ($foodOrders as $food): ?>
                         <div class="food-item">
                             <span class="food-name"><?= $food['quantity'] ?> x <?= htmlspecialchars($food['food_name']) ?></span>
@@ -484,9 +895,10 @@ require_once 'header.php';
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
-            
-            <div class="mt-2 pt-2 border-t border-[#1a1a2e]">
-                <div class="detail-row" style="border-bottom: 1px solid #1a1a2e;">
+
+            <!-- ✅ SUBTOTAL, IVA Y TOTAL -->
+            <div class="mt-2 pt-2 border-t border-[#e2e8f0]">
+                <div class="detail-row" style="border-bottom: 1px solid #e2e8f0;">
                     <span class="label">Subtotal</span>
                     <span class="value"><?= formatCurrency($subtotal, $siteConfig) ?></span>
                 </div>
@@ -500,50 +912,74 @@ require_once 'header.php';
                 </div>
             </div>
         </div>
-        
+
+        <!-- Método de Pago -->
         <div class="payment-box">
             <div class="payment-header">
                 <span class="payment-label">💳 Método de Pago</span>
                 <span class="payment-value"><?= htmlspecialchars($paymentLabel) ?></span>
             </div>
+
             <div class="payment-detail">
                 <span class="detail-label">Referencia</span>
                 <span class="detail-value"><?= htmlspecialchars($paymentReference) ?></span>
             </div>
+
             <?php if ($paymentMethod === 'movil'): ?>
-                <div class="payment-detail"><span class="detail-label">Banco</span><span class="detail-value">Banco de Venezuela</span></div>
-                <div class="payment-detail"><span class="detail-label">Cuenta</span><span class="detail-value">0102-0123-45-1234567890</span></div>
-                <div class="payment-detail"><span class="detail-label">Teléfono</span><span class="detail-value">0412-1234567</span></div>
+                <div class="payment-detail">
+                    <span class="detail-label">Banco</span>
+                    <span class="detail-value">Banco de Venezuela</span>
+                </div>
+                <div class="payment-detail">
+                    <span class="detail-label">Cuenta</span>
+                    <span class="detail-value">0102-0123-45-1234567890</span>
+                </div>
+                <div class="payment-detail">
+                    <span class="detail-label">Teléfono</span>
+                    <span class="detail-value">0412-1234567</span>
+                </div>
             <?php elseif ($paymentMethod === 'tarjeta'): ?>
-                <div class="payment-detail"><span class="detail-label">Tarjeta</span><span class="detail-value">•••• •••• •••• 1234</span></div>
-                <div class="payment-detail"><span class="detail-label">Titular</span><span class="detail-value">Cliente Prueba</span></div>
+                <div class="payment-detail">
+                    <span class="detail-label">Tarjeta</span>
+                    <span class="detail-value">•••• •••• •••• 1234</span>
+                </div>
+                <div class="payment-detail">
+                    <span class="detail-label">Titular</span>
+                    <span class="detail-value">Cliente Prueba</span>
+                </div>
             <?php endif; ?>
+
             <div class="payment-detail">
                 <span class="detail-label">Fecha de Pago</span>
                 <span class="detail-value"><?= date('d/m/Y H:i:s') ?></span>
             </div>
         </div>
-        
-        <div class="mt-4 p-3 bg-indigo-600/10 border border-indigo-500/20 rounded-xl text-xs text-gray-400">
+
+        <!-- Información adicional -->
+        <div class="info-box mt-4">
             <p class="flex items-center gap-2">
                 <i class="fas fa-info-circle text-indigo-400"></i>
-                <span>Se ha enviado un correo electrónico con los detalles de tu compra a <strong class="text-white"><?= htmlspecialchars($_SESSION['user_name'] ?? '') ?></strong>.</span>
+                <span>Se ha enviado un correo electrónico con los detalles de tu compra a <strong><?= htmlspecialchars($_SESSION['user_name'] ?? '') ?></strong>.</span>
             </p>
             <p class="flex items-center gap-2 mt-1">
                 <i class="fas fa-qrcode text-indigo-400"></i>
-                <span>Presenta este código en taquilla: <strong class="text-white font-mono">#<?= str_pad($purchase['id'], 6, '0', STR_PAD_LEFT) ?>-<?= str_pad($ticketCount, 2, '0', STR_PAD_LEFT) ?></strong></span>
+                <span>Presenta este código en taquilla: <strong class="font-mono">#<?= str_pad($purchase['id'], 6, '0', STR_PAD_LEFT) ?>-<?= str_pad($ticketCount, 2, '0', STR_PAD_LEFT) ?></strong></span>
             </p>
             <?php if (!empty($accessibleSeats)): ?>
-                <p class="flex items-center gap-2 mt-1 text-sky-400">
+                <p class="flex items-center gap-2 mt-1 text-sky-600">
                     <i class="fas fa-wheelchair"></i>
-                    <span>Asientos de accesibilidad: <strong class="text-white"><?= implode(', ', $accessibleSeats) ?></strong></span>
+                    <span>Asientos de accesibilidad: <strong><?= implode(', ', $accessibleSeats) ?></strong></span>
                 </p>
             <?php endif; ?>
         </div>
-        
+
         <div class="btn-actions">
-            <a href="index.php" class="btn-primary"><i class="fas fa-home mr-2"></i> Volver al Inicio</a>
-            <a href="movie_detail.php?id=<?= $showtime['movie_id'] ?>" class="btn-secondary"><i class="fas fa-film mr-2"></i> Ver más funciones de esta película</a>
+            <a href="index.php" class="btn-primary">
+                <i class="fas fa-home mr-2"></i> Volver al Inicio
+            </a>
+            <a href="movie_detail.php?id=<?= $showtime['movie_id'] ?>" class="btn-secondary">
+                <i class="fas fa-film mr-2"></i> Ver más funciones de esta película
+            </a>
         </div>
     </div>
 </div>
@@ -551,8 +987,15 @@ require_once 'header.php';
 <?php require_once 'footer.php'; ?>
 
 <script>
+// ============================================
+// ✅ LIMPIAR SESSIONSTORAGE AL CARGAR CONFIRMACIÓN
+// ============================================
 document.addEventListener('DOMContentLoaded', function() {
     const showtimeId = <?= $showtimeId ?>;
+
+    console.log('🗑️ Limpiando sessionStorage para showtime:', showtimeId);
+
+    // Limpiar todas las claves relacionadas con este showtime
     const keysToRemove = [];
     for (let i = 0; i < sessionStorage.length; i++) {
         const key = sessionStorage.key(i);
@@ -561,13 +1004,35 @@ document.addEventListener('DOMContentLoaded', function() {
             key.startsWith('selected_seats_count_' + showtimeId) ||
             key.startsWith('food_timeout_' + showtimeId) ||
             key.startsWith('food_seats_' + showtimeId) ||
-            key.startsWith('ticket_selection_' + showtimeId)
+            key.startsWith('ticket_selection_' + showtimeId) ||
+            key.startsWith('food_order_' + showtimeId)
         )) {
             keysToRemove.push(key);
         }
     }
-    keysToRemove.forEach(key => sessionStorage.removeItem(key));
-    console.log('🗑️ SessionStorage limpiado para showtime:', showtimeId);
+
+    keysToRemove.forEach(key => {
+        sessionStorage.removeItem(key);
+        console.log('🗑️ Eliminado:', key);
+    });
+
+    if (keysToRemove.length === 0) {
+        console.log('✅ No hay claves de sessionStorage para limpiar');
+    } else {
+        console.log('✅ SessionStorage limpiado correctamente (' + keysToRemove.length + ' claves)');
+    }
+
+    // ✅ Limpiar también el parámetro de la URL si existe
+    if (window.history && window.history.replaceState) {
+        const url = new URL(window.location.href);
+        if (url.searchParams.has('purchase_id')) {
+            // Mantener solo el purchase_id, limpiar otros parámetros
+            const purchaseId = url.searchParams.get('purchase_id');
+            url.search = '?purchase_id=' + purchaseId;
+            window.history.replaceState({}, document.title, url.toString());
+            console.log('🧹 URL limpiada');
+        }
+    }
 });
 </script>
 </body>

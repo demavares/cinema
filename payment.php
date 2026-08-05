@@ -23,7 +23,7 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ VALIDAR TOKEN DE COMPRA DESDE SESIÓN (NO DESDE GET)
+// ✅ VALIDAR TOKEN DE COMPRA DESDE SESIÓN
 // ============================================
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
 
@@ -40,7 +40,6 @@ $sessionSeatsKey = 'food_seats_' . $showtimeId;
 $sessionTimeoutKey = 'food_timeout_' . $showtimeId;
 $sessionFoodKey = 'food_order_' . $showtimeId;
 
-// Si la sesión no es válida, redirigir
 if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true) {
     unset($_SESSION[$sessionTimeoutKey]);
     unset($_SESSION[$sessionSeatsKey]);
@@ -50,7 +49,6 @@ if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true)
     exit;
 }
 
-// Verificar si el timeout expiró
 if (isset($_SESSION[$sessionTimeoutKey]) && $_SESSION[$sessionTimeoutKey] <= 0) {
     unset($_SESSION[$sessionTimeoutKey]);
     unset($_SESSION[$sessionSeatsKey]);
@@ -60,23 +58,16 @@ if (isset($_SESSION[$sessionTimeoutKey]) && $_SESSION[$sessionTimeoutKey] <= 0) 
     exit;
 }
 
-// Si no hay timeout, crear uno
 if (!isset($_SESSION[$sessionTimeoutKey])) {
     $_SESSION[$sessionTimeoutKey] = 600;
 }
 
-// ============================================
-// ✅ LEER ASIENTOS DESDE SESIÓN (SEGURO)
-// ============================================
 $seats = isset($_SESSION[$sessionSeatsKey]) ? $_SESSION[$sessionSeatsKey] : '';
 if (empty($seats)) {
     header('Location: seats.php?showtime_id=' . $showtimeId . '&error=no_seats');
     exit;
 }
 
-// ============================================
-// ✅ LEER PEDIDO DE COMIDA DESDE SESIÓN (SEGURO)
-// ============================================
 $foodOrder = isset($_SESSION[$sessionFoodKey]) ? json_decode($_SESSION[$sessionFoodKey], true) : [];
 
 // ============================================
@@ -102,12 +93,9 @@ $ticketCount = count($seatsArray);
 // ============================================
 // ✅ RECALCULAR PRECIOS EN EL SERVIDOR
 // ============================================
-
-// 1. Recalcular precio de boletos
 $finalPrice = getShowtimePrice($showtime);
 $totalTicketsPrice = $ticketCount * $finalPrice;
 
-// 2. Recalcular precio de comida desde la base de datos
 $totalFoodPrice = 0;
 $foodItems = [];
 
@@ -139,17 +127,15 @@ if (!empty($foodOrder)) {
     }
 }
 
-// 3. Obtener tasa de IVA
 $stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
 $tax = $stmt->fetch();
 $taxRate = $tax ? floatval($tax['tax_rate']) : 16;
 
-// 4. Calcular subtotal, IVA y total
 $subtotal = $totalTicketsPrice + $totalFoodPrice;
 $taxAmount = $subtotal * ($taxRate / 100);
 $totalAmount = $subtotal + $taxAmount;
 
-// 5. Guardar en sesión para usar en checkout
+// Guardar en sesión para usar en checkout
 $_SESSION['subtotal_' . $showtimeId] = $subtotal;
 $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
 $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
@@ -157,17 +143,12 @@ $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
 $_SESSION['ticket_quantities_' . $showtimeId] = ['adult' => $ticketCount, 'child' => 0, 'senior' => 0];
 $_SESSION['total_seats_' . $showtimeId] = $ticketCount;
 
-// ============================================
-// IDIOMA DE LA PELÍCULA
-// ============================================
 $language = $showtime['language'] ?? 'español';
 $languageLabel = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 
 $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "Método de Pago - " . $showtime['title'];
-
-// ✅ Enlace de regreso sin token en URL
 $backUrl = 'food_menu.php?showtime_id=' . $showtimeId;
 
 $currency_symbol = $siteConfig['currency_symbol'] ?? '$';
@@ -176,11 +157,19 @@ $thousands_separator = $siteConfig['thousands_separator'] ?? '.';
 $decimal_separator = $siteConfig['decimal_separator'] ?? ',';
 $decimal_places = intval($siteConfig['decimal_places'] ?? 2);
 
-// Asegurar que el token existe en sesión
+// Asegurar que el token existe en sesión y está vigente
 if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
     $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseTokenWithTimeout($showtimeId, 900);
 }
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
+
+// ============================================
+// ✅ DEBUG - Registrar token para depuración
+// ============================================
+error_log("=== PAYMENT.PHP ===");
+error_log("showtime_id: $showtimeId");
+error_log("purchase_token: " . substr($purchaseToken, 0, 16) . "...");
+error_log("timeout: " . getPurchaseTokenTimeLeft($showtimeId) . " segundos restantes");
 
 require_once 'header.php';
 ?>
@@ -589,22 +578,18 @@ function selectPayment(method) {
     selectedPayment = method;
     document.getElementById('paymentMethodInput').value = method;
 
-    // Actualizar UI
     document.querySelectorAll('.payment-method').forEach(el => {
         el.classList.remove('selected');
     });
     document.getElementById('method-' + method).classList.add('selected');
 
-    // Marcar radio
     document.getElementById('radio-' + method).checked = true;
 
-    // Mostrar detalles
     document.querySelectorAll('.payment-details').forEach(el => {
         el.classList.remove('active');
     });
     document.getElementById('details-' + method).classList.add('active');
 
-    // Habilitar botón de pago
     document.getElementById('btnPay').disabled = false;
 }
 
@@ -614,22 +599,21 @@ function selectPayment(method) {
 document.getElementById('paymentForm').addEventListener('submit', function(e) {
     if (!selectedPayment) {
         e.preventDefault();
-        showNotification('Por favor, selecciona un método de pago.', 'warning');
+        alert('Por favor, selecciona un método de pago.');
         return false;
     }
 
-    // Validar campos según método
     if (selectedPayment === 'movil') {
         const reference = document.getElementById('movil_reference').value.trim();
         const phone = document.getElementById('movil_phone').value.trim();
         if (!reference || !phone) {
             e.preventDefault();
-            showNotification('Por favor, completa todos los campos de Pago Móvil.', 'warning');
+            alert('Por favor, completa todos los campos de Pago Móvil.');
             return false;
         }
         if (reference.length < 4) {
             e.preventDefault();
-            showNotification('La referencia debe tener al menos 4 dígitos.', 'warning');
+            alert('La referencia debe tener al menos 4 dígitos.');
             return false;
         }
     } else if (selectedPayment === 'tarjeta') {
@@ -640,22 +624,22 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
 
         if (!cardNumber || !expiry || !cvv || !holder) {
             e.preventDefault();
-            showNotification('Por favor, completa todos los campos de la tarjeta.', 'warning');
+            alert('Por favor, completa todos los campos de la tarjeta.');
             return false;
         }
         if (cardNumber.length < 16) {
             e.preventDefault();
-            showNotification('Número de tarjeta inválido.', 'warning');
+            alert('Número de tarjeta inválido.');
             return false;
         }
         if (!/^\d{2}\/\d{2}$/.test(expiry)) {
             e.preventDefault();
-            showNotification('Formato de fecha inválido. Usa MM/AA.', 'warning');
+            alert('Formato de fecha inválido. Usa MM/AA.');
             return false;
         }
         if (cvv.length < 3) {
             e.preventDefault();
-            showNotification('CVV inválido.', 'warning');
+            alert('CVV inválido.');
             return false;
         }
     }
@@ -664,43 +648,13 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
     const tokenInput = this.querySelector('input[name="purchase_token"]');
     if (!tokenInput || !tokenInput.value) {
         e.preventDefault();
-        showNotification('Error de seguridad: Token de compra no encontrado.', 'error');
+        alert('Error de seguridad: Token de compra no encontrado.');
         return false;
     }
 
     console.log('✅ Formulario de pago enviado con token:', tokenInput.value);
     return true;
 });
-
-// ============================================
-// NOTIFICACIONES
-// ============================================
-function showNotification(message, type = 'info') {
-    const colors = {
-        info: 'bg-blue-600',
-        success: 'bg-green-600',
-        warning: 'bg-yellow-600',
-        error: 'bg-red-600'
-    };
-    const icons = {
-        info: 'fa-info-circle',
-        success: 'fa-check-circle',
-        warning: 'fa-exclamation-triangle',
-        error: 'fa-times-circle'
-    };
-    const notification = document.createElement('div');
-    notification.className = `fixed bottom-4 left-1/2 transform -translate-x-1/2 ${colors[type] || 'bg-gray-600'} text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg shadow-lg z-50 transition-all duration-300 max-w-[90%] sm:max-w-md text-center text-sm flex items-center gap-3`;
-    notification.innerHTML = `
-        <i class="fas ${icons[type] || 'fa-info-circle'}"></i>
-        <span>${message}</span>
-    `;
-    document.body.appendChild(notification);
-    setTimeout(() => {
-        notification.style.opacity = '0';
-        notification.style.transform = 'translate(-50%, 20px)';
-        setTimeout(() => notification.remove(), 300);
-    }, 3500);
-}
 </script>
 </body>
 </html>
