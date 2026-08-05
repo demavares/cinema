@@ -293,50 +293,114 @@ $released_count = releaseExpiredSeats($pdo);
 function generateCSRFToken() {
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+        $_SESSION['csrf_token_created'] = time();
     }
     return $_SESSION['csrf_token'];
 }
 
 function verifyCSRFToken($token) {
-    return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
+    if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
+        return false;
+    }
+    return true;
 }
 
 // ============================================
-// ✅ GENERAR TOKEN DE COMPRA ÚNICO
+// ✅ GENERAR TOKEN DE COMPRA ÚNICO CON TIMEOUT
 // ============================================
 function generatePurchaseToken() {
     return bin2hex(random_bytes(32));
 }
 
-// ============================================
-// ✅ VERIFICAR TOKEN DE COMPRA CON VALIDACIÓN DE CONCURRENCIA
-// ============================================
+function generatePurchaseTokenWithTimeout($showtimeId, $timeout = 900) {
+    $token = generatePurchaseToken();
+    $_SESSION['purchase_token_' . $showtimeId] = $token;
+    $_SESSION['purchase_expires_at_' . $showtimeId] = time() + $timeout; // 15 minutos por defecto
+    $_SESSION['purchase_created_at_' . $showtimeId] = time();
+    return $token;
+}
+
 function verifyPurchaseToken($token, $showtimeId) {
     if (empty($token) || empty($showtimeId)) return false;
     
-    // Verificar que el token corresponda al showtime actual
     $expectedToken = $_SESSION['purchase_token_' . $showtimeId] ?? null;
-    if (!$expectedToken) return false;
+    if (!$expectedToken || !hash_equals($expectedToken, $token)) {
+        return false;
+    }
     
-    // Verificar que no haya sido usado (prevenir reenvío)
     $usedKey = 'purchase_token_used_' . $showtimeId;
     if (isset($_SESSION[$usedKey]) && $_SESSION[$usedKey] === true) {
         return false;
     }
     
-    return hash_equals($expectedToken, $token);
+    return true;
 }
 
-// ============================================
-// ✅ MARCAR TOKEN COMO USADO (PREVENIR REENVÍO)
-// ============================================
+function verifyPurchaseTokenWithTimeout($token, $showtimeId) {
+    if (empty($token) || empty($showtimeId)) return false;
+    
+    $expectedToken = $_SESSION['purchase_token_' . $showtimeId] ?? null;
+    if (!$expectedToken || !hash_equals($expectedToken, $token)) {
+        return false;
+    }
+    
+    $usedKey = 'purchase_token_used_' . $showtimeId;
+    if (isset($_SESSION[$usedKey]) && $_SESSION[$usedKey] === true) {
+        return false;
+    }
+    
+    $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
+    if (time() > $expiresAt) {
+        unset($_SESSION['purchase_token_' . $showtimeId]);
+        unset($_SESSION['purchase_expires_at_' . $showtimeId]);
+        return false;
+    }
+    
+    return true;
+}
+
 function markPurchaseTokenAsUsed($showtimeId) {
     $_SESSION['purchase_token_used_' . $showtimeId] = true;
 }
 
-// ============================================
-// ✅ GENERAR ID DE TRANSACCIÓN ÚNICO
-// ============================================
+function isPurchaseTokenExpired($showtimeId) {
+    $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
+    return time() > $expiresAt;
+}
+
+function getPurchaseTokenTimeLeft($showtimeId) {
+    $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
+    if ($expiresAt === 0) return 0;
+    return max(0, $expiresAt - time());
+}
+
+function clearPurchaseSession($showtimeId) {
+    $keys = [
+        'purchase_token_' . $showtimeId,
+        'purchase_expires_at_' . $showtimeId,
+        'purchase_token_used_' . $showtimeId,
+        'purchase_created_at_' . $showtimeId,
+        'ticket_quantities_' . $showtimeId,
+        'total_seats_' . $showtimeId,
+        'subtotal_' . $showtimeId,
+        'tax_amount_' . $showtimeId,
+        'total_amount_' . $showtimeId,
+        'tax_rate_' . $showtimeId,
+        'food_timeout_' . $showtimeId,
+        'food_seats_' . $showtimeId,
+        'food_valid_' . $showtimeId,
+        'food_order_' . $showtimeId,
+        'payment_method_' . $showtimeId,
+        'pending_checkout'
+    ];
+    
+    foreach ($keys as $key) {
+        if (isset($_SESSION[$key])) {
+            unset($_SESSION[$key]);
+        }
+    }
+}
+
 function generateTransactionId() {
     return 'TXN-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -8));
 }
@@ -480,9 +544,6 @@ function getTicketPrice($movie) {
     return $movie['price'];
 }
 
-// ============================================
-// FUNCIÓN PARA OBTENER PRECIO POR TIPO DE BOLETO
-// ============================================
 function getTicketPriceByType($showtime, $type) {
     $prices = [
         'adult' => $showtime['price_adult'] ?? $showtime['price'] ?? 0,
@@ -490,7 +551,6 @@ function getTicketPriceByType($showtime, $type) {
         'senior' => $showtime['price_senior'] ?? 0
     ];
     
-    // Aplicar descuento de lunes
     $currentDay = date('N');
     $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
     if (in_array('lunes_mitad', $promotions) && $currentDay == 1) {
@@ -562,7 +622,6 @@ function destroySession() {
 // ✅ VALIDAR Y RECALCULAR PRECIOS EN EL SERVIDOR
 // ============================================
 function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
-    // Obtener showtime con precios
     $stmt = $pdo->prepare("
         SELECT s.*, m.duration
         FROM showtimes s
@@ -576,17 +635,14 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
         return ['error' => 'Función no encontrada o inactiva'];
     }
     
-    // Obtener tasa de IVA
     $stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
     $tax = $stmt->fetch();
     $taxRate = $tax ? floatval($tax['tax_rate']) : 16;
     
-    // Obtener precios del showtime (desde BD, NO desde el cliente)
     $priceAdult = floatval($showtime['price_adult'] ?? $showtime['price'] ?? 0);
     $priceChild = floatval($showtime['price_child'] ?? 0);
     $priceSenior = floatval($showtime['price_senior'] ?? 0);
     
-    // Aplicar descuento de lunes si aplica
     $currentDay = date('N');
     $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
     if (in_array('lunes_mitad', $promotions) && $currentDay == 1) {
@@ -595,7 +651,6 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
         $priceSenior = $priceSenior / 2;
     }
     
-    // Validar que los tipos de ticket existan
     $validTypes = ['adult', 'child', 'senior'];
     $totalSeats = 0;
     $subtotal = 0;
@@ -622,7 +677,6 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
         return ['error' => 'Debes seleccionar al menos un boleto'];
     }
     
-    // Verificar disponibilidad de asientos
     $stmt = $pdo->prepare("
         SELECT r.capacity, r.seat_layout
         FROM showtimes s
@@ -636,7 +690,6 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
         return ['error' => 'Sala no encontrada'];
     }
     
-    // Obtener asientos ocupados
     $stmt = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ?");
     $stmt->execute([$showtimeId]);
     $occupiedSeats = $stmt->fetchAll(PDO::FETCH_COLUMN);
@@ -649,7 +702,6 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
         return ['error' => 'No hay suficientes asientos disponibles'];
     }
     
-    // Calcular impuestos y total
     $taxAmount = $subtotal * ($taxRate / 100);
     $totalAmount = $subtotal + $taxAmount;
     

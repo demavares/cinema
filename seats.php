@@ -16,21 +16,27 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ VALIDAR TOKEN DE COMPRA
+// ✅ VERIFICAR TIMEOUT DEL TOKEN DE COMPRA
 // ============================================
-$token = $_GET['token'] ?? '';
+if (isPurchaseTokenExpired($showtimeId)) {
+    clearPurchaseSession($showtimeId);
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=El+tiempo+para+la+reserva+ha+expirado');
+    exit;
+}
+
+// ============================================
+// ✅ VALIDAR TOKEN DE COMPRA DESDE SESIÓN
+// ============================================
+$purchaseToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
 $foodValidKey = 'food_valid_' . $showtimeId;
 $hasFoodSession = isset($_SESSION[$foodValidKey]) && $_SESSION[$foodValidKey] === true;
 
-// Si no hay token válido y no hay sesión de comida activa, redirigir a price_selection
-if (empty($token) || !verifyPurchaseToken($token, $showtimeId)) {
+if (empty($purchaseToken) || !verifyPurchaseTokenWithTimeout($purchaseToken, $showtimeId)) {
     if (!$hasFoodSession) {
-        header('Location: price_selection.php?showtime_id=' . $showtimeId);
+        header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
         exit;
     }
-    // Si hay sesión de comida, regenerar token
-    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseToken();
-    $token = $_SESSION['purchase_token_' . $showtimeId];
+    $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
 }
 
 // ============================================
@@ -228,14 +234,11 @@ $backUrl = 'price_selection.php?showtime_id=' . $showtimeId;
 
 $siteConfig = getSiteConfig($pdo);
 
-// Asegurar que el token existe
+// Asegurar que el token existe en sesión
 if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
-    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseToken();
+    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseTokenWithTimeout($showtimeId, 900);
 }
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
-
-// Guardar URL de regreso en sesión para navegación consistente
-$_SESSION['seats_return_url_' . $showtimeId] = 'seats.php?showtime_id=' . $showtimeId . '&token=' . $purchaseToken;
 
 require_once 'header.php';
 ?>
@@ -628,15 +631,16 @@ body {
             </div>
 
             <div class="mt-4 flex flex-col gap-2.5">
-                <form action="food_menu.php" method="GET" id="foodForm" onsubmit="return handleFormSubmit(event)">
+                <form action="create_food_session.php" method="POST" id="foodForm" onsubmit="return handleFormSubmit(event)">
                     <input type="hidden" name="showtime_id" value="<?= $showtime['id'] ?>">
                     <input type="hidden" name="seats" id="seats-input" value="">
-                    <input type="hidden" name="token" value="<?= htmlspecialchars($purchaseToken) ?>">
+                    <input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
+                    <input type="hidden" name="purchase_token" value="<?= htmlspecialchars($purchaseToken) ?>">
                     <button type="submit" id="btn-continue" disabled class="btn-continue-food">
                         <i class="fas fa-utensils mr-2"></i> Continuar a Comida
                     </button>
                 </form>
-                <a href="price_selection.php?showtime_id=<?= $showtimeId ?>&token=<?= htmlspecialchars($purchaseToken) ?>" class="btn-back">
+                <a href="price_selection.php?showtime_id=<?= $showtimeId ?>" class="btn-back">
                     <i class="fas fa-arrow-left mr-2"></i> Regresar a Boletos
                 </a>
             </div>
@@ -772,22 +776,21 @@ window.handleFormSubmit = function(event) {
     event.preventDefault();
     if (!validateSeats()) return false;
     
-    const seats = document.getElementById('seats-input').value;
-    const showtimeId = document.querySelector('input[name="showtime_id"]').value;
-    const token = document.querySelector('input[name="token"]')?.value || purchaseToken;
+    const form = document.getElementById('foodForm');
+    const formData = new FormData(form);
+    
     const btnContinue = document.getElementById('btn-continue');
     btnContinue.disabled = true;
     btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
     
     fetch('create_food_session.php', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'showtime_id=' + encodeURIComponent(showtimeId) + '&seats=' + encodeURIComponent(seats) + '&token=' + encodeURIComponent(token)
+        body: formData
     })
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            window.location.href = 'food_menu.php?showtime_id=' + showtimeId + '&token=' + token;
+            window.location.href = 'food_menu.php?showtime_id=' + showtimeId;
         } else {
             showNotification('Error al crear la sesión. Intenta nuevamente.', 'error');
             btnContinue.disabled = false;
@@ -796,7 +799,7 @@ window.handleFormSubmit = function(event) {
     })
     .catch(error => {
         console.error('Error:', error);
-        window.location.href = 'food_menu.php?showtime_id=' + showtimeId + '&token=' + token;
+        window.location.href = 'food_menu.php?showtime_id=' + showtimeId;
     });
     return false;
 };

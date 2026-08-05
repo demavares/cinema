@@ -1,18 +1,12 @@
 <?php
 require_once 'config.php';
 
-// ============================================
-// VERIFICAR AUTENTICACIÓN
-// ============================================
 if (!isset($_SESSION['user_id'])) {
     http_response_code(403);
     echo json_encode(['error' => 'Unauthorized']);
     exit;
 }
 
-// ============================================
-// ✅ VERIFICAR CSRF
-// ============================================
 if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
     http_response_code(403);
     echo json_encode(['error' => 'CSRF token inválido']);
@@ -32,9 +26,9 @@ if ($showtimeId <= 0) {
 // ============================================
 // ✅ VALIDAR TOKEN DE COMPRA
 // ============================================
-if (empty($token) || !verifyPurchaseToken($token, $showtimeId)) {
+if (empty($token) || !verifyPurchaseTokenWithTimeout($token, $showtimeId)) {
     http_response_code(403);
-    echo json_encode(['error' => 'Token de compra inválido']);
+    echo json_encode(['error' => 'Token de compra inválido o expirado']);
     exit;
 }
 
@@ -50,16 +44,13 @@ if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true)
 
 $sessionFoodKey = 'food_order_' . $showtimeId;
 
-// Limpiar pedido anterior
 if (isset($_SESSION[$sessionFoodKey])) {
     unset($_SESSION[$sessionFoodKey]);
 }
 
 if (!empty($foodOrder) && $foodOrder !== '[]') {
-    // Validar que sea un JSON válido
     $decoded = json_decode($foodOrder, true);
     if ($decoded !== null && is_array($decoded)) {
-        // ✅ Validar que los items existen en la base de datos
         $foodIds = array_column($decoded, 'id');
         if (!empty($foodIds)) {
             $placeholders = implode(',', array_fill(0, count($foodIds), '?'));
@@ -67,7 +58,6 @@ if (!empty($foodOrder) && $foodOrder !== '[]') {
             $stmt->execute($foodIds);
             $validItems = $stmt->fetchAll(PDO::FETCH_COLUMN);
             
-            // Filtrar solo items válidos
             $filteredOrder = array_filter($decoded, function($item) use ($validItems) {
                 return in_array($item['id'], $validItems) && intval($item['quantity']) > 0;
             });

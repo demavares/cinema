@@ -16,9 +16,6 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
-// ============================================
-// ✅ OBTENER SHOWTIME_ID DESDE SESIÓN O GET (CON VALIDACIÓN)
-// ============================================
 $showtimeId = isset($_GET['showtime_id']) ? intval($_GET['showtime_id']) : 0;
 if ($showtimeId <= 0) {
     header('Location: index.php');
@@ -26,51 +23,27 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ VALIDAR TOKEN DE COMPRA
+// ✅ VALIDAR TOKEN DE COMPRA DESDE SESIÓN (NO DESDE GET)
 // ============================================
-$token = $_GET['token'] ?? '';
-if (empty($token) || !verifyPurchaseToken($token, $showtimeId)) {
-    // Verificar si hay sesión de comida válida como respaldo
-    $foodValidKey = 'food_valid_' . $showtimeId;
-    if (!isset($_SESSION[$foodValidKey]) || $_SESSION[$foodValidKey] !== true) {
-        header('Location: price_selection.php?showtime_id=' . $showtimeId);
-        exit;
-    }
-    // Regenerar token si es necesario
-    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseToken();
-    $token = $_SESSION['purchase_token_' . $showtimeId];
-}
+$purchaseToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
 
-// ============================================
-// ✅ LEER ASIENTOS DESDE SESIÓN (SEGURO)
-// ============================================
-$sessionSeatsKey = 'food_seats_' . $showtimeId;
-$sessionValidKey = 'food_valid_' . $showtimeId;
-$sessionTimeoutKey = 'food_timeout_' . $showtimeId;
-
-// Verificar que la sesión de comida sea válida
-if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true) {
-    unset($_SESSION[$sessionSeatsKey]);
-    unset($_SESSION[$sessionValidKey]);
-    unset($_SESSION[$sessionTimeoutKey]);
-    header('Location: price_selection.php?showtime_id=' . $showtimeId);
+if (empty($purchaseToken) || !verifyPurchaseTokenWithTimeout($purchaseToken, $showtimeId)) {
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
     exit;
 }
 
-// Obtener asientos desde sesión (NO desde GET)
-$seats = isset($_SESSION[$sessionSeatsKey]) ? $_SESSION[$sessionSeatsKey] : '';
-if (empty($seats)) {
-    // Intentar recuperar desde GET solo si hay sesión válida
-    if (isset($_GET['seats']) && !empty($_GET['seats'])) {
-        $seats = trim($_GET['seats']);
-        $_SESSION[$sessionSeatsKey] = $seats;
-    } else {
-        header('Location: price_selection.php?showtime_id=' . $showtimeId);
-        exit;
-    }
+// ============================================
+// VERIFICAR SESIÓN DE COMIDA
+// ============================================
+$sessionValidKey = 'food_valid_' . $showtimeId;
+$sessionSeatsKey = 'food_seats_' . $showtimeId;
+$sessionTimeoutKey = 'food_timeout_' . $showtimeId;
+
+if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true) {
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=session_expired');
+    exit;
 }
 
-// Verificar si el timeout expiró
 if (isset($_SESSION[$sessionTimeoutKey]) && $_SESSION[$sessionTimeoutKey] <= 0) {
     unset($_SESSION[$sessionSeatsKey]);
     unset($_SESSION[$sessionValidKey]);
@@ -79,10 +52,18 @@ if (isset($_SESSION[$sessionTimeoutKey]) && $_SESSION[$sessionTimeoutKey] <= 0) 
     exit;
 }
 
-// Si no hay sesión de timeout, crear una
 if (!isset($_SESSION[$sessionTimeoutKey])) {
     $_SESSION[$sessionTimeoutKey] = 600;
 }
+
+$seats = isset($_SESSION[$sessionSeatsKey]) ? $_SESSION[$sessionSeatsKey] : '';
+if (empty($seats)) {
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=no_seats');
+    exit;
+}
+
+$seatsArray = explode(',', $seats);
+$ticketCount = count($seatsArray);
 
 // ============================================
 // OBTENER DATOS DEL SHOWTIME Y PELÍCULA
@@ -100,9 +81,6 @@ if (!$showtime) {
     header('Location: index.php');
     exit;
 }
-
-$seatsArray = explode(',', $seats);
-$ticketCount = count($seatsArray);
 
 // ============================================
 // ✅ RECALCULAR PRECIO EN EL SERVIDOR
@@ -156,18 +134,13 @@ $siteConfig = getSiteConfig($pdo);
 $pageTitle = "Comida - " . $showtime['title'];
 
 $backFrom = isset($_GET['from']) ? $_GET['from'] : '';
-$backUrl = 'seats.php?showtime_id=' . $showtimeId . '&from=' . $backFrom . '&token=' . $token;
+$backUrl = 'seats.php?showtime_id=' . $showtimeId;
 
 $currency_symbol = $siteConfig['currency_symbol'] ?? '$';
 $currency_position = $siteConfig['currency_position'] ?? 'left';
 $thousands_separator = $siteConfig['thousands_separator'] ?? '.';
 $decimal_separator = $siteConfig['decimal_separator'] ?? ',';
 $decimal_places = intval($siteConfig['decimal_places'] ?? 2);
-
-// Crear token de sesión única para esta compra si no existe
-if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
-    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseToken();
-}
 
 require_once 'header.php';
 ?>
@@ -488,7 +461,7 @@ body {
                     <input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
                     <input type="hidden" name="showtime_id" value="<?= $showtimeId ?>">
                     <input type="hidden" name="food_order" id="foodOrderInput" value="[]">
-                    <input type="hidden" name="purchase_token" value="<?= htmlspecialchars($token) ?>">
+                    <input type="hidden" name="purchase_token" value="<?= htmlspecialchars($purchaseToken) ?>">
                     <button type="submit" class="btn-continue" id="btnCheckout">
                         <i class="fas fa-credit-card mr-2"></i> Ir a Pagar
                     </button>
@@ -556,7 +529,7 @@ const pricePerTicket = <?= $finalPrice ?>;
 const ticketCount = <?= $ticketCount ?>;
 const showtimeId = <?= $showtimeId ?>;
 const seats = '<?= $seats ?>';
-const purchaseToken = '<?= htmlspecialchars($token) ?>';
+const purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
 const taxRate = <?= $taxRate ?>;
 
 let cart = {};
@@ -656,8 +629,6 @@ function updateCartUI() {
     
     totalFoodPrice = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     
-    // ✅ CALCULAR TOTAL CON IVA EN EL FRONTEND SOLO PARA MOSTRAR
-    // EL BACKEND RECALCULARÁ EN checkout.php
     const subtotal = totalTicketsPrice + totalFoodPrice;
     const tax = subtotal * (taxRate / 100);
     const total = subtotal + tax;
@@ -733,33 +704,14 @@ document.getElementById('foodForm').addEventListener('submit', function(e) {
         quantity: item.quantity
     }));
     
+    document.getElementById('foodOrderInput').value = JSON.stringify(orderData);
+    
     const btn = document.getElementById('btnCheckout');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
     
-    // ✅ ENVIAR SOLO IDs Y CANTIDADES, NO PRECIOS
-    fetch('save_food_order.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: 'showtime_id=' + showtimeId + 
-              '&food_order=' + encodeURIComponent(JSON.stringify(orderData)) +
-              '&purchase_token=' + encodeURIComponent(purchaseToken) +
-              '&csrf_token=' + encodeURIComponent('<?= $csrf_token ?>')
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            window.location.href = 'payment.php?showtime_id=' + showtimeId + '&token=' + purchaseToken;
-        } else {
-            alert('Error al guardar el pedido. Intenta nuevamente.');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-credit-card mr-2"></i> Ir a Pagar';
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        window.location.href = 'payment.php?showtime_id=' + showtimeId + '&token=' + purchaseToken;
-    });
+    // ✅ Enviar por POST con token en campo oculto
+    this.submit();
 });
 </script>
 </body>

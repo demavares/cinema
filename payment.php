@@ -23,16 +23,17 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ VALIDAR TOKEN DE COMPRA
+// ✅ VALIDAR TOKEN DE COMPRA DESDE SESIÓN (NO DESDE GET)
 // ============================================
-$token = $_GET['token'] ?? '';
-if (empty($token) || !verifyPurchaseToken($token, $showtimeId)) {
-    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido');
+$purchaseToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
+
+if (empty($purchaseToken) || !verifyPurchaseTokenWithTimeout($purchaseToken, $showtimeId)) {
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
     exit;
 }
 
 // ============================================
-// ✅ VERIFICAR SESIÓN DE COMIDA
+// VERIFICAR SESIÓN DE COMIDA
 // ============================================
 $sessionValidKey = 'food_valid_' . $showtimeId;
 $sessionSeatsKey = 'food_seats_' . $showtimeId;
@@ -45,7 +46,7 @@ if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true)
     unset($_SESSION[$sessionSeatsKey]);
     unset($_SESSION[$sessionValidKey]);
     unset($_SESSION[$sessionFoodKey]);
-    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=session_expired&token=' . $token);
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=session_expired');
     exit;
 }
 
@@ -69,7 +70,7 @@ if (!isset($_SESSION[$sessionTimeoutKey])) {
 // ============================================
 $seats = isset($_SESSION[$sessionSeatsKey]) ? $_SESSION[$sessionSeatsKey] : '';
 if (empty($seats)) {
-    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=no_seats&token=' . $token);
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=no_seats');
     exit;
 }
 
@@ -166,8 +167,8 @@ $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "Método de Pago - " . $showtime['title'];
 
-// ✅ Enlace de regreso con parámetro from=payment
-$backUrl = 'food_menu.php?showtime_id=' . $showtimeId . '&from=payment&token=' . $token;
+// ✅ Enlace de regreso sin token en URL
+$backUrl = 'food_menu.php?showtime_id=' . $showtimeId;
 
 $currency_symbol = $siteConfig['currency_symbol'] ?? '$';
 $currency_position = $siteConfig['currency_position'] ?? 'left';
@@ -177,7 +178,7 @@ $decimal_places = intval($siteConfig['decimal_places'] ?? 2);
 
 // Asegurar que el token existe en sesión
 if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
-    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseToken();
+    $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseTokenWithTimeout($showtimeId, 900);
 }
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
 
