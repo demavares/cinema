@@ -1,25 +1,39 @@
 <?php
 require_once 'config.php';
 
+// ============================================
+// VERIFICAR AUTENTICACIÓN
+// ============================================
 if (!isset($_SESSION['user_id'])) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Unauthorized']);
+    header('Location: login.php');
     exit;
 }
 
+// ============================================
+// ✅ VERIFICAR CSRF
+// ============================================
 if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
-    http_response_code(403);
-    echo json_encode(['error' => 'CSRF token inválido']);
-    exit;
+    die("Error de seguridad: Token CSRF inválido.");
 }
 
+// ============================================
+// OBTENER DATOS DEL POST
+// ============================================
 $showtimeId = isset($_POST['showtime_id']) ? intval($_POST['showtime_id']) : 0;
 $foodOrder = isset($_POST['food_order']) ? $_POST['food_order'] : '';
 $token = $_POST['purchase_token'] ?? '';
+$redirect = isset($_POST['redirect']) ? true : false;
 
+// ============================================
+// VALIDAR DATOS BÁSICOS
+// ============================================
 if ($showtimeId <= 0) {
-    http_response_code(400);
-    echo json_encode(['error' => 'Invalid showtime_id']);
+    if ($redirect) {
+        header('Location: food_menu.php?showtime_id=' . $showtimeId . '&error=showtime_invalido');
+    } else {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid showtime_id']);
+    }
     exit;
 }
 
@@ -27,8 +41,12 @@ if ($showtimeId <= 0) {
 // ✅ VALIDAR TOKEN DE COMPRA
 // ============================================
 if (empty($token) || !verifyPurchaseTokenWithTimeout($token, $showtimeId)) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Token de compra inválido o expirado']);
+    if ($redirect) {
+        header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
+    } else {
+        http_response_code(403);
+        echo json_encode(['error' => 'Token de compra inválido o expirado']);
+    }
     exit;
 }
 
@@ -37,13 +55,21 @@ if (empty($token) || !verifyPurchaseTokenWithTimeout($token, $showtimeId)) {
 // ============================================
 $sessionValidKey = 'food_valid_' . $showtimeId;
 if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Sesión de comida inválida']);
+    if ($redirect) {
+        header('Location: seats.php?showtime_id=' . $showtimeId . '&error=session_expired');
+    } else {
+        http_response_code(403);
+        echo json_encode(['error' => 'Sesión de comida inválida']);
+    }
     exit;
 }
 
+// ============================================
+// ✅ PROCESAR EL PEDIDO DE COMIDA
+// ============================================
 $sessionFoodKey = 'food_order_' . $showtimeId;
 
+// Limpiar pedido anterior
 if (isset($_SESSION[$sessionFoodKey])) {
     unset($_SESSION[$sessionFoodKey]);
 }
@@ -69,6 +95,17 @@ if (!empty($foodOrder) && $foodOrder !== '[]') {
     }
 }
 
-echo json_encode(['success' => true]);
-exit;
+// ============================================
+// ✅ REDIRIGIR O RESPONDER CON JSON
+// ============================================
+if ($redirect) {
+    // Envío tradicional - redirigir a payment.php
+    header('Location: payment.php?showtime_id=' . $showtimeId);
+    exit;
+} else {
+    // Petición AJAX - devolver JSON
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true]);
+    exit;
+}
 ?>

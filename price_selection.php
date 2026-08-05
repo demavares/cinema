@@ -62,14 +62,36 @@ if (!$showtime) {
 }
 
 // ============================================
-// OBTENER PRECIOS DESDE BD (SEGURO)
+// ✅ OBTENER PRECIOS DESDE BD - CON FALLBACKS
 // ============================================
 $priceAdult = floatval($showtime['price_adult'] ?? $showtime['price'] ?? 0);
 $priceChild = floatval($showtime['price_child'] ?? 0);
 $priceSenior = floatval($showtime['price_senior'] ?? 0);
+
+// Si los precios específicos son 0, usar el precio general como adulto
+if ($priceAdult == 0 && isset($showtime['price']) && $showtime['price'] > 0) {
+    $priceAdult = floatval($showtime['price']);
+}
+
+// Si priceAdult sigue siendo 0, usar un valor por defecto
+if ($priceAdult == 0) {
+    $priceAdult = 50.00;
+}
+
+// Si child y senior son 0, usar porcentajes del precio adulto
+if ($priceChild == 0 && $priceAdult > 0) {
+    $priceChild = $priceAdult * 0.5;
+}
+if ($priceSenior == 0 && $priceAdult > 0) {
+    $priceSenior = $priceAdult * 0.7;
+}
+
 $enableChild = isset($showtime['enable_child_price']) && $showtime['enable_child_price'] == 1 ? 1 : 0;
 $enableSenior = isset($showtime['enable_senior_price']) && $showtime['enable_senior_price'] == 1 ? 1 : 0;
 
+// ============================================
+// PROMOCIONES
+// ============================================
 $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
 $hasMondayPromo = in_array('lunes_mitad', $promotions);
 $hasPresale = in_array('preventa', $promotions);
@@ -81,10 +103,16 @@ if ($hasMondayPromo && $currentDay == 1) {
     $priceSenior = $priceSenior / 2;
 }
 
+// ============================================
+// OBTENER TASA DE IVA
+// ============================================
 $stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
 $tax = $stmt->fetch();
 $taxRate = $tax ? floatval($tax['tax_rate']) : 16;
 
+// ============================================
+// OBTENER ASIENTOS DISPONIBLES
+// ============================================
 $stmtRoom = $pdo->prepare("
     SELECT r.capacity, r.seat_layout
     FROM showtimes s
@@ -111,6 +139,9 @@ $occupied = $stmtOccupied->fetch();
 $occupiedCount = intval($occupied['occupied'] ?? 0);
 $realAvailableSeats = max(0, $totalAvailableSeats - $occupiedCount);
 
+// ============================================
+// IDIOMA
+// ============================================
 $language = $showtime['language'] ?? 'español';
 $languageLabel = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 
@@ -278,7 +309,16 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
         <div class="flex-1 min-w-0">
             <h2 class="text-2xl font-bold text-gray-800 mb-1">🎫 Selecciona tus Boletos</h2>
             <p class="text-base text-gray-400 mb-6">Elige la cantidad de boletos por tipo de tarifa</p>
+            
+            <?php if ($priceAdult <= 0): ?>
+            <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg mb-4">
+                <p class="font-semibold">⚠️ Atención:</p>
+                <p class="text-sm">Esta función no tiene precios configurados. Por favor, contacta al administrador.</p>
+            </div>
+            <?php endif; ?>
+            
             <div class="grid grid-cols-1 gap-4" id="priceGrid">
+                <!-- Adulto (siempre disponible) -->
                 <div class="price-card" id="card-adult" data-type="adult">
                     <div class="price-info">
                         <span class="label">👤 Adulto</span>
@@ -291,7 +331,8 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                         <button type="button" class="qty-increase" data-type="adult">+</button>
                     </div>
                 </div>
-                <?php if($enableChild): ?>
+                <!-- Niño -->
+                <?php if($enableChild && $priceChild > 0): ?>
                 <div class="price-card" id="card-child" data-type="child">
                     <div class="price-info">
                         <span class="label">🧒 Niño</span>
@@ -305,7 +346,8 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                     </div>
                 </div>
                 <?php endif; ?>
-                <?php if($enableSenior): ?>
+                <!-- Tercera Edad -->
+                <?php if($enableSenior && $priceSenior > 0): ?>
                 <div class="price-card" id="card-senior" data-type="senior">
                     <div class="price-info">
                         <span class="label">👴 Tercera Edad</span>
@@ -320,6 +362,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                 </div>
                 <?php endif; ?>
             </div>
+            
             <div class="total-seats-info mt-6">
                 Has seleccionado <strong id="totalSeatsCount">0</strong> boleto(s)
             </div>
@@ -327,6 +370,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
             <p class="text-xs text-gray-400 text-center mt-2"><?= $realAvailableSeats ?> asientos disponibles en esta función</p>
             <?php endif; ?>
         </div>
+        
         <div class="w-full lg:w-80 card-summary">
             <h3 class="text-xl font-bold text-white mb-3 flex items-center gap-2">
                 <i class="fas fa-receipt text-indigo-600"></i> Resumen
@@ -387,6 +431,9 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 <?php require_once 'footer.php'; ?>
 
 <script>
+// ============================================
+// ✅ CONFIGURACIÓN DESDE PHP
+// ============================================
 const priceAdult = <?= floatval($priceAdult) ?>;
 const priceChild = <?= floatval($priceChild) ?>;
 const priceSenior = <?= floatval($priceSenior) ?>;
@@ -396,6 +443,7 @@ const taxRate = <?= floatval($taxRate) ?>;
 const showtimeId = <?= $showtimeId ?>;
 const purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
 const maxAvailableSeats = <?= intval($realAvailableSeats) ?>;
+
 const currencyConfig = {
     symbol: '<?= $currency_symbol ?>',
     position: '<?= $currency_position ?>',
@@ -404,10 +452,39 @@ const currencyConfig = {
     decimals: <?= intval($decimal_places) ?>
 };
 
-let quantities = { adult: 0, child: 0, senior: 0 };
-const prices = { adult: priceAdult, child: priceChild, senior: priceSenior };
-const enabledTypes = { adult: true, child: enableChild === 1, senior: enableSenior === 1 };
+console.log('=== PRICE_SELECTION JS ===');
+console.log('priceAdult:', priceAdult);
+console.log('priceChild:', priceChild);
+console.log('priceSenior:', priceSenior);
+console.log('enableChild:', enableChild);
+console.log('enableSenior:', enableSenior);
 
+// ============================================
+// ESTADO
+// ============================================
+let quantities = {
+    adult: 0,
+    child: 0,
+    senior: 0
+};
+
+const prices = {
+    adult: priceAdult,
+    child: priceChild,
+    senior: priceSenior
+};
+
+const enabledTypes = {
+    adult: true,
+    child: enableChild === 1 && priceChild > 0,
+    senior: enableSenior === 1 && priceSenior > 0
+};
+
+console.log('enabledTypes:', enabledTypes);
+
+// ============================================
+// FUNCIONES
+// ============================================
 function formatCurrency(amount) {
     const symbol = currencyConfig.symbol;
     const position = currencyConfig.position;
@@ -420,104 +497,197 @@ function formatCurrency(amount) {
     return position === 'right' ? formatted + ' ' + symbol : symbol + formatted;
 }
 
+function getElement(id) {
+    const el = document.getElementById(id);
+    if (!el) {
+        console.warn('⚠️ Elemento no encontrado:', id);
+    }
+    return el;
+}
+
 function updateUI() {
     const total = quantities.adult + quantities.child + quantities.senior;
-    const subtotal = (quantities.adult * prices.adult) + (quantities.child * prices.child) + (quantities.senior * prices.senior);
+    const subtotal = (quantities.adult * prices.adult) +
+                     (quantities.child * prices.child) +
+                     (quantities.senior * prices.senior);
     const tax = subtotal * (taxRate / 100);
     const totalAmount = subtotal + tax;
     
-    document.getElementById('qty_adult').textContent = quantities.adult;
-    document.getElementById('qty_child').textContent = quantities.child;
-    document.getElementById('qty_senior').textContent = quantities.senior;
+    console.log('📊 Actualizando UI - Total:', total, 'Subtotal:', subtotal);
     
-    document.getElementById('totalSeatsCount').textContent = total;
-    document.getElementById('btnSeatsCount').textContent = total;
-    document.getElementById('totalSeatsInput').value = total;
+    // ✅ Actualizar contadores - con verificación de existencia
+    const qtyAdult = getElement('qty_adult');
+    const qtyChild = getElement('qty_child');
+    const qtySenior = getElement('qty_senior');
     
-    document.getElementById('subtotalHidden').value = subtotal.toFixed(2);
-    document.getElementById('taxHidden').value = tax.toFixed(2);
-    document.getElementById('totalHidden').value = totalAmount.toFixed(2);
+    if (qtyAdult) qtyAdult.textContent = quantities.adult;
+    if (qtyChild) qtyChild.textContent = quantities.child;
+    if (qtySenior) qtySenior.textContent = quantities.senior;
     
-    let html = '';
-    let hasItems = false;
-    if (quantities.adult > 0) {
-        hasItems = true;
-        html += `<div class="summary-row"><span class="label">Adulto x${quantities.adult}</span><span class="value">${formatCurrency(quantities.adult * prices.adult)}</span></div>`;
+    // ✅ Actualizar resumen
+    const totalSeatsCount = getElement('totalSeatsCount');
+    const btnSeatsCount = getElement('btnSeatsCount');
+    const totalSeatsInput = getElement('totalSeatsInput');
+    
+    if (totalSeatsCount) totalSeatsCount.textContent = total;
+    if (btnSeatsCount) btnSeatsCount.textContent = total;
+    if (totalSeatsInput) totalSeatsInput.value = total;
+    
+    // ✅ Actualizar campos ocultos
+    const subtotalHidden = getElement('subtotalHidden');
+    const taxHidden = getElement('taxHidden');
+    const totalHidden = getElement('totalHidden');
+    
+    if (subtotalHidden) subtotalHidden.value = subtotal.toFixed(2);
+    if (taxHidden) taxHidden.value = tax.toFixed(2);
+    if (totalHidden) totalHidden.value = totalAmount.toFixed(2);
+    
+    // ✅ Actualizar resumen visual
+    const summaryItems = getElement('summaryItems');
+    if (summaryItems) {
+        let html = '';
+        let hasItems = false;
+        
+        if (quantities.adult > 0) {
+            hasItems = true;
+            html += `
+            <div class="summary-row">
+                <span class="label">Adulto x${quantities.adult}</span>
+                <span class="value">${formatCurrency(quantities.adult * prices.adult)}</span>
+            </div>
+            `;
+        }
+        if (quantities.child > 0) {
+            hasItems = true;
+            html += `
+            <div class="summary-row">
+                <span class="label">Niño x${quantities.child}</span>
+                <span class="value">${formatCurrency(quantities.child * prices.child)}</span>
+            </div>
+            `;
+        }
+        if (quantities.senior > 0) {
+            hasItems = true;
+            html += `
+            <div class="summary-row">
+                <span class="label">Tercera Edad x${quantities.senior}</span>
+                <span class="value">${formatCurrency(quantities.senior * prices.senior)}</span>
+            </div>
+            `;
+        }
+        
+        if (!hasItems) {
+            html = `<div class="text-sm text-gray-400 text-center py-4">No has seleccionado boletos</div>`;
+        }
+        summaryItems.innerHTML = html;
     }
-    if (quantities.child > 0) {
-        hasItems = true;
-        html += `<div class="summary-row"><span class="label">Niño x${quantities.child}</span><span class="value">${formatCurrency(quantities.child * prices.child)}</span></div>`;
-    }
-    if (quantities.senior > 0) {
-        hasItems = true;
-        html += `<div class="summary-row"><span class="label">Tercera Edad x${quantities.senior}</span><span class="value">${formatCurrency(quantities.senior * prices.senior)}</span></div>`;
-    }
-    if (!hasItems) html = `<div class="text-sm text-gray-400 text-center py-4">No has seleccionado boletos</div>`;
-    document.getElementById('summaryItems').innerHTML = html;
     
-    document.getElementById('subtotalAmount').textContent = formatCurrency(subtotal);
-    document.getElementById('taxAmount').textContent = formatCurrency(tax);
-    document.getElementById('totalAmount').textContent = formatCurrency(totalAmount);
+    // ✅ Actualizar totales
+    const subtotalAmount = getElement('subtotalAmount');
+    const taxAmount = getElement('taxAmount');
+    const totalAmountEl = getElement('totalAmount');
     
-    const btnContinue = document.getElementById('btnContinue');
+    if (subtotalAmount) subtotalAmount.textContent = formatCurrency(subtotal);
+    if (taxAmount) taxAmount.textContent = formatCurrency(tax);
+    if (totalAmountEl) totalAmountEl.textContent = formatCurrency(totalAmount);
+    
+    // ✅ Habilitar/deshabilitar botón
+    const btnContinue = getElement('btnContinue');
     if (btnContinue) {
         if (total > 0 && total <= maxAvailableSeats) {
             btnContinue.disabled = false;
             btnContinue.innerHTML = `Elegir ${total} Asiento${total !== 1 ? 's' : ''}`;
+            console.log('✅ Botón habilitado');
         } else if (total > maxAvailableSeats) {
             btnContinue.disabled = true;
             btnContinue.innerHTML = `⚠️ Solo ${maxAvailableSeats} asientos disponibles`;
+            console.log('⚠️ Excede asientos disponibles');
         } else {
             btnContinue.disabled = true;
             btnContinue.innerHTML = 'Elegir 0 Asientos';
+            console.log('❌ Botón deshabilitado - Sin asientos');
         }
     }
     
-    document.getElementById('ticketsInput').value = JSON.stringify(quantities);
-    try { sessionStorage.setItem('ticket_selection_' + showtimeId, JSON.stringify(quantities)); } catch(e) {}
+    // ✅ Actualizar campo de tickets
+    const ticketsInput = getElement('ticketsInput');
+    if (ticketsInput) ticketsInput.value = JSON.stringify(quantities);
+    
+    // Guardar en sessionStorage
+    try {
+        sessionStorage.setItem('ticket_selection_' + showtimeId, JSON.stringify(quantities));
+    } catch (e) {
+        console.warn('Error guardando en sessionStorage:', e);
+    }
 }
 
+// ============================================
+// FUNCIÓN PARA INCREMENTAR/DECREMENTAR
+// ============================================
 function updateQuantity(type, change) {
-    if (!enabledTypes[type]) return;
+    if (!enabledTypes[type]) {
+        console.warn('Tipo no habilitado:', type);
+        return;
+    }
     const newValue = quantities[type] + change;
     if (newValue < 0) return;
     quantities[type] = newValue;
+    console.log('🔄 Cantidad actualizada:', type, '=', quantities[type]);
     updateUI();
 }
 
+// ============================================
+// EVENT LISTENERS
+// ============================================
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('✅ price_selection.php cargado - DOM listo');
+    
+    // Limpiar sessionStorage al cargar
     try {
         sessionStorage.removeItem('selected_seats_' + showtimeId);
         sessionStorage.removeItem('selected_seats_count_' + showtimeId);
     } catch(e) {}
     
+    // Botones de incremento
     document.querySelectorAll('.qty-increase').forEach(function(btn) {
         btn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            updateQuantity(this.dataset.type, 1);
-        });
-    });
-    
-    document.querySelectorAll('.qty-decrease').forEach(function(btn) {
-        btn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            updateQuantity(this.dataset.type, -1);
-        });
-    });
-    
-    document.querySelectorAll('.price-card:not(.disabled)').forEach(function(card) {
-        card.addEventListener('click', function(e) {
-            if (e.target.closest('.quantity-controls button')) return;
             const type = this.dataset.type;
-            if (!type) return;
+            console.log('➕ Click + en:', type);
             updateQuantity(type, 1);
         });
     });
     
+    // Botones de decremento
+    document.querySelectorAll('.qty-decrease').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            const type = this.dataset.type;
+            console.log('➖ Click - en:', type);
+            updateQuantity(type, -1);
+        });
+    });
+    
+    // Clic en la tarjeta
+    document.querySelectorAll('.price-card:not(.disabled)').forEach(function(card) {
+        card.addEventListener('click', function(e) {
+            if (e.target.closest('.quantity-controls button')) {
+                return;
+            }
+            const type = this.dataset.type;
+            if (!type) return;
+            console.log('🖱️ Click en tarjeta:', type);
+            updateQuantity(type, 1);
+        });
+    });
+    
+    // Validar formulario antes de enviar
     document.getElementById('seatsForm').addEventListener('submit', function(e) {
         const total = quantities.adult + quantities.child + quantities.senior;
+        console.log('📤 Enviando formulario - Total:', total);
+        
         if (total === 0) {
             e.preventDefault();
             alert('Por favor, selecciona al menos un boleto.');
@@ -534,10 +704,13 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('Error de seguridad: Token de compra no encontrado.');
             return false;
         }
+        console.log('✅ Formulario enviado correctamente');
         return true;
     });
     
+    // Inicializar UI
     updateUI();
+    console.log('✅ UI inicializada correctamente');
 });
 </script>
 </body>

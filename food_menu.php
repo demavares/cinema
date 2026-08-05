@@ -462,6 +462,7 @@ body {
                     <input type="hidden" name="showtime_id" value="<?= $showtimeId ?>">
                     <input type="hidden" name="food_order" id="foodOrderInput" value="[]">
                     <input type="hidden" name="purchase_token" value="<?= htmlspecialchars($purchaseToken) ?>">
+                    <input type="hidden" name="redirect" value="1">
                     <button type="submit" class="btn-continue" id="btnCheckout">
                         <i class="fas fa-credit-card mr-2"></i> Ir a Pagar
                     </button>
@@ -551,7 +552,7 @@ function formatCurrency(amount) {
 }
 
 // ============================================
-// ENVIAR FORMULARIO DE COMIDA
+// ENVIAR FORMULARIO DE COMIDA (floating cart)
 // ============================================
 function submitFoodForm() {
     const items = Object.values(cart);
@@ -693,9 +694,10 @@ function escapeHtml(text) {
 }
 
 // ============================================
-// MANEJAR ENVÍO DEL FORMULARIO
+// ✅ MANEJAR ENVÍO DEL FORMULARIO (ENVÍO TRADICIONAL)
 // ============================================
 document.getElementById('foodForm').addEventListener('submit', function(e) {
+    // Prevenir envío para construir el JSON primero
     e.preventDefault();
     
     const items = Object.values(cart);
@@ -704,13 +706,14 @@ document.getElementById('foodForm').addEventListener('submit', function(e) {
         quantity: item.quantity
     }));
     
+    // Actualizar el campo oculto con el JSON
     document.getElementById('foodOrderInput').value = JSON.stringify(orderData);
     
     const btn = document.getElementById('btnCheckout');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
     
-    // ✅ Enviar por POST con token en campo oculto
+    // ✅ Enviar el formulario normalmente (redirección por PHP)
     this.submit();
 });
 </script>
