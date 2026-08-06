@@ -51,7 +51,7 @@ function sanitizeInput($data, $type = 'string', $escape = true) {
  * Valida acciones GET con CSRF
  */
 function validateGetAction($action, $id) {
-    $allowed_actions = ['delete_movie', 'delete_room', 'delete_showtime', 'toggle_movie', 'toggle_room', 'toggle_showtime', 'delete_food', 'toggle_food'];
+    $allowed_actions = ['delete_movie', 'delete_room', 'delete_showtime', 'toggle_movie', 'toggle_room', 'toggle_showtime', 'delete_food', 'toggle_food', 'update_movie'];
     
     if (!in_array($action, $allowed_actions)) {
         return false;
@@ -529,7 +529,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $show_date = $_POST['show_date'] ?? '';
             $show_time = $_POST['show_time'] ?? '';
             
-            // ✅ NUEVOS PRECIOS
             $price_adult = filter_var($_POST['price_adult'] ?? 0, FILTER_VALIDATE_FLOAT);
             $price_child = filter_var($_POST['price_child'] ?? 0, FILTER_VALIDATE_FLOAT);
             $price_senior = filter_var($_POST['price_senior'] ?? 0, FILTER_VALIDATE_FLOAT);
@@ -602,7 +601,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $show_date = $_POST['show_date'] ?? '';
             $show_time = $_POST['show_time'] ?? '';
             
-            // ✅ NUEVOS PRECIOS
             $price_adult = filter_var($_POST['price_adult'] ?? 0, FILTER_VALIDATE_FLOAT);
             $price_child = filter_var($_POST['price_child'] ?? 0, FILTER_VALIDATE_FLOAT);
             $price_senior = filter_var($_POST['price_senior'] ?? 0, FILTER_VALIDATE_FLOAT);
@@ -884,7 +882,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 
-                // ✅ GUARDAR CONFIGURACIÓN DE IVA
                 if (isset($_POST['tax_rate'])) {
                     $tax_rate = filter_var($_POST['tax_rate'], FILTER_VALIDATE_FLOAT);
                     if ($tax_rate !== false && $tax_rate >= 0) {
@@ -1045,6 +1042,127 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $csrf_token_get = $_GET['csrf_token'] ?? '';
 
+// ============================================
+// ✅ ACTUALIZAR PELÍCULA DESDE TMDb
+// ============================================
+if (isset($_GET['update_movie']) && validateGetAction('update_movie', $_GET['update_movie'])) {
+    $id = intval($_GET['update_movie']);
+    try {
+        $stmt = $pdo->prepare("SELECT * FROM movies WHERE id = ?");
+        $stmt->execute([$id]);
+        $movie = $stmt->fetch();
+        
+        if (!$movie) {
+            $error = "Película no encontrada.";
+        } else {
+            $tmdb_data = getMovieFromTMDB($movie['title'], $movie['year']);
+            
+            if (!$tmdb_data) {
+                $error = "No se pudieron obtener datos de TMDb para la película: " . $movie['title'];
+            } else {
+                $description = !empty($tmdb_data['description']) ? $tmdb_data['description'] : $movie['description'];
+                $duration = !empty($tmdb_data['runtime']) ? intval($tmdb_data['runtime']) : $movie['duration'];
+                $genre = !empty($tmdb_data['genres']) ? $tmdb_data['genres'] : $movie['genre'];
+                $director = !empty($tmdb_data['director']) && $tmdb_data['director'] !== 'No disponible' ? $tmdb_data['director'] : $movie['director'];
+                $cast_members = !empty($tmdb_data['cast_members']) ? $tmdb_data['cast_members'] : $movie['cast_members'];
+                $year = !empty($tmdb_data['year']) ? $tmdb_data['year'] : $movie['year'];
+                $poster_url = !empty($tmdb_data['poster_path']) ? 'https://image.tmdb.org/t/p/w500' . $tmdb_data['poster_path'] : $movie['poster_url'];
+                $banner_url = !empty($tmdb_data['backdrop_path']) ? 'https://image.tmdb.org/t/p/original' . $tmdb_data['backdrop_path'] : $movie['banner_url'];
+                
+                $country_id = $movie['country_id'];
+                if (empty($country_id) && !empty($tmdb_data['country'])) {
+                    $country_name = $tmdb_data['country'];
+                    $stmt = $pdo->prepare("SELECT id FROM countries WHERE name = ?");
+                    $stmt->execute([$country_name]);
+                    $country_result = $stmt->fetch();
+                    if ($country_result) {
+                        $country_id = $country_result['id'];
+                    } else {
+                        $country_code = array_search($country_name, [
+                            'Estados Unidos de América' => 'US',
+                            'Japón' => 'JP',
+                            'Reino Unido' => 'GB',
+                            'Francia' => 'FR',
+                            'Alemania' => 'DE',
+                            'Corea del Sur' => 'KR',
+                            'China' => 'CN',
+                            'Canadá' => 'CA',
+                            'España' => 'ES',
+                            'Italia' => 'IT',
+                            'México' => 'MX',
+                            'India' => 'IN',
+                            'Australia' => 'AU',
+                            'Venezuela' => 'VE',
+                            'Argentina' => 'AR',
+                            'Colombia' => 'CO',
+                            'Chile' => 'CL',
+                            'Perú' => 'PE',
+                            'Brasil' => 'BR'
+                        ]);
+                        if ($country_code) {
+                            $stmt = $pdo->prepare("SELECT id FROM countries WHERE code = ?");
+                            $stmt->execute([$country_code]);
+                            $country_result = $stmt->fetch();
+                            if ($country_result) {
+                                $country_id = $country_result['id'];
+                            }
+                        }
+                    }
+                }
+                
+                $updated_fields = [];
+                if ($description != $movie['description']) $updated_fields[] = 'Sinopsis';
+                if ($duration != $movie['duration']) $updated_fields[] = 'Duración';
+                if ($genre != $movie['genre']) $updated_fields[] = 'Género';
+                if ($director != $movie['director']) $updated_fields[] = 'Director';
+                if ($cast_members != $movie['cast_members']) $updated_fields[] = 'Reparto';
+                if ($year != $movie['year']) $updated_fields[] = 'Año';
+                if ($poster_url != $movie['poster_url']) $updated_fields[] = 'Póster';
+                if ($banner_url != $movie['banner_url']) $updated_fields[] = 'Banner';
+                if ($country_id != $movie['country_id']) $updated_fields[] = 'País';
+                
+                $stmt = $pdo->prepare("
+                    UPDATE movies SET 
+                        description = ?,
+                        duration = ?,
+                        genre = ?,
+                        director = ?,
+                        cast_members = ?,
+                        year = ?,
+                        poster_url = ?,
+                        banner_url = ?,
+                        country_id = ?
+                    WHERE id = ?
+                ");
+                $stmt->execute([
+                    $description,
+                    $duration,
+                    $genre,
+                    $director,
+                    $cast_members,
+                    $year,
+                    $poster_url,
+                    $banner_url,
+                    $country_id,
+                    $id
+                ]);
+                
+                if (!empty($updated_fields)) {
+                    $msg_text = "Película «" . $movie['title'] . "» fue actualizada desde TMDb. Campos actualizados: " . implode(', ', $updated_fields) . ".";
+                } else {
+                    $msg_text = "Película «" . $movie['title'] . "» ya está actualizada. No se detectaron cambios.";
+                }
+                
+                header("Location: admin.php?tab=movies&msg=" . urlencode($msg_text));
+                exit;
+            }
+        }
+    } catch (PDOException $e) {
+        error_log("Error al actualizar película desde TMDb: " . $e->getMessage());
+        $error = "Error al actualizar la película. Por favor, intente nuevamente.";
+    }
+}
+
 // Eliminar Película
 if (isset($_GET['delete_movie']) && validateGetAction('delete_movie', $_GET['delete_movie'])) {
     $id = intval($_GET['delete_movie']);
@@ -1198,7 +1316,23 @@ if (isset($_GET['toggle_food']) && validateGetAction('toggle_food', $_GET['toggl
 // OBTENER DATOS
 // ============================================
 
-$movies = $pdo->query("SELECT * FROM movies ORDER BY id DESC")->fetchAll();
+// ✅ Buscador por nombre de película
+$search_title = isset($_GET['search_title']) ? trim($_GET['search_title']) : '';
+
+$movies_sql = "SELECT * FROM movies WHERE 1=1";
+$movies_params = [];
+
+if (!empty($search_title)) {
+    $movies_sql .= " AND title LIKE ?";
+    $movies_params[] = '%' . $search_title . '%';
+}
+
+$movies_sql .= " ORDER BY id DESC";
+
+$stmt = $pdo->prepare($movies_sql);
+$stmt->execute($movies_params);
+$movies = $stmt->fetchAll();
+
 $rooms = $pdo->query("SELECT * FROM rooms ORDER BY id")->fetchAll();
 $countries = $pdo->query("SELECT * FROM countries ORDER BY name ASC")->fetchAll();
 
@@ -1212,11 +1346,9 @@ $showtimes = $pdo->query("
 
 $users = $pdo->query("SELECT * FROM users ORDER BY id DESC")->fetchAll();
 
-// Datos de comida
 $food_items = $pdo->query("SELECT f.*, c.name as category_name FROM food_items f LEFT JOIN food_categories c ON f.category_id = c.id ORDER BY f.id DESC")->fetchAll();
 $food_categories = $pdo->query("SELECT * FROM food_categories ORDER BY name ASC")->fetchAll();
 
-// ✅ OBTENER CONFIGURACIÓN DE IVA
 $taxConfig = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1")->fetch();
 $taxRate = $taxConfig ? floatval($taxConfig['tax_rate']) : 16;
 
@@ -1620,7 +1752,6 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
             color: #fca5a5;
         }
 
-        /* Toggle Switch para precios */
         .toggle-switch {
             position: relative;
             width: 44px;
@@ -1667,6 +1798,202 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         .price-input-disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        /* Estilos para el buscador - Solo nombre */
+        .search-box {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: flex-end;
+            background: #1f2937;
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid #374151;
+            margin-bottom: 20px;
+        }
+        .search-box .search-group {
+            flex: 1;
+            min-width: 250px;
+        }
+        .search-box .search-group label {
+            display: block;
+            font-size: 0.7rem;
+            color: #9ca3af;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .search-box .search-group input {
+            width: 100%;
+            background: #111827;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 8px 12px;
+            color: #e5e7eb;
+            font-size: 0.9rem;
+            transition: border-color 0.3s ease;
+        }
+        .search-box .search-group input:focus {
+            outline: none;
+            border-color: #4f46e5;
+            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
+        }
+        .search-box .search-group input::placeholder {
+            color: #6b7280;
+        }
+        .search-box .search-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+        .search-box .search-actions button {
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: none;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .search-box .search-actions .btn-search {
+            background: #4f46e5;
+            color: white;
+        }
+        .search-box .search-actions .btn-search:hover {
+            background: #6366f1;
+            transform: translateY(-1px);
+        }
+        .search-box .search-actions .btn-clear {
+            background: #374151;
+            color: #9ca3af;
+        }
+        .search-box .search-actions .btn-clear:hover {
+            background: #4b5563;
+            color: #e5e7eb;
+        }
+        
+        /* Modal de actualización */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            z-index: 9999;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-box {
+            background: #1a1a2e;
+            border: 2px solid #22c55e;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 440px;
+            width: 100%;
+            text-align: center;
+            animation: modalFadeIn 0.4s ease;
+            box-shadow: 0 20px 60px rgba(34, 197, 94, 0.15);
+        }
+        .modal-box .modal-icon {
+            font-size: 4rem;
+            color: #22c55e;
+            margin-bottom: 16px;
+            display: block;
+        }
+        .modal-box .modal-title {
+            color: #e5e7eb;
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        .modal-box .modal-message {
+            color: #9ca3af;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            margin-bottom: 24px;
+        }
+        .modal-box .modal-btn {
+            background: #22c55e;
+            color: white;
+            padding: 10px 32px;
+            border-radius: 8px;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+        .modal-box .modal-btn:hover {
+            background: #16a34a;
+            transform: scale(1.05);
+        }
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9) translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
+            }
+        }
+        
+        @media (max-width: 640px) {
+            .search-box {
+                flex-direction: column;
+                gap: 10px;
+                padding: 12px;
+            }
+            .search-box .search-group {
+                min-width: 100%;
+                width: 100%;
+            }
+            .search-box .search-actions {
+                width: 100%;
+            }
+            .search-box .search-actions button {
+                flex: 1;
+                justify-content: center;
+            }
+            .modal-box {
+                padding: 28px 20px;
+                margin: 0 12px;
+            }
+            .modal-box .modal-icon {
+                font-size: 3rem;
+            }
+            .modal-box .modal-title {
+                font-size: 1.2rem;
+            }
+            .modal-box .modal-message {
+                font-size: 0.85rem;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .search-box .search-actions button {
+                font-size: 0.75rem;
+                padding: 6px 12px;
+            }
+            .modal-box {
+                padding: 20px 16px;
+            }
+            .modal-box .modal-icon {
+                font-size: 2.5rem;
+                margin-bottom: 10px;
+            }
         }
     </style>
 </head>
@@ -1719,7 +2046,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         </div>
 
         <!-- ============================================ -->
-        <!-- TAB: PELÍCULAS -->
+        <!-- TAB: PELÍCULAS - CON BUSCADOR POR NOMBRE     -->
         <!-- ============================================ -->
         <?php if($activeTab === 'movies'): ?>
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
@@ -1841,9 +2168,26 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
             </form>
         </div>
 
-        <!-- Lista de Películas -->
+        <!-- Lista de Películas con Buscador por Nombre -->
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
             <h2 class="text-lg font-bold mb-4 text-indigo-300">📋 Todas las Películas</h2>
+            
+            <!-- Buscador solo por nombre -->
+            <div class="search-box">
+                <div class="search-group">
+                    <label><i class="fas fa-search mr-1"></i> Buscar por Título</label>
+                    <input type="text" id="searchTitle" placeholder="Ej: Spider-Man, Avatar..." value="<?= htmlspecialchars($search_title) ?>">
+                </div>
+                <div class="search-actions">
+                    <button class="btn-search" onclick="applyFilters()">
+                        <i class="fas fa-search"></i> Buscar
+                    </button>
+                    <button class="btn-clear" onclick="clearFilters()">
+                        <i class="fas fa-times"></i> Limpiar
+                    </button>
+                </div>
+            </div>
+            
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
                     <thead>
@@ -1858,7 +2202,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                             <th class="pb-3 font-semibold text-center">Acciones</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-700/50 text-sm">
+                    <tbody class="divide-y divide-gray-700/50 text-sm" id="moviesTableBody">
                         <?php foreach($movies as $m): ?>
                             <tr>
                                 <td class="py-3">
@@ -1897,6 +2241,11 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                                            class="text-xs px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 transition-colors">
                                             Editar
                                         </a>
+                                        <a href="?update_movie=<?= htmlspecialchars($m['id']) ?>&tab=movies&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
+                                           class="text-xs px-2 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 transition-colors"
+                                           onclick="return confirm('¿Actualizar los datos de la película «<?= htmlspecialchars($m['title']) ?>» desde TMDb?')">
+                                            <i class="fas fa-sync-alt mr-1"></i> Actualizar
+                                        </a>
                                         <a href="?toggle_movie=<?= htmlspecialchars($m['id']) ?>&tab=movies&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
                                            class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors"
                                            onclick="return confirm('¿Cambiar estado de esta película?')">
@@ -1913,6 +2262,12 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                         <?php endforeach; ?>
                     </tbody>
                 </table>
+                <?php if(empty($movies)): ?>
+                    <div class="text-center py-8 text-gray-400">
+                        <p class="text-4xl mb-2">🎬</p>
+                        <p>No se encontraron películas<?= !empty($search_title) ? ' con el filtro aplicado' : '' ?>.</p>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
         <?php endif; ?>
@@ -1998,11 +2353,10 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                     </select>
                 </div>
                 
-                <!-- ✅ PRECIOS Y CONFIGURACIÓN - CORREGIDO -->
+                <!-- PRECIOS Y CONFIGURACIÓN -->
                 <div class="md:col-span-3">
                     <label class="block text-sm text-gray-400 mb-2">💰 Precios</label>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <!-- Precio Adulto (Siempre visible) -->
                         <div>
                             <label class="block text-sm text-gray-400 mb-1">Adulto *</label>
                             <div class="relative">
@@ -2016,7 +2370,6 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                             </div>
                         </div>
                         
-                        <!-- Precio Niño con toggle -->
                         <div>
                             <div class="flex items-center justify-between mb-1">
                                 <label class="block text-sm text-gray-400">Niño</label>
@@ -2040,7 +2393,6 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                             <p class="text-xs text-gray-500 mt-1">Menores de 12 años</p>
                         </div>
                         
-                        <!-- Precio Tercera Edad con toggle -->
                         <div>
                             <div class="flex items-center justify-between mb-1">
                                 <label class="block text-sm text-gray-400">Tercera Edad</label>
@@ -2125,7 +2477,6 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                             $lang_label = $language == 'español' ? '🎬 Español' : '📝 Subtítulos';
                             $lang_class = $language == 'español' ? 'espanol' : 'subtitulos';
                             
-                            // Precios
                             $price_adult = $s['price_adult'] ?? $s['price'] ?? 0;
                             $price_child = $s['price_child'] ?? 0;
                             $price_senior = $s['price_senior'] ?? 0;
@@ -2666,7 +3017,6 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
             
             <!-- Resumen -->
             <?php
-            // Obtener historial
             $history_start_date = $_GET['history_start_date'] ?? '';
             $history_end_date = $_GET['history_end_date'] ?? '';
 
@@ -2966,7 +3316,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                     </select>
                 </div>
                 
-                <!-- ✅ IVA - NUEVA SECCIÓN -->
+                <!-- IVA -->
                 <div class="md:col-span-2 mt-2">
                     <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">🧾 Impuestos</h3>
                 </div>
@@ -3005,7 +3355,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                     </div>
                 </div>
                 
-                <!-- Columna 3: Contacto -->
+                <!-- Contacto -->
                 <div class="md:col-span-2 mt-2">
                     <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">📞 Información de Contacto</h3>
                     <p class="text-xs text-gray-500 mb-2">Si dejas un campo vacío, no se mostrará en el footer.</p>
@@ -3029,7 +3379,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                            class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
                 
-                <!-- Columna 4: Redes Sociales -->
+                <!-- Redes Sociales -->
                 <div class="md:col-span-2 mt-2">
                     <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">📱 Redes Sociales</h3>
                     <p class="text-xs text-gray-500 mb-2">Si dejas un campo vacío, no se mostrará en el footer.</p>
@@ -3080,6 +3430,16 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
 
     </div>
 
+    <!-- Modal de Actualización -->
+    <div class="modal-overlay" id="updateModal">
+        <div class="modal-box">
+            <span class="modal-icon">✅</span>
+            <h2 class="modal-title">Película Actualizada</h2>
+            <p class="modal-message" id="updateModalMessage">La película fue actualizada correctamente desde TMDb.</p>
+            <button class="modal-btn" onclick="closeUpdateModal()">Entendido</button>
+        </div>
+    </div>
+
     <script>
     function togglePasswordVisibility(inputId, btn) {
         const input = document.getElementById(inputId);
@@ -3095,27 +3455,20 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         }
     }
 
-    // ============================================
-    // FUNCIÓN PARA HABILITAR/DESHABILITAR PRECIO - CORREGIDA
-    // ============================================
     function togglePriceInput(checkbox, inputId) {
         const input = document.getElementById(inputId);
         if (!input) return;
         
         if (checkbox.checked) {
-            // Habilitar - mantener el valor que tiene (no poner 0)
             input.disabled = false;
             input.classList.remove('price-input-disabled');
         } else {
-            // Deshabilitar - mantener el valor guardado (no vaciar)
             input.disabled = true;
             input.classList.add('price-input-disabled');
         }
     }
 
-    // Inicializar estado de los toggles al cargar
     document.addEventListener('DOMContentLoaded', function() {
-        // Precio Niño
         const childCheckbox = document.getElementById('enable_child_price');
         const childInput = document.getElementById('price_child');
         if (childCheckbox && childInput) {
@@ -3128,7 +3481,6 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
             }
         }
         
-        // Precio Tercera Edad
         const seniorCheckbox = document.getElementById('enable_senior_price');
         const seniorInput = document.getElementById('price_senior');
         if (seniorCheckbox && seniorInput) {
@@ -3142,9 +3494,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         }
     });
         
-    // =============================================
-    // VERIFICADOR DE CONFLICTOS EN TIEMPO REAL
-    // =============================================
+    // VERIFICADOR DE CONFLICTOS
     document.addEventListener('DOMContentLoaded', function() {
         const movieSelect = document.getElementById('movieSelect');
         const roomSelect = document.getElementById('roomSelect');
@@ -3203,8 +3553,6 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
             })
             .then(response => response.json())
             .then(data => {
-                console.log('Respuesta del servidor:', data);
-                
                 if (data.error) {
                     conflictStatus.textContent = '⚠️ Error: ' + data.error;
                     conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
@@ -3246,6 +3594,66 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         
         if (movieSelect.value && roomSelect.value && dateInput.value && timeInput.value) {
             setTimeout(checkConflicts, 300);
+        }
+    });
+
+    // FUNCIONES DEL BUSCADOR POR NOMBRE
+    function applyFilters() {
+        const title = document.getElementById('searchTitle').value.trim();
+        let url = '?tab=movies';
+        if (title) url += '&search_title=' + encodeURIComponent(title);
+        url += '&csrf_token=' + encodeURIComponent('<?= htmlspecialchars($csrf_token) ?>');
+        window.location.href = url;
+    }
+
+    function clearFilters() {
+        window.location.href = '?tab=movies&csrf_token=' + encodeURIComponent('<?= htmlspecialchars($csrf_token) ?>');
+    }
+
+    // FUNCIONES DEL MODAL DE ACTUALIZACIÓN
+    function showUpdateModal(message) {
+        document.getElementById('updateModalMessage').textContent = message;
+        document.getElementById('updateModal').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeUpdateModal() {
+        document.getElementById('updateModal').classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const modal = document.getElementById('updateModal');
+            if (modal.classList.contains('active')) {
+                closeUpdateModal();
+            }
+        }
+    });
+
+    document.addEventListener('click', function(e) {
+        const modal = document.getElementById('updateModal');
+        if (e.target === modal) {
+            closeUpdateModal();
+        }
+    });
+
+    // VERIFICAR SI HAY MENSAJE DE ACTUALIZACIÓN
+    <?php if($msg && strpos($msg, 'fue actualizada') !== false): ?>
+    document.addEventListener('DOMContentLoaded', function() {
+        showUpdateModal('<?= addslashes($msg) ?>');
+    });
+    <?php endif; ?>
+    
+    // ENTER PARA BUSCAR
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchTitle');
+        if (searchInput) {
+            searchInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    applyFilters();
+                }
+            });
         }
     });
     </script>
