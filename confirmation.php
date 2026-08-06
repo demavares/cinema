@@ -63,6 +63,9 @@ if (!$showtime) {
     exit;
 }
 
+// ============================================
+// ✅ OBTENER TICKET TYPES DESDE purchase_tickets
+// ============================================
 $stmt = $pdo->prepare("
     SELECT pt.*, tt.name as ticket_type_name, tt.code as ticket_type_code
     FROM purchase_tickets pt
@@ -83,8 +86,10 @@ foreach ($seatsArray as $seat) {
 }
 
 $ticketCount = count($seatsArray);
-$price = getShowtimePrice($showtime);
 
+// ============================================
+// ✅ OBTENER PEDIDOS DE COMIDA FILTRADOS POR purchase_id
+// ============================================
 $foodOrders = [];
 $totalFood = 0;
 
@@ -92,18 +97,61 @@ $stmt = $pdo->prepare("
     SELECT fo.*, fi.name as food_name
     FROM food_orders fo
     JOIN food_items fi ON fo.food_item_id = fi.id
-    WHERE fo.user_id = ? AND fo.showtime_id = ? AND fo.status = 'completed'
+    WHERE fo.purchase_id = ? AND fo.status = 'completed'
 ");
-$stmt->execute([$_SESSION['user_id'], $showtimeId]);
+$stmt->execute([$purchaseId]);
 $foodOrders = $stmt->fetchAll();
 
 foreach ($foodOrders as $food) {
     $totalFood += $food['total_price'];
 }
 
+// ============================================
+// ✅ CALCULAR TOTALES CORRECTAMENTE
+// ============================================
 $subtotal = floatval($purchase['subtotal'] ?? 0);
 $taxAmount = floatval($purchase['tax_amount'] ?? 0);
 $totalAmount = floatval($purchase['total_amount'] ?? 0);
+$taxRate = floatval($purchase['tax_rate'] ?? 16);
+
+// ✅ CALCULAR DESGLOSE DE BOLETOS
+$ticketTypes = [];
+$ticketTotal = 0;
+foreach ($purchaseTickets as $pt) {
+    $code = $pt['ticket_type_code'] ?? 'adult';
+    $name = $pt['ticket_type_name'] ?? ucfirst($code);
+    $price = floatval($pt['price']);
+    
+    if (!isset($ticketTypes[$code])) {
+        $ticketTypes[$code] = [
+            'count' => 0,
+            'name' => $name,
+            'price' => $price,
+            'total' => 0
+        ];
+    }
+    $ticketTypes[$code]['count']++;
+    $ticketTypes[$code]['total'] += $price;
+    $ticketTotal += $price;
+}
+
+// ✅ CALCULAR DESGLOSE DE COMIDA AGRUPADA
+$groupedFood = [];
+$foodTotal = 0;
+foreach ($foodOrders as $food) {
+    $key = $food['food_name'];
+    if (!isset($groupedFood[$key])) {
+        $groupedFood[$key] = [
+            'name' => $food['food_name'],
+            'quantity' => 0,
+            'total' => 0,
+            'unit_price' => $food['unit_price']
+        ];
+    }
+    $groupedFood[$key]['quantity'] += $food['quantity'];
+    $groupedFood[$key]['total'] += $food['total_price'];
+    $foodTotal += $food['total_price'];
+}
 
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "¡Compra Exitosa! - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
@@ -141,7 +189,6 @@ require_once 'header.php';
 <style>
 /* ============================================
    ESTILOS UNIFICADOS - Fondo blanco y texto oscuro
-   Mismo estilo que seats.php, food_menu.php y payment.php
    ============================================ */
 body {
     background-color: #ffffff !important;
@@ -274,61 +321,64 @@ body {
     margin-bottom: 10px;
 }
 
-.detail-row {
+/* ============================================
+   ✅ ESTILOS PARA BOLETOS Y COMIDA
+   ============================================ */
+.ticket-row {
     display: flex;
     justify-content: space-between;
-    padding: 6px 0;
-    border-bottom: 1px solid #e2e8f0;
+    padding: 4px 0;
     font-size: 0.95rem;
+    border-bottom: 1px solid #f1f5f9;
 }
 
-.detail-row:last-child {
+.ticket-row:last-child {
     border-bottom: none;
 }
 
-.detail-row .label {
+.ticket-row .ticket-label {
     color: #475569;
 }
 
-.detail-row .value {
+.ticket-row .ticket-price {
     color: #0f172a;
     font-weight: 600;
 }
 
-.detail-row.total {
-    border-top: 2px solid #4f46e5;
-    border-bottom: none;
-    padding-top: 12px;
-    margin-top: 4px;
-    font-size: 1.1rem;
-}
-
-.detail-row.total .value {
-    color: #16a34a;
-    font-weight: 700;
-}
-
-.tax-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 4px 0;
-    font-size: 0.85rem;
-    color: #475569;
-    border-bottom: 1px solid #e2e8f0;
-}
-
-.tax-row .tax-value {
-    color: #b45309;
+.ticket-type-badge {
+    display: inline-block;
+    padding: 1px 10px;
+    border-radius: 10px;
+    font-size: 0.65rem;
     font-weight: 600;
+    margin-left: 4px;
+}
+
+.ticket-type-badge.adult {
+    background: #eef2ff;
+    color: #4f46e5;
+    border: 1px solid #c7d2fe;
+}
+
+.ticket-type-badge.child {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #86efac;
+}
+
+.ticket-type-badge.senior {
+    background: #fef3c7;
+    color: #b45309;
+    border: 1px solid #fde68a;
 }
 
 .food-item {
     display: flex;
     justify-content: space-between;
-    padding: 4px 0 4px 16px;
+    padding: 4px 0 4px 0;
     font-size: 0.9rem;
     color: #475569;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1px solid #f1f5f9;
 }
 
 .food-item:last-child {
@@ -342,6 +392,102 @@ body {
 .food-item .food-total {
     color: #0f172a;
     font-weight: 500;
+}
+
+/* ============================================
+   ✅ ESTILOS PARA TOTALES
+   ============================================ */
+.totals-section {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 2px solid #e2e8f0;
+}
+
+.total-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    font-size: 0.95rem;
+}
+
+.total-row .total-label {
+    color: #475569;
+}
+
+.total-row .total-value {
+    color: #0f172a;
+    font-weight: 600;
+}
+
+.total-row.tax-row .total-value {
+    color: #b45309;
+    font-weight: 600;
+}
+
+.total-row.grand-total {
+    border-top: 2px solid #4f46e5;
+    padding-top: 12px;
+    margin-top: 4px;
+    font-size: 1.15rem;
+}
+
+.total-row.grand-total .total-label {
+    color: #0f172a;
+    font-weight: 700;
+}
+
+.total-row.grand-total .total-value {
+    color: #16a34a;
+    font-weight: 700;
+}
+
+/* ============================================
+   FIN ESTILOS
+   ============================================ */
+.seat-accessible-badge {
+    display: inline-block;
+    background: #dbeafe;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    padding: 0px 8px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    margin-left: 4px;
+}
+
+.seat-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-top: 4px;
+}
+
+.seat-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-weight: 600;
+    color: #0f172a;
+    background: #f1f5f9;
+    padding: 2px 10px 2px 8px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    font-size: 0.85rem;
+}
+
+.seat-item.accessible {
+    color: #1d4ed8;
+    border-color: #bfdbfe;
+    background: #dbeafe;
+}
+
+.seat-item .accessible-icon {
+    font-size: 0.8rem;
+}
+
+.seat-item .seat-label {
+    font-weight: 700;
 }
 
 .payment-box {
@@ -461,79 +607,6 @@ body {
     border: 1px solid #e2e8f0;
 }
 
-.seat-accessible-badge {
-    display: inline-block;
-    background: #dbeafe;
-    color: #1d4ed8;
-    border: 1px solid #bfdbfe;
-    padding: 0px 8px;
-    border-radius: 12px;
-    font-size: 0.65rem;
-    font-weight: 600;
-    margin-left: 4px;
-}
-
-.seat-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 12px;
-    margin-top: 4px;
-}
-
-.seat-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    font-weight: 600;
-    color: #0f172a;
-    background: #f1f5f9;
-    padding: 2px 10px 2px 8px;
-    border-radius: 6px;
-    border: 1px solid #e2e8f0;
-    font-size: 0.85rem;
-}
-
-.seat-item.accessible {
-    color: #1d4ed8;
-    border-color: #bfdbfe;
-    background: #dbeafe;
-}
-
-.seat-item .accessible-icon {
-    font-size: 0.8rem;
-}
-
-.seat-item .seat-label {
-    font-weight: 700;
-}
-
-.ticket-type-badge {
-    display: inline-block;
-    padding: 1px 10px;
-    border-radius: 10px;
-    font-size: 0.65rem;
-    font-weight: 600;
-    margin-left: 4px;
-}
-
-.ticket-type-badge.adult {
-    background: #eef2ff;
-    color: #4f46e5;
-    border: 1px solid #c7d2fe;
-}
-
-.ticket-type-badge.child {
-    background: #dcfce7;
-    color: #15803d;
-    border: 1px solid #86efac;
-}
-
-.ticket-type-badge.senior {
-    background: #fef3c7;
-    color: #b45309;
-    border: 1px solid #fde68a;
-}
-
 .info-tags {
     display: flex;
     flex-wrap: wrap;
@@ -619,33 +692,47 @@ body {
         justify-content: center;
     }
 
-    .detail-row {
+    .ticket-row {
         font-size: 0.85rem;
-        padding: 5px 0;
+        padding: 4px 0;
         flex-direction: column;
         align-items: flex-start;
         gap: 2px;
     }
 
-    .detail-row .value {
+    .ticket-row .ticket-price {
         width: 100%;
-    }
-
-    .detail-row.total {
-        font-size: 1rem;
-        padding-top: 10px;
-        flex-direction: row;
-        align-items: center;
-    }
-
-    .tax-row {
-        font-size: 0.78rem;
-        padding: 3px 0;
     }
 
     .food-item {
         font-size: 0.8rem;
-        padding: 3px 0 3px 12px;
+        padding: 3px 0;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+
+    .food-item .food-total {
+        width: 100%;
+    }
+
+    .total-row {
+        font-size: 0.85rem;
+        padding: 3px 0;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+
+    .total-row .total-value {
+        width: 100%;
+    }
+
+    .total-row.grand-total {
+        font-size: 1rem;
+        padding-top: 10px;
+        flex-direction: row;
+        align-items: center;
     }
 
     .payment-box {
@@ -728,35 +815,14 @@ body {
         font-size: 0.7rem;
     }
 
-    .detail-row {
-        font-size: 0.75rem;
-        padding: 4px 0;
-    }
-
-    .detail-row.total {
-        font-size: 0.85rem;
+    .total-row.grand-total {
+        font-size: 0.9rem;
         padding-top: 8px;
     }
 
-    .tax-row {
-        font-size: 0.7rem;
-        padding: 2px 0;
-    }
-
-    .payment-box .payment-detail {
-        font-size: 0.7rem;
-        padding: 3px 0;
-    }
-
-    .btn-actions .btn-primary,
-    .btn-actions .btn-secondary {
-        padding: 8px;
-        font-size: 0.75rem;
-    }
-
-    .seat-item {
-        font-size: 0.7rem;
-        padding: 1px 6px 1px 4px;
+    .ticket-type-badge {
+        font-size: 0.5rem;
+        padding: 0px 5px;
     }
 }
 </style>
@@ -822,51 +888,40 @@ body {
                     <div class="info-tags">
                         <span class="tag-item"><strong><?= $ticketCount ?></strong> boleto<?= $ticketCount > 1 ? 's' : '' ?></span>
                         <?php if (!empty($foodOrders)): ?>
-                            <span class="tag-item"><strong><?= count($foodOrders) ?></strong> producto<?= count($foodOrders) > 1 ? 's' : '' ?> de comida</span>
+                            <span class="tag-item"><strong><?= count($groupedFood) ?></strong> producto<?= count($groupedFood) > 1 ? 's' : '' ?> de comida</span>
                         <?php endif; ?>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Detalle de la Compra -->
+        <!-- ============================================ -->
+        <!-- ✅ DETALLE DE TU COMPRA - NUEVO DISEÑO       -->
+        <!-- ============================================ -->
         <div class="detail-section">
             <p class="detail-title">📋 Detalle de tu compra</p>
 
-            <!-- ✅ BOLETOS POR TIPO -->
-            <?php if (!empty($purchaseTickets)): ?>
+            <!-- ✅ BOLETOS POR TIPO - DESGLOSADOS CORRECTAMENTE -->
+            <?php if (!empty($ticketTypes)): ?>
                 <div class="mb-2">
-                    <?php
-                    $ticketTypes = [];
-                    foreach ($purchaseTickets as $pt) {
-                        $code = $pt['ticket_type_code'] ?? 'adult';
-                        if (!isset($ticketTypes[$code])) {
-                            $ticketTypes[$code] = [
-                                'count' => 0,
-                                'name' => $pt['ticket_type_name'] ?? ucfirst($code),
-                                'price' => $pt['price']
-                            ];
-                        }
-                        $ticketTypes[$code]['count']++;
-                    }
-                    foreach ($ticketTypes as $code => $info):
+                    <?php foreach ($ticketTypes as $code => $info): 
                         $badgeClass = $code == 'adult' ? 'adult' : ($code == 'child' ? 'child' : 'senior');
                         $icon = $code == 'adult' ? '👤' : ($code == 'child' ? '🧒' : '👴');
                     ?>
-                        <div class="detail-row">
-                            <span class="label">
+                        <div class="ticket-row">
+                            <span class="ticket-label">
                                 <?= htmlspecialchars($info['name']) ?> x<?= $info['count'] ?>
                                 <span class="ticket-type-badge <?= $badgeClass ?>"><?= $icon ?></span>
                             </span>
-                            <span class="value"><?= formatCurrency($info['count'] * $info['price'], $siteConfig) ?></span>
+                            <span class="ticket-price"><?= formatCurrency($info['total'], $siteConfig) ?></span>
                         </div>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
 
-            <!-- Asientos -->
-            <div class="detail-row" style="flex-direction: column; align-items: stretch; gap: 4px; border-bottom: 1px solid #e2e8f0;">
-                <span class="label">🎫 Asientos</span>
+            <!-- ✅ ASIENTOS -->
+            <div class="mt-3 pt-3 border-t border-[#e2e8f0]">
+                <p class="text-sm font-semibold text-gray-700 mb-1">🎫 Asientos</p>
                 <div class="seat-list">
                     <?php foreach ($seatsArray as $seat):
                         $isAccessible = strpos($seat, '♿') !== false;
@@ -883,32 +938,40 @@ body {
                 </div>
             </div>
 
-            <!-- Comida -->
-            <?php if (!empty($foodOrders)): ?>
-                <div class="mt-2 pt-2 border-t border-[#e2e8f0]">
+            <!-- Separador -->
+            <div class="my-3 border-t border-[#e2e8f0]"></div>
+
+            <!-- ✅ COMIDA - DESGLOSADA -->
+            <?php if (!empty($groupedFood)): ?>
+                <div class="mt-2">
                     <p class="text-sm font-semibold text-gray-700 mb-1">🍿 Comida</p>
-                    <?php foreach ($foodOrders as $food): ?>
+                    <?php foreach ($groupedFood as $item): ?>
                         <div class="food-item">
-                            <span class="food-name"><?= $food['quantity'] ?> x <?= htmlspecialchars($food['food_name']) ?></span>
-                            <span class="food-total"><?= formatCurrency($food['total_price'], $siteConfig) ?></span>
+                            <span class="food-name"><?= $item['quantity'] ?> x <?= htmlspecialchars($item['name']) ?></span>
+                            <span class="food-total"><?= formatCurrency($item['total'], $siteConfig) ?></span>
                         </div>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
 
             <!-- ✅ SUBTOTAL, IVA Y TOTAL -->
-            <div class="mt-2 pt-2 border-t border-[#e2e8f0]">
-                <div class="detail-row" style="border-bottom: 1px solid #e2e8f0;">
-                    <span class="label">Subtotal</span>
-                    <span class="value"><?= formatCurrency($subtotal, $siteConfig) ?></span>
+            <div class="totals-section">
+                <!-- Subtotal -->
+                <div class="total-row">
+                    <span class="total-label">Subtotal</span>
+                    <span class="total-value"><?= formatCurrency($subtotal, $siteConfig) ?></span>
                 </div>
-                <div class="tax-row">
-                    <span class="tax-label">IVA (<?= $purchase['tax_rate'] ?? 16 ?>%)</span>
-                    <span class="tax-value"><?= formatCurrency($taxAmount, $siteConfig) ?></span>
+
+                <!-- IVA -->
+                <div class="total-row tax-row">
+                    <span class="total-label">IVA (<?= number_format($taxRate, 2) ?>%)</span>
+                    <span class="total-value"><?= formatCurrency($taxAmount, $siteConfig) ?></span>
                 </div>
-                <div class="detail-row total" style="border-top: 2px solid #4f46e5; margin-top: 4px; padding-top: 12px;">
-                    <span class="label font-bold">💰 Total Pagado</span>
-                    <span class="value"><?= formatCurrency($totalAmount, $siteConfig) ?></span>
+
+                <!-- Total Pagado -->
+                <div class="total-row grand-total">
+                    <span class="total-label">💰 Total Pagado</span>
+                    <span class="total-value"><?= formatCurrency($totalAmount, $siteConfig) ?></span>
                 </div>
             </div>
         </div>
@@ -1026,7 +1089,6 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.history && window.history.replaceState) {
         const url = new URL(window.location.href);
         if (url.searchParams.has('purchase_id')) {
-            // Mantener solo el purchase_id, limpiar otros parámetros
             const purchaseId = url.searchParams.get('purchase_id');
             url.search = '?purchase_id=' + purchaseId;
             window.history.replaceState({}, document.title, url.toString());

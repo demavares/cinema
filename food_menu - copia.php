@@ -23,22 +23,13 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ VALIDAR TOKEN DE COMPRA DESDE SESIÓN
+// ✅ VALIDAR TOKEN DE COMPRA DESDE SESIÓN (NO DESDE GET)
 // ============================================
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
 
 if (empty($purchaseToken) || !verifyPurchaseTokenWithTimeout($purchaseToken, $showtimeId)) {
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
     exit;
-}
-
-// ============================================
-// ✅ REINICIAR EL CARRITO AL CARGAR LA PÁGINA
-// ============================================
-// Limpiar el carrito de la sesión para evitar acumulación
-$sessionFoodKey = 'food_order_' . $showtimeId;
-if (isset($_SESSION[$sessionFoodKey])) {
-    unset($_SESSION[$sessionFoodKey]);
 }
 
 // ============================================
@@ -97,17 +88,22 @@ if (!$showtime) {
 $finalPrice = getShowtimePrice($showtime);
 $totalTicketsPrice = $ticketCount * $finalPrice;
 
+// Obtener tasa de IVA
 $stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
 $tax = $stmt->fetch();
 $taxRate = $tax ? floatval($tax['tax_rate']) : 16;
 $taxAmount = $totalTicketsPrice * ($taxRate / 100);
 $totalAmount = $totalTicketsPrice + $taxAmount;
 
+// Guardar en sesión para usar en payment
 $_SESSION['total_tickets_price_' . $showtimeId] = $totalTicketsPrice;
 $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
 $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
 $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
 
+// ============================================
+// IDIOMA DE LA PELÍCULA
+// ============================================
 $language = $showtime['language'] ?? 'español';
 $languageLabel = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 
@@ -150,6 +146,7 @@ require_once 'header.php';
 ?>
 
 <style>
+/* Configuración Global - Fondo blanco y texto oscuro */
 body {
     background-color: #ffffff !important;
     color: #1f2937 !important;
@@ -160,6 +157,7 @@ body {
 .border-\[\#1e1e2e\] {
     border-color: #e2e8f0 !important;
 }
+/* Timeout Warning */
 .timeout-warning {
     padding: 16px 24px;
     border-radius: 10px;
@@ -202,7 +200,7 @@ body {
 .food-card .food-image { width: 100%; height: 210px; max-height: 233px; object-fit: cover; background: #f1f5f9; }
 .food-card .food-info { padding: 14px 16px 16px 16px; display: flex; flex-direction: column; justify-content: space-between; flex: 1; }
 .food-card .food-name { font-weight: 700; color: #0f172a; font-size: 1.1rem; }
-.food-card .food-price { color: #16a34a; font-weight: 700; font-size: 1.2rem; }
+.food-card .food-price { color: #16a34a; font-weight: 700; font-size: 1.2rem; whitespace: nowrap; }
 .food-card .food-desc { color: #475569; font-size: 0.95rem; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
 .food-card .quantity-controls { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 12px; padding: 6px 0; }
 .food-card .quantity-controls button { background: #f1f5f9; border: 1px solid #cbd5e1; color: #1e293b; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 700; }
@@ -323,10 +321,17 @@ body {
 .floating-cart .cart-total { font-size: 1.25rem; font-weight: 700; color: #16a34a; }
 .floating-cart .cart-count { color: #475569; font-size: 0.9rem; }
 .floating-cart .btn-continue { padding: 10px 18px; font-size: 0.9rem; width: auto; }
-.movie-language { font-size: 0.9rem; color: #475569; margin-top: 2px; font-weight: 500; }
+.movie-language {
+    font-size: 0.9rem;
+    color: #475569;
+    margin-top: 2px;
+    font-weight: 500;
+}
 .text-white { color: #0f172a !important; }
 .text-gray-400 { color: #475569 !important; font-weight: 500; }
-@media (max-width: 1024px) { .timeout-warning { top: 90px; } }
+@media (max-width: 1024px) {
+    .timeout-warning { top: 90px; }
+}
 @media (max-width: 768px) {
     .food-card .food-image { height: 180px; max-height: 180px; }
     .floating-cart { bottom: 10px; right: 10px; left: 10px; min-width: auto; padding: 12px 16px; }
@@ -340,7 +345,9 @@ body {
         padding: 16px 18px;
         margin-top: 12px;
     }
-    .timeout-warning .ml-auto { margin-left: 0 !important; }
+    .timeout-warning .ml-auto {
+        margin-left: 0 !important;
+    }
 }
 </style>
 
@@ -355,6 +362,7 @@ body {
     </div>
 
     <div class="flex flex-col lg:flex-row gap-6">
+        <!-- SECCIÓN IZQUIERDA: MENÚ DE COMIDA -->
         <div class="flex-1 min-w-0">
             <h2 class="text-2xl font-bold text-gray-800 mb-1">🍿 Elige tu comida</h2>
             <p class="text-base text-gray-400 mb-6">Selecciona los productos que deseas agregar a tu pedido (opcional)</p>
@@ -366,7 +374,9 @@ body {
             </div>
             <?php else: ?>
             <?php foreach ($foodByCategory as $category => $items): ?>
-            <div class="category-title"><i class="fas fa-tag"></i> <?= htmlspecialchars($category) ?></div>
+            <div class="category-title">
+                <i class="fas fa-tag"></i> <?= htmlspecialchars($category) ?>
+            </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
                 <?php foreach ($items as $item): ?>
                 <div class="food-card" data-food-id="<?= $item['id'] ?>">
@@ -398,12 +408,14 @@ body {
             <?php endif; ?>
         </div>
 
+        <!-- SECCIÓN DERECHA: CARD-SUMMARY / RESUMEN DEL PEDIDO -->
         <div class="w-full lg:w-80 summary-sticky">
             <h3 class="text-xl font-bold text-white mb-3 flex items-center gap-2">
                 <i class="fas fa-receipt text-indigo-600"></i> Resumen del Pedido
             </h3>
 
             <div class="selected-info-box">
+                <!-- Película -->
                 <div class="mb-3">
                     <p class="text-xs text-gray-400 font-semibold uppercase">🎬 Película</p>
                     <div class="text-slate-900 font-bold text-base"><?= htmlspecialchars($showtime['title']) ?></div>
@@ -413,6 +425,7 @@ body {
                     </div>
                 </div>
 
+                <!-- Boletos -->
                 <div>
                     <p class="text-xs text-gray-400 font-semibold uppercase mb-1">🎫 Boletos</p>
                     <div class="ticket-line">
@@ -425,6 +438,7 @@ body {
                 </div>
             </div>
 
+            <!-- Comida seleccionada -->
             <div class="mb-4">
                 <p class="text-xs text-gray-400 font-semibold uppercase mb-2">🍿 Comida Añadida</p>
                 <div id="cartItems">
@@ -435,11 +449,13 @@ body {
                 </div>
             </div>
 
+            <!-- Total Final -->
             <div class="order-total">
                 <span class="total-label">Total a Pagar</span>
                 <span class="total-amount" id="totalAmount"><?= formatCurrency($totalTicketsPrice, $siteConfig) ?></span>
             </div>
 
+            <!-- Botones de Acción -->
             <div class="flex flex-col gap-2.5 mt-5">
                 <form action="save_food_order.php" method="POST" id="foodForm">
                     <input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
@@ -459,19 +475,25 @@ body {
         </div>
     </div>
 
+    <!-- Floating Cart Mobile -->
     <div class="floating-cart" id="floatingCart">
         <div class="flex justify-between items-center">
             <div>
                 <div class="cart-count" id="floatingCount">0 productos</div>
                 <div class="cart-total" id="floatingTotal"><?= formatCurrency($totalTicketsPrice, $siteConfig) ?></div>
             </div>
-            <button class="btn-continue" onclick="submitFoodForm()">Pagar</button>
+            <button class="btn-continue" onclick="submitFoodForm()">
+                Pagar
+            </button>
         </div>
     </div>
 </div>
 
 <?php require_once 'footer.php'; ?>
 
+<!-- ============================================ -->
+<!-- TIMEOUT MANAGER                              -->
+<!-- ============================================ -->
 <script src="timeout_manager.js"></script>
 
 <script>
@@ -493,7 +515,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================
-// CONFIGURACIÓN
+// CONFIGURACIÓN DE MONEDA
 // ============================================
 const currencyConfig = {
     symbol: '<?= $currency_symbol ?>',
@@ -511,20 +533,8 @@ const seats = '<?= $seats ?>';
 const purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
 const taxRate = <?= $taxRate ?>;
 
-// ============================================
-// ✅ REINICIAR CARRITO - SIEMPRE EMPEZAR VACÍO
-// ============================================
 let cart = {};
 let totalFoodPrice = 0;
-
-// Limpiar sessionStorage al cargar
-try {
-    sessionStorage.removeItem('food_cart_' + showtimeId);
-    sessionStorage.removeItem('food_order_' + showtimeId);
-    console.log('🗑️ Carrito limpiado al cargar food_menu');
-} catch(e) {}
-
-console.log('🛒 Carrito inicializado vacío');
 
 // ============================================
 // FORMATO DE MONEDA
@@ -550,8 +560,6 @@ function submitFoodForm() {
         id: parseInt(item.id),
         quantity: item.quantity
     }));
-    
-    console.log('📦 Enviando pedido:', orderData);
     
     const form = document.getElementById('foodForm');
     document.getElementById('foodOrderInput').value = JSON.stringify(orderData);
@@ -670,7 +678,6 @@ function updateCartUI() {
     }
     
     totalAmountEl.textContent = formatCurrency(total);
-    console.log('🛒 Carrito actualizado:', items);
 }
 
 function removeFromCart(foodId) {
@@ -687,9 +694,10 @@ function escapeHtml(text) {
 }
 
 // ============================================
-// ✅ MANEJAR ENVÍO DEL FORMULARIO
+// ✅ MANEJAR ENVÍO DEL FORMULARIO (ENVÍO TRADICIONAL)
 // ============================================
 document.getElementById('foodForm').addEventListener('submit', function(e) {
+    // Prevenir envío para construir el JSON primero
     e.preventDefault();
     
     const items = Object.values(cart);
@@ -698,14 +706,14 @@ document.getElementById('foodForm').addEventListener('submit', function(e) {
         quantity: item.quantity
     }));
     
-    console.log('📤 Enviando pedido a save_food_order.php:', orderData);
-    
+    // Actualizar el campo oculto con el JSON
     document.getElementById('foodOrderInput').value = JSON.stringify(orderData);
     
     const btn = document.getElementById('btnCheckout');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
     
+    // ✅ Enviar el formulario normalmente (redirección por PHP)
     this.submit();
 });
 </script>

@@ -62,13 +62,24 @@ if (!isset($_SESSION[$sessionTimeoutKey])) {
     $_SESSION[$sessionTimeoutKey] = 600;
 }
 
+// ============================================
+// ✅ LEER ASIENTOS DESDE SESIÓN (SEGURO)
+// ============================================
 $seats = isset($_SESSION[$sessionSeatsKey]) ? $_SESSION[$sessionSeatsKey] : '';
 if (empty($seats)) {
     header('Location: seats.php?showtime_id=' . $showtimeId . '&error=no_seats');
     exit;
 }
 
+// ============================================
+// ✅ LEER PEDIDO DE COMIDA DESDE SESIÓN (SEGURO)
+// ============================================
 $foodOrder = isset($_SESSION[$sessionFoodKey]) ? json_decode($_SESSION[$sessionFoodKey], true) : [];
+
+// Log para depuración
+error_log("=== PAYMENT.PHP ===");
+error_log("showtime_id: $showtimeId");
+error_log("foodOrder: " . print_r($foodOrder, true));
 
 // ============================================
 // OBTENER DATOS DEL SHOWTIME
@@ -162,14 +173,6 @@ if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
     $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseTokenWithTimeout($showtimeId, 900);
 }
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
-
-// ============================================
-// ✅ DEBUG - Registrar token para depuración
-// ============================================
-error_log("=== PAYMENT.PHP ===");
-error_log("showtime_id: $showtimeId");
-error_log("purchase_token: " . substr($purchaseToken, 0, 16) . "...");
-error_log("timeout: " . getPurchaseTokenTimeLeft($showtimeId) . " segundos restantes");
 
 require_once 'header.php';
 ?>

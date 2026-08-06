@@ -65,18 +65,17 @@ if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true)
 }
 
 // ============================================
-// ✅ PROCESAR EL PEDIDO DE COMIDA
+// ✅ PROCESAR EL PEDIDO DE COMIDA - SOBRESCRIBIR
 // ============================================
 $sessionFoodKey = 'food_order_' . $showtimeId;
 
-// Limpiar pedido anterior
-if (isset($_SESSION[$sessionFoodKey])) {
-    unset($_SESSION[$sessionFoodKey]);
-}
+// ✅ ELIMINAR COMPLETAMENTE EL PEDIDO ANTERIOR
+unset($_SESSION[$sessionFoodKey]);
 
+// ✅ PROCESAR NUEVO PEDIDO SOLO SI HAY DATOS
 if (!empty($foodOrder) && $foodOrder !== '[]') {
     $decoded = json_decode($foodOrder, true);
-    if ($decoded !== null && is_array($decoded)) {
+    if ($decoded !== null && is_array($decoded) && !empty($decoded)) {
         $foodIds = array_column($decoded, 'id');
         if (!empty($foodIds)) {
             $placeholders = implode(',', array_fill(0, count($foodIds), '?'));
@@ -89,21 +88,25 @@ if (!empty($foodOrder) && $foodOrder !== '[]') {
             });
             
             if (!empty($filteredOrder)) {
+                // ✅ SOBRESCRIBIR (no sumar)
                 $_SESSION[$sessionFoodKey] = json_encode(array_values($filteredOrder));
+                error_log("✅ Pedido guardado en sesión: " . $_SESSION[$sessionFoodKey]);
+            } else {
+                error_log("⚠️ No hay items válidos en el pedido");
             }
         }
     }
+} else {
+    error_log("ℹ️ Pedido vacío o sin datos");
 }
 
 // ============================================
 // ✅ REDIRIGIR O RESPONDER CON JSON
 // ============================================
 if ($redirect) {
-    // Envío tradicional - redirigir a payment.php
     header('Location: payment.php?showtime_id=' . $showtimeId);
     exit;
 } else {
-    // Petición AJAX - devolver JSON
     header('Content-Type: application/json');
     echo json_encode(['success' => true]);
     exit;
