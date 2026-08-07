@@ -47,7 +47,7 @@ foreach ($keysToClean as $key) {
 // OBTENER DATOS DEL SHOWTIME
 // ============================================
 $stmt = $pdo->prepare("
-    SELECT s.*, m.title, m.poster_url, m.duration, m.format, r.name as room_name
+    SELECT s.*, m.title, m.poster_url, m.duration, r.name as room_name
     FROM showtimes s
     JOIN movies m ON s.movie_id = m.id
     JOIN rooms r ON s.room_id = r.id
@@ -140,11 +140,18 @@ $occupiedCount = intval($occupied['occupied'] ?? 0);
 $realAvailableSeats = max(0, $totalAvailableSeats - $occupiedCount);
 
 // ============================================
-// IDIOMA Y FORMATO
+// IDIOMA Y FORMATO - OBTENER FORMATO DEL SHOWTIME
 // ============================================
 $language = $showtime['language'] ?? 'español';
 $languageLabel = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 $format = $showtime['format'] ?? '2D';
+
+// Clase CSS para el badge de formato
+$formatClass = 'format-2d';
+if (!empty($format)) {
+    $formatLower = strtolower($format);
+    $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
+}
 
 $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
@@ -156,13 +163,6 @@ $currency_position = $siteConfig['currency_position'] ?? 'left';
 $thousands_separator = $siteConfig['thousands_separator'] ?? '.';
 $decimal_separator = $siteConfig['decimal_separator'] ?? ',';
 $decimal_places = intval($siteConfig['decimal_places'] ?? 2);
-
-// Obtener clase CSS para el badge de formato
-$formatClass = 'format-2d';
-if (!empty($format)) {
-    $formatLower = strtolower($format);
-    $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
-}
 
 require_once 'header.php';
 ?>
@@ -303,25 +303,76 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 }
 .total-seats-info-top strong { color: #0f172a; font-size: 1.25rem; font-weight: 800; }
 
-/* Badge de formato */
-.format-badge {
-    display: inline-block;
-    padding: 1px 10px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    background: #1e293b;
-    color: #94a3b8;
-    border: 1px solid #334155;
-    text-transform: uppercase;
+/* ============================================
+   PROMOCIONES - NUEVOS COLORES
+   ============================================ */
+.promo-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 1px solid;
 }
-.format-badge.format-2d { background: #1e293b; color: #94a3b8; border-color: #334155; }
-.format-badge.format-3d { background: #1e1b4b; color: #818cf8; border-color: #4f46e5; }
-.format-badge.format-imax { background: #1a1a2e; color: #fbbf24; border-color: #f59e0b; }
-.format-badge.format-imax-3d { background: #1a1a2e; color: #f59e0b; border-color: #d97706; }
-.format-badge.format-4dx { background: #1a1a2e; color: #34d399; border-color: #10b981; }
-.format-badge.format-screenx { background: #1a1a2e; color: #60a5fa; border-color: #3b82f6; }
-.format-badge.format-d-box { background: #1a1a2e; color: #f472b6; border-color: #ec4899; }
+
+.promo-tag .promo-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+/* Lunes a mitad de precio */
+.promo-tag.monday {
+    background: #dcfce7;
+    color: #15803d;
+    border-color: #bbf7d0;
+}
+.promo-tag.monday .promo-dot {
+    background: #15803d;
+}
+
+/* Preventa */
+.promo-tag.presale {
+    background: #fef3c7;
+    color: #b45309;
+    border-color: #fde68a;
+}
+.promo-tag.presale .promo-dot {
+    background: #b45309;
+}
+
+/* ============================================
+   FORMATO - MISMO ESTILO QUE MOVIE_DETAIL
+   ============================================ */
+.format-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 10px;
+    border-radius: 5px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1.4;
+    background: transparent !important;
+    border: 1px solid #4f5e71;
+    color: #4f5e71;
+}
+.format-badge.format-2d,
+.format-badge.format-3d,
+.format-badge.format-imax,
+.format-badge.format-imax-3d,
+.format-badge.format-4dx,
+.format-badge.format-screenx,
+.format-badge.format-d-box {
+    border-color: #4f5e71;
+    color: #4f5e71;
+}
 
 @media (min-width: 1024px) { .card-summary { position: sticky; top: 100px; } }
 @media (max-width: 640px) {
@@ -415,26 +466,27 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                     <!-- Idioma -->
                     <div class="text-sm text-gray-700 font-medium mt-1.5">Idioma: <?= htmlspecialchars($languageLabel) ?></div>
                     
-                    <!-- ✅ FORMATO - AGREGADO DEBAJO DE IDIOMA -->
-                    <div class="text-sm text-gray-700 font-medium mt-1">
-                        Formato: <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($format) ?></span>
-                    </div>
-                    
+                    <!-- Sala · Fecha · Hora -->
                     <div class="text-sm text-gray-700 font-medium mt-1 whitespace-nowrap">
                         <?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?>
                     </div>
                     
-                    <!-- PROMOCIONES CON BADGE DE TAILWIND -->
-                    <div class="flex flex-col gap-1.5 mt-2.5 items-start">
+                    <!-- ✅ FORMATO - MISMO DISEÑO QUE MOVIE_DETAIL -->
+                    <div class="mt-1.5">
+                        <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($format) ?></span>
+                    </div>
+                    
+                    <!-- PROMOCIONES CON NUEVOS COLORES -->
+                    <div class="flex flex-col gap-2 mt-3 items-start">
                         <?php if ($hasMondayPromo): ?>
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                <span class="w-1.5 h-1.5 rounded-full bg-indigo-600"></span>
+                            <span class="promo-tag monday">
+                                <span class="promo-dot"></span>
                                 Lunes a mitad de precio
                             </span>
                         <?php endif; ?>
                         <?php if ($hasPresale): ?>
-                            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-200">
-                                <span class="w-1.5 h-1.5 rounded-full bg-purple-600"></span>
+                            <span class="promo-tag presale">
+                                <span class="promo-dot"></span>
                                 Preventa
                             </span>
                         <?php endif; ?>
@@ -465,7 +517,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 
             <!-- TOTAL -->
             <div class="summary-plain-row bold-row">
-                <span>Total</span>
+                <span>Total a Pagar</span>
                 <span id="totalAmount"><?= formatCurrency(0, $siteConfig) ?></span>
             </div>
 

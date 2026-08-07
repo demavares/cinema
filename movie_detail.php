@@ -134,9 +134,6 @@ if (empty($director)) {
     $director = 'No disponible';
 }
 
-// Formato
-$format = $movie['format'] ?? '2D';
-
 // ============================================
 // PAÍS DE ORIGEN
 // ============================================
@@ -231,13 +228,13 @@ if (!empty($trailer_url)) {
 }
 
 // ============================================
-// OBTENER HORARIOS
+// OBTENER HORARIOS - INCLUYENDO FORMATO
 // ============================================
 $currentDateTime = getCurrentDateTime();
 $currentDate = getCurrentDate();
 
 $stmt = $pdo->prepare("
-    SELECT s.*, r.name as room_name, r.capacity
+    SELECT s.*, r.name as room_name, r.capacity, COALESCE(s.format, '2D') as format
     FROM showtimes s
     JOIN rooms r ON s.room_id = r.id
     WHERE s.movie_id = ? AND s.is_active = 1 
@@ -267,6 +264,15 @@ foreach ($showtimes as $showtime) {
 // Obtener fechas disponibles
 $available_dates = array_keys($showtimes_by_date);
 $first_date = !empty($available_dates) ? $available_dates[0] : null;
+
+// ============================================
+// ✅ OBTENER EL FORMATO DEL PRIMER SHOWTIME PARA MOSTRAR EN LA CARD
+// ============================================
+$display_format = '2D';
+if (!empty($showtimes)) {
+    $first_showtime = $showtimes[0];
+    $display_format = $first_showtime['format'] ?? '2D';
+}
 
 // Pasar configuración de moneda a JavaScript
 $currencyConfig = [
@@ -709,27 +715,41 @@ require_once 'header.php';
         color: #111827;
     }
     
-    .time-block .room {
-        font-size: 0.9rem;
-        color: #6b7280;
-        display: block;
+    /* SALA Y FORMATO EN LA MISMA LÍNEA */
+    .time-block .room-format {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
         margin-top: 4px;
-        font-weight: 500;
+        flex-wrap: wrap;
     }
     
-    /* ✅ BADGE DE FORMATO - MISMO COLOR DE BORDE Y TEXTO QUE LA IMAGEN */
+    /* SALA - FUENTE MÁS GRANDE Y COLOR MÁS OSCURO */
+    .time-block .room {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1f2937;
+    }
+    
+    .time-block .room-format .separator {
+        color: #9ca3af;
+        font-weight: 300;
+        font-size: 0.9rem;
+    }
+    
+    /* FORMATO - BADGE CON BORDE Y TEXTO DEL MISMO COLOR */
     .time-block .format-badge {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        padding: 3px 10px;
+        padding: 2px 10px;
         border-radius: 5px;
-        font-size: 0.9rem;
-        font-weight: 800;
+        font-size: 0.85rem;
+        font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         line-height: 1;
-        margin-top: 4px;
         background: transparent !important;
         border: 1px solid #4f5e71;
         color: #4f5e71;
@@ -746,43 +766,49 @@ require_once 'header.php';
         color: #4f5e71;
     }
     
-    .time-block .language-badge {
-        display: inline-block;
-        font-size: 0.8rem;
-        font-weight: 700;
-        padding: 4px 15px;
-        border-radius: 20px;
-        margin-top: 6px;
-        letter-spacing: 0.3px;
-    }
-    .time-block .language-badge.espanol {
-        background: #dcfce7;
-        color: #15803d;
-        border: 1px solid #bbf7d0;
-    }
-    .time-block .language-badge.subtitulos {
-        background: #dbeafe;
-        color: #1d4ed8;
-        border: 1px solid #bfdbfe;
+    /* IDIOMA - TEXTO PLANO SIN BADGE CON MÁS ESPACIO */
+    .time-block .language-text {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: #4b5563;
+        margin-top: 8px;
     }
     
+    /* PROMOCIONES - BADGES CON BORDER Y DOT */
     .time-block .promo-badge {
-        display: inline-block;
-        font-size: 0.7rem;
-        font-weight: 700;
-        padding: 2px 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 12px;
         border-radius: 12px;
-        margin-top: 4px;
+        font-size: 0.7rem;
+        font-weight: 600;
+        margin-top: 6px;
+        border: 1px solid;
+    }
+    .time-block .promo-badge .dot {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
     }
     .time-block .promo-badge.lunes {
         background: #dcfce7;
         color: #15803d;
-        border: 1px solid #bbf7d0;
+        border-color: #bbf7d0;
+    }
+    .time-block .promo-badge.lunes .dot {
+        background: #15803d;
     }
     .time-block .promo-badge.preventa {
         background: #fef3c7;
         color: #b45309;
-        border: 1px solid #fde68a;
+        border-color: #fde68a;
+    }
+    .time-block .promo-badge.preventa .dot {
+        background: #b45309;
     }
     
     .time-block.sold-out {
@@ -801,7 +827,7 @@ require_once 'header.php';
         color: #dc2626;
         text-transform: uppercase;
         display: block;
-        margin-top: 4px;
+        margin-top: 6px;
         letter-spacing: 0.5px;
     }
     
@@ -999,15 +1025,17 @@ require_once 'header.php';
             min-height: 80px;
         }
         .time-block .hour { font-size: 1.1rem; }
-        .time-block .room { font-size: 0.75rem; }
-        .time-block .language-badge {
-            font-size: 0.6rem;
-            padding: 2px 10px;
+        .time-block .room { font-size: 0.9rem; }
+        .time-block .format-badge { font-size: 0.75rem; padding: 1px 7px; }
+        .time-block .language-text { font-size: 0.75rem; margin-top: 6px; }
+        .time-block .promo-badge { 
+            font-size: 0.6rem; 
+            padding: 2px 8px; 
+            margin-top: 4px;
+            gap: 4px;
         }
-        .time-block .format-badge {
-            font-size: 0.75rem;
-            padding: 2px 7px;
-        }
+        .time-block .promo-badge .dot { width: 4px; height: 4px; }
+        .time-block .room-format { gap: 4px; }
         .date-card {
             padding: 10px 14px;
             min-width: 60px;
@@ -1123,7 +1151,7 @@ require_once 'header.php';
         </div>
     </section>
     
-    <!-- Selección de Funciones - CON FORMATO EN LA CARD (SOLO BORDE) -->
+    <!-- Selección de Funciones - CON PROMOCIONES BORDER AND DOT -->
     <section class="showtimes-section">
         <div class="showtimes-container">
             <h2 class="section-title">🎬 Funciones</h2>
@@ -1183,10 +1211,9 @@ require_once 'header.php';
                             $hasPresale = in_array('preventa', $promotions);
                             $isFull = $time['is_full'];
                             $language = $time['language'] ?? 'español';
-                            $lang_class = $language == 'español' ? 'espanol' : 'subtitulos';
                             $lang_label = $language == 'español' ? 'Español' : 'Subtítulos en Español';
-                            // Obtener formato de la película
-                            $movieFormat = $format;
+                            // Obtener formato directamente del showtime
+                            $movieFormat = $time['format'] ?? '2D';
                             $formatClass = 'format-2d';
                             if (!empty($movieFormat)) {
                                 $formatLower = strtolower($movieFormat);
@@ -1196,22 +1223,34 @@ require_once 'header.php';
                             <?php if(!$isFull): ?>
                             <a href="price_selection.php?showtime_id=<?= $time['id'] ?>" class="time-block">
                                 <span class="hour"><?= formatTimeVenezuela($time['show_time']) ?></span>
-                                <span class="room"><?= htmlspecialchars($time['room_name']) ?></span>
-                                <!-- ✅ FORMATO - BADGE CON MISMO COLOR Y TAMAÑO -->
-                                <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
-                                <span class="language-badge <?= $lang_class ?>"><?= $lang_label ?></span>
+                                <div class="room-format">
+                                    <span class="room"><?= htmlspecialchars($time['room_name']) ?></span>
+                                    <span class="separator">|</span>
+                                    <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
+                                </div>
+                                <span class="language-text"><?= $lang_label ?></span>
                                 <?php if($hasMonday): ?>
-                                    <span class="promo-badge lunes">Lunes ½ Precio</span>
+                                    <span class="promo-badge lunes">
+                                        <span class="dot"></span>
+                                        Lunes ½ Precio
+                                    </span>
                                 <?php endif; ?>
                                 <?php if($hasPresale): ?>
-                                    <span class="promo-badge preventa">Preventa</span>
+                                    <span class="promo-badge preventa">
+                                        <span class="dot"></span>
+                                        Preventa
+                                    </span>
                                 <?php endif; ?>
                             </a>
                             <?php else: ?>
                             <div class="time-block sold-out">
                                 <span class="hour"><?= formatTimeVenezuela($time['show_time']) ?></span>
-                                <span class="room"><?= htmlspecialchars($time['room_name']) ?></span>
-                                <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
+                                <div class="room-format">
+                                    <span class="room"><?= htmlspecialchars($time['room_name']) ?></span>
+                                    <span class="separator">|</span>
+                                    <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
+                                </div>
+                                <span class="language-text"><?= $lang_label ?></span>
                                 <span class="sold-out-label">Agotado</span>
                             </div>
                             <?php endif; ?>
@@ -1249,29 +1288,34 @@ require_once 'header.php';
                     const hasMonday = promotions.includes('lunes_mitad');
                     const hasPresale = promotions.includes('preventa');
                     const language = time.language || 'español';
-                    const langClass = language == 'español' ? 'espanol' : 'subtitulos';
                     const langLabel = language == 'español' ? 'Español' : 'Subtítulos en Español';
-                    // Obtener formato
-                    const movieFormat = '<?= htmlspecialchars($format) ?>';
+                    const movieFormat = time.format || '2D';
                     const formatClass = 'format-2d';
                     
                     if (!isFull) {
                         html += `
                             <a href="price_selection.php?showtime_id=${time.id}" class="time-block">
                                 <span class="hour">${formatTimeVenezuela(time.show_time)}</span>
-                                <span class="room">${escapeHtml(time.room_name)}</span>
-                                <span class="format-badge ${formatClass}">${escapeHtml(movieFormat)}</span>
-                                <span class="language-badge ${langClass}">${langLabel}</span>
-                                ${hasMonday ? `<span class="promo-badge lunes">Lunes ½ Precio</span>` : ''}
-                                ${hasPresale ? `<span class="promo-badge preventa">Preventa</span>` : ''}
+                                <div class="room-format">
+                                    <span class="room">${escapeHtml(time.room_name)}</span>
+                                    <span class="separator">|</span>
+                                    <span class="format-badge ${formatClass}">${escapeHtml(movieFormat)}</span>
+                                </div>
+                                <span class="language-text">${langLabel}</span>
+                                ${hasMonday ? `<span class="promo-badge lunes"><span class="dot"></span> Lunes ½ Precio</span>` : ''}
+                                ${hasPresale ? `<span class="promo-badge preventa"><span class="dot"></span> Preventa</span>` : ''}
                             </a>
                         `;
                     } else {
                         html += `
                             <div class="time-block sold-out">
                                 <span class="hour">${formatTimeVenezuela(time.show_time)}</span>
-                                <span class="room">${escapeHtml(time.room_name)}</span>
-                                <span class="format-badge ${formatClass}">${escapeHtml(movieFormat)}</span>
+                                <div class="room-format">
+                                    <span class="room">${escapeHtml(time.room_name)}</span>
+                                    <span class="separator">|</span>
+                                    <span class="format-badge ${formatClass}">${escapeHtml(movieFormat)}</span>
+                                </div>
+                                <span class="language-text">${langLabel}</span>
                                 <span class="sold-out-label">Agotado</span>
                             </div>
                         `;
