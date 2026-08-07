@@ -717,34 +717,25 @@ require_once 'header.php';
         font-weight: 500;
     }
     
-    /* ✅ BADGE DE FORMATO - MISMO COLOR DE BORDE Y TEXTO QUE LA IMAGEN */
+    /* ✅ FORMATO - ESTILO COMO EN LA IMAGEN UI */
     .time-block .format-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 3px 10px;
-        border-radius: 5px;
+        display: inline-block;
         font-size: 0.9rem;
-        font-weight: 800;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        line-height: 1;
-        margin-top: 4px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        margin-top: 2px;
         background: transparent !important;
-        border: 1px solid #4f5e71;
-        color: #4f5e71;
+        border: none;
+        padding: 0;
+        text-transform: uppercase;
     }
-
-    .time-block .format-badge.format-2d,
-    .time-block .format-badge.format-3d,
-    .time-block .format-badge.format-imax,
-    .time-block .format-badge.format-imax-3d,
-    .time-block .format-badge.format-4dx,
-    .time-block .format-badge.format-screenx,
-    .time-block .format-badge.format-d-box {
-        border-color: #4f5e71;
-        color: #4f5e71;
-    }
+    .time-block .format-badge.format-2d { color: #94a3b8; }
+    .time-block .format-badge.format-3d { color: #818cf8; }
+    .time-block .format-badge.format-imax { color: #fbbf24; }
+    .time-block .format-badge.format-imax-3d { color: #f59e0b; }
+    .time-block .format-badge.format-4dx { color: #34d399; }
+    .time-block .format-badge.format-screenx { color: #60a5fa; }
+    .time-block .format-badge.format-d-box { color: #f472b6; }
     
     .time-block .language-badge {
         display: inline-block;
@@ -1005,8 +996,7 @@ require_once 'header.php';
             padding: 2px 10px;
         }
         .time-block .format-badge {
-            font-size: 0.75rem;
-            padding: 2px 7px;
+            font-size: 0.8rem;
         }
         .date-card {
             padding: 10px 14px;
@@ -1123,7 +1113,7 @@ require_once 'header.php';
         </div>
     </section>
     
-    <!-- Selección de Funciones - CON FORMATO EN LA CARD (SOLO BORDE) -->
+    <!-- Selección de Funciones - CON FORMATO EN LA CARD (ESTILO UI) -->
     <section class="showtimes-section">
         <div class="showtimes-container">
             <h2 class="section-title">🎬 Funciones</h2>
@@ -1197,7 +1187,7 @@ require_once 'header.php';
                             <a href="price_selection.php?showtime_id=<?= $time['id'] ?>" class="time-block">
                                 <span class="hour"><?= formatTimeVenezuela($time['show_time']) ?></span>
                                 <span class="room"><?= htmlspecialchars($time['room_name']) ?></span>
-                                <!-- ✅ FORMATO - BADGE CON MISMO COLOR Y TAMAÑO -->
+                                <!-- ✅ FORMATO - ESTILO COMO EN LA IMAGEN UI (solo texto con color) -->
                                 <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
                                 <span class="language-badge <?= $lang_class ?>"><?= $lang_label ?></span>
                                 <?php if($hasMonday): ?>
