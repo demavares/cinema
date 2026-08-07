@@ -116,7 +116,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $classification = sanitizeInput($_POST['classification'] ?? '');
             $trailer_url = sanitizeInput($_POST['trailer_url'] ?? '', 'url');
             $year = !empty($_POST['year']) ? filter_var($_POST['year'], FILTER_VALIDATE_INT) : null;
-            $format = sanitizeInput($_POST['format'] ?? '');
             
             $description = $_POST['description'] ?? '';
             $duration = !empty($_POST['duration']) ? filter_var($_POST['duration'], FILTER_VALIDATE_INT) : 0;
@@ -125,8 +124,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $cast_members = sanitizeInput($_POST['cast_members'] ?? '');
             $country_id = !empty($_POST['country_id']) ? filter_var($_POST['country_id'], FILTER_VALIDATE_INT) : null;
 
-            if (empty($title) || empty($trailer_url) || empty($classification) || empty($director) || empty($format)) {
-                $error = "Título, Director, Formato, URL del tráiler y Clasificación son obligatorios.";
+            if (empty($title) || empty($trailer_url) || empty($classification)) {
+                $error = "Título, URL del tráiler y Clasificación son obligatorios.";
             } elseif (!empty($poster_url) && !filter_var($poster_url, FILTER_VALIDATE_URL)) {
                 $error = "URL del póster no válida.";
             } elseif (!empty($trailer_url) && !filter_var($trailer_url, FILTER_VALIDATE_URL)) {
@@ -186,8 +185,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 try {
-                    $stmt = $pdo->prepare("INSERT INTO movies (title, description, poster_url, banner_url, duration, genre, year, director, cast_members, classification, trailer_url, country_id, format, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)");
-                    $stmt->execute([$title, $description, $poster_url, $banner_url, $duration, $genre, $year, $director, $cast_members, $classification, $trailer_url, $country_id, $format]);
+                    $stmt = $pdo->prepare("INSERT INTO movies (title, description, poster_url, banner_url, duration, genre, year, director, cast_members, classification, trailer_url, country_id, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)");
+                    $stmt->execute([$title, $description, $poster_url, $banner_url, $duration, $genre, $year, $director, $cast_members, $classification, $trailer_url, $country_id]);
                     $success_msg = "Película «" . $title . "» agregada exitosamente (oculta por defecto).";
                     header("Location: admin.php?tab=movies&msg=" . urlencode($success_msg));
                     exit;
@@ -209,7 +208,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $classification = sanitizeInput($_POST['classification'] ?? '');
             $trailer_url = sanitizeInput($_POST['trailer_url'] ?? '', 'url');
             $year = !empty($_POST['year']) ? filter_var($_POST['year'], FILTER_VALIDATE_INT) : null;
-            $format = sanitizeInput($_POST['format'] ?? '');
             
             $description = $_POST['description'] ?? '';
             $duration = !empty($_POST['duration']) ? filter_var($_POST['duration'], FILTER_VALIDATE_INT) : 0;
@@ -220,8 +218,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($id <= 0) {
                 $error = "ID de película inválido.";
-            } elseif (empty($title) || empty($trailer_url) || empty($classification) || empty($director) || empty($format)) {
-                $error = "Título, Director, Formato, URL del tráiler y Clasificación son obligatorios.";
+            } elseif (empty($title) || empty($trailer_url) || empty($classification)) {
+                $error = "Título, URL del tráiler y Clasificación son obligatorios.";
             } elseif (!empty($poster_url) && !filter_var($poster_url, FILTER_VALIDATE_URL)) {
                 $error = "URL del póster no válida.";
             } elseif (!empty($trailer_url) && !filter_var($trailer_url, FILTER_VALIDATE_URL)) {
@@ -319,8 +317,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
 
                 try {
-                    $stmt = $pdo->prepare("UPDATE movies SET title=?, description=?, poster_url=?, banner_url=?, duration=?, genre=?, year=?, director=?, cast_members=?, classification=?, trailer_url=?, country_id=?, format=? WHERE id=?");
-                    $stmt->execute([$title, $description, $poster_url, $banner_url, $duration, $genre, $year, $director, $cast_members, $classification, $trailer_url, $country_id, $format, $id]);
+                    $stmt = $pdo->prepare("UPDATE movies SET title=?, description=?, poster_url=?, banner_url=?, duration=?, genre=?, year=?, director=?, cast_members=?, classification=?, trailer_url=?, country_id=? WHERE id=?");
+                    $stmt->execute([$title, $description, $poster_url, $banner_url, $duration, $genre, $year, $director, $cast_members, $classification, $trailer_url, $country_id, $id]);
                     
                     if (!empty($fields_updated)) {
                         $msg_text = "Película actualizada exitosamente. Campos autollenados desde TMDb: " . implode(', ', $fields_updated) . ".";
@@ -523,7 +521,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         // ============================================
-        // AGREGAR HORARIO
+        // AGREGAR HORARIO - MODIFICADO
         // ============================================
         elseif (isset($_POST['add_showtime'])) {
             $movie_id = filter_var($_POST['movie_id'] ?? 0, FILTER_VALIDATE_INT);
@@ -594,7 +592,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         // ============================================
-        // EDITAR HORARIO
+        // EDITAR HORARIO - MODIFICADO
         // ============================================
         elseif (isset($_POST['edit_showtime'])) {
             $old_id = filter_var($_POST['showtime_id'] ?? 0, FILTER_VALIDATE_INT);
@@ -855,7 +853,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         // -----------------------------------------
-        // CONFIGURACIÓN DEL SITIO
+        // CONFIGURACIÓN DEL SITIO - AGREGAR IVA
         // -----------------------------------------
         if (isset($_POST['save_config'])) {
             try {
@@ -1112,9 +1110,6 @@ if (isset($_GET['update_movie']) && validateGetAction('update_movie', $_GET['upd
                     }
                 }
                 
-                // Formato no se actualiza desde TMDb (se mantiene)
-                $format = $movie['format'] ?? '2D';
-                
                 $updated_fields = [];
                 if ($description != $movie['description']) $updated_fields[] = 'Sinopsis';
                 if ($duration != $movie['duration']) $updated_fields[] = 'Duración';
@@ -1321,7 +1316,7 @@ if (isset($_GET['toggle_food']) && validateGetAction('toggle_food', $_GET['toggl
 // OBTENER DATOS
 // ============================================
 
-// Buscador por nombre de película
+// ✅ Buscador por nombre de película
 $search_title = isset($_GET['search_title']) ? trim($_GET['search_title']) : '';
 
 $movies_sql = "SELECT * FROM movies WHERE 1=1";
@@ -1337,15 +1332,6 @@ $movies_sql .= " ORDER BY id DESC";
 $stmt = $pdo->prepare($movies_sql);
 $stmt->execute($movies_params);
 $movies = $stmt->fetchAll();
-
-// Obtener formatos disponibles desde la BD (valores únicos)
-$stmt = $pdo->query("SELECT DISTINCT format FROM movies WHERE format IS NOT NULL AND format != '' ORDER BY format ASC");
-$existingFormats = $stmt->fetchAll(PDO::FETCH_COLUMN);
-
-// Formatos predefinidos (combinar con los existentes)
-$defaultFormats = ['2D', '3D', 'IMAX', 'IMAX 3D', '4DX', 'ScreenX', 'D-BOX'];
-$allFormats = array_unique(array_merge($defaultFormats, $existingFormats));
-sort($allFormats);
 
 $rooms = $pdo->query("SELECT * FROM rooms ORDER BY id")->fetchAll();
 $countries = $pdo->query("SELECT * FROM countries ORDER BY name ASC")->fetchAll();
@@ -1814,7 +1800,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
             cursor: not-allowed;
         }
 
-        /* Estilos para el buscador */
+        /* Estilos para el buscador - Solo nombre */
         .search-box {
             display: flex;
             flex-wrap: wrap;
@@ -1964,26 +1950,6 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
             }
         }
         
-        /* Badge de formato */
-        .format-badge {
-            display: inline-block;
-            padding: 1px 8px;
-            border-radius: 4px;
-            font-size: 9px;
-            font-weight: 700;
-            background: #1e293b;
-            color: #94a3b8;
-            border: 1px solid #334155;
-            text-transform: uppercase;
-        }
-        .format-badge.format-2d { background: #1e293b; color: #94a3b8; border-color: #334155; }
-        .format-badge.format-3d { background: #1e1b4b; color: #818cf8; border-color: #4f46e5; }
-        .format-badge.format-imax { background: #1a1a2e; color: #fbbf24; border-color: #f59e0b; }
-        .format-badge.format-imax-3d { background: #1a1a2e; color: #f59e0b; border-color: #d97706; }
-        .format-badge.format-4dx { background: #1a1a2e; color: #34d399; border-color: #10b981; }
-        .format-badge.format-screenx { background: #1a1a2e; color: #60a5fa; border-color: #3b82f6; }
-        .format-badge.format-d-box { background: #1a1a2e; color: #f472b6; border-color: #ec4899; }
-        
         @media (max-width: 640px) {
             .search-box {
                 flex-direction: column;
@@ -2080,7 +2046,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         </div>
 
         <!-- ============================================ -->
-        <!-- TAB: PELÍCULAS - CON FORMATO                  -->
+        <!-- TAB: PELÍCULAS - CON BUSCADOR POR NOMBRE     -->
         <!-- ============================================ -->
         <?php if($activeTab === 'movies'): ?>
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
@@ -2091,7 +2057,6 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                 <p>ℹ️ Al colocar el <strong>título</strong>, el sistema intentará autocompletar la información desde TMDb. Sin embargo, todos los campos son editables manualmente.</p>
                 <p class="mt-1 text-yellow-300">🔒 Las películas nuevas se registran como <strong>OCULTAS</strong> por defecto. Debes activarlas manualmente.</p>
                 <p class="mt-1 text-indigo-300">✏️ Al editar, los campos vacíos se autollenarán automáticamente desde TMDb.</p>
-                <p class="mt-1 text-red-300">⚠️ Los campos <strong>Director</strong>, <strong>Formato</strong>, <strong>Clasificación</strong> y <strong>URL del Tráiler</strong> son obligatorios.</p>
             </div>
             <form action="" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
@@ -2156,30 +2121,10 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                 </div>
 
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Formato *</label>
-                    <select name="format" required class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="">Seleccionar Formato</option>
-                        <?php foreach($allFormats as $format): ?>
-                            <option value="<?= htmlspecialchars($format) ?>" <?= ($edit_movie && isset($edit_movie['format']) && $edit_movie['format'] == $format) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($format) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <p class="text-xs text-gray-500 mt-1">Formato de proyección (2D, 3D, IMAX, etc.)</p>
-                </div>
-
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Director *</label>
-                    <input type="text" name="director" required value="<?= $edit_movie ? htmlspecialchars($edit_movie['director'] ?? '') : '' ?>" placeholder="Director de la película"
+                    <label class="block text-sm text-gray-400 mb-1">URL del Tráiler (YouTube) *</label>
+                    <input type="url" name="trailer_url" required value="<?= $edit_movie ? htmlspecialchars($edit_movie['trailer_url']) : '' ?>" 
+                           placeholder="https://www.youtube.com/watch?v=XXXXXX"
                            class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <p class="text-xs text-gray-500 mt-1">Deja vacío para autocompletar vía TMDb (múltiples directores se unen con " y ")</p>
-                </div>
-
-                <div class="md:col-span-2">
-                    <label class="block text-sm text-gray-400 mb-1">Reparto Principal</label>
-                    <input type="text" name="cast_members" value="<?= $edit_movie ? htmlspecialchars($edit_movie['cast_members'] ?? '') : '' ?>" placeholder="Ej: Actor 1, Actor 2, Actor 3"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <p class="text-xs text-gray-500 mt-1">Deja vacío para autocompletar vía TMDb (Top 6 actores principales)</p>
                 </div>
 
                 <div>
@@ -2195,10 +2140,17 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                 </div>
 
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">URL del Tráiler (YouTube) *</label>
-                    <input type="url" name="trailer_url" required value="<?= $edit_movie ? htmlspecialchars($edit_movie['trailer_url']) : '' ?>" 
-                           placeholder="https://www.youtube.com/watch?v=XXXXXX"
+                    <label class="block text-sm text-gray-400 mb-1">Director</label>
+                    <input type="text" name="director" value="<?= $edit_movie ? htmlspecialchars($edit_movie['director'] ?? '') : '' ?>" placeholder="Director de la película"
                            class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <p class="text-xs text-gray-500 mt-1">Deja vacío para autocompletar vía TMDb (múltiples directores se unen con " y ")</p>
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="block text-sm text-gray-400 mb-1">Reparto Principal</label>
+                    <input type="text" name="cast_members" value="<?= $edit_movie ? htmlspecialchars($edit_movie['cast_members'] ?? '') : '' ?>" placeholder="Ej: Actor 1, Actor 2, Actor 3"
+                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <p class="text-xs text-gray-500 mt-1">Deja vacío para autocompletar vía TMDb (Top 6 actores principales)</p>
                 </div>
 
                 <div class="md:col-span-2">
@@ -2216,11 +2168,11 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
             </form>
         </div>
 
-        <!-- Lista de Películas con Buscador -->
+        <!-- Lista de Películas con Buscador por Nombre -->
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
             <h2 class="text-lg font-bold mb-4 text-indigo-300">📋 Todas las Películas</h2>
             
-            <!-- Buscador -->
+            <!-- Buscador solo por nombre -->
             <div class="search-box">
                 <div class="search-group">
                     <label><i class="fas fa-search mr-1"></i> Buscar por Título</label>
@@ -2245,20 +2197,13 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                             <th class="pb-3 font-semibold">Duración</th>
                             <th class="pb-3 font-semibold">Género</th>
                             <th class="pb-3 font-semibold">Año</th>
-                            <th class="pb-3 font-semibold">Formato</th>
                             <th class="pb-3 font-semibold">Clasificación</th>
                             <th class="pb-3 font-semibold text-center">Estado</th>
                             <th class="pb-3 font-semibold text-center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-700/50 text-sm" id="moviesTableBody">
-                        <?php foreach($movies as $m): 
-                            $formatClass = 'format-2d';
-                            if (!empty($m['format'])) {
-                                $formatLower = strtolower($m['format']);
-                                $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
-                            }
-                        ?>
+                        <?php foreach($movies as $m): ?>
                             <tr>
                                 <td class="py-3">
                                     <img src="<?= htmlspecialchars($m['poster_url']) ?>" 
@@ -2269,13 +2214,6 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                                 <td class="py-3 text-gray-400"><?= $m['duration'] ? htmlspecialchars($m['duration']) . ' min' : '-' ?></td>
                                 <td class="py-3 text-gray-400"><?= htmlspecialchars($m['genre'] ?? '-') ?></td>
                                 <td class="py-3 text-gray-400"><?= htmlspecialchars($m['year'] ?? '-') ?></td>
-                                <td class="py-3">
-                                    <?php if(!empty($m['format'])): ?>
-                                        <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($m['format']) ?></span>
-                                    <?php else: ?>
-                                        <span class="text-gray-500 text-xs">-</span>
-                                    <?php endif; ?>
-                                </td>
                                 <td class="py-3">
                                     <?php if($m['classification']): ?>
                                         <span class="
@@ -2335,7 +2273,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         <?php endif; ?>
 
         <!-- ============================================ -->
-        <!-- TAB: HORARIOS                                 -->
+        <!-- TAB: HORARIOS - MODIFICADO CON PRECIOS       -->
         <!-- ============================================ -->
         <?php if($activeTab === 'showtimes'): ?>
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
@@ -2415,6 +2353,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                     </select>
                 </div>
                 
+                <!-- PRECIOS Y CONFIGURACIÓN -->
                 <div class="md:col-span-3">
                     <label class="block text-sm text-gray-400 mb-2">💰 Precios</label>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -2611,7 +2550,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         <?php endif; ?>
 
         <!-- ============================================ -->
-        <!-- TAB: SALAS                                   -->
+        <!-- TAB: SALAS -->
         <!-- ============================================ -->
         <?php if($activeTab === 'rooms'): ?>
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
@@ -2697,7 +2636,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         <?php endif; ?>
 
         <!-- ============================================ -->
-        <!-- TAB: USUARIOS                               -->
+        <!-- TAB: USUARIOS -->
         <!-- ============================================ -->
         <?php if($activeTab === 'users'): ?>
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
@@ -2900,7 +2839,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         <?php endif; ?>
 
         <!-- ============================================ -->
-        <!-- TAB: COMIDA                                 -->
+        <!-- TAB: COMIDA -->
         <!-- ============================================ -->
         <?php if($activeTab === 'food'): ?>
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
@@ -3049,7 +2988,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         <?php endif; ?>
 
         <!-- ============================================ -->
-        <!-- TAB: HISTORIAL                             -->
+        <!-- TAB: HISTORIAL -->
         <!-- ============================================ -->
         <?php if($activeTab === 'history'): ?>
         <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
@@ -3249,7 +3188,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
         <?php endif; ?>
 
         <!-- ============================================ -->
-        <!-- TAB: CONFIGURACIÓN                         -->
+        <!-- TAB: CONFIGURACIÓN - MODIFICADO CON IVA      -->
         <!-- ============================================ -->
         <?php if($activeTab === 'config'): 
             $config = getSiteConfig($pdo);

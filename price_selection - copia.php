@@ -47,7 +47,7 @@ foreach ($keysToClean as $key) {
 // OBTENER DATOS DEL SHOWTIME
 // ============================================
 $stmt = $pdo->prepare("
-    SELECT s.*, m.title, m.poster_url, m.duration, m.format, r.name as room_name
+    SELECT s.*, m.title, m.poster_url, m.format, m.duration, r.name as room_name
     FROM showtimes s
     JOIN movies m ON s.movie_id = m.id
     JOIN rooms r ON s.room_id = r.id
@@ -140,11 +140,10 @@ $occupiedCount = intval($occupied['occupied'] ?? 0);
 $realAvailableSeats = max(0, $totalAvailableSeats - $occupiedCount);
 
 // ============================================
-// IDIOMA Y FORMATO
+// IDIOMA
 // ============================================
 $language = $showtime['language'] ?? 'español';
 $languageLabel = $language == 'español' ? 'Español' : 'Subtítulos en Español';
-$format = $showtime['format'] ?? '2D';
 
 $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
@@ -156,13 +155,6 @@ $currency_position = $siteConfig['currency_position'] ?? 'left';
 $thousands_separator = $siteConfig['thousands_separator'] ?? '.';
 $decimal_separator = $siteConfig['decimal_separator'] ?? ',';
 $decimal_places = intval($siteConfig['decimal_places'] ?? 2);
-
-// Obtener clase CSS para el badge de formato
-$formatClass = 'format-2d';
-if (!empty($format)) {
-    $formatLower = strtolower($format);
-    $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
-}
 
 require_once 'header.php';
 ?>
@@ -303,26 +295,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 }
 .total-seats-info-top strong { color: #0f172a; font-size: 1.25rem; font-weight: 800; }
 
-/* Badge de formato */
-.format-badge {
-    display: inline-block;
-    padding: 1px 10px;
-    border-radius: 4px;
-    font-size: 0.7rem;
-    font-weight: 700;
-    background: #1e293b;
-    color: #94a3b8;
-    border: 1px solid #334155;
-    text-transform: uppercase;
-}
-.format-badge.format-2d { background: #1e293b; color: #94a3b8; border-color: #334155; }
-.format-badge.format-3d { background: #1e1b4b; color: #818cf8; border-color: #4f46e5; }
-.format-badge.format-imax { background: #1a1a2e; color: #fbbf24; border-color: #f59e0b; }
-.format-badge.format-imax-3d { background: #1a1a2e; color: #f59e0b; border-color: #d97706; }
-.format-badge.format-4dx { background: #1a1a2e; color: #34d399; border-color: #10b981; }
-.format-badge.format-screenx { background: #1a1a2e; color: #60a5fa; border-color: #3b82f6; }
-.format-badge.format-d-box { background: #1a1a2e; color: #f472b6; border-color: #ec4899; }
-
 @media (min-width: 1024px) { .card-summary { position: sticky; top: 100px; } }
 @media (max-width: 640px) {
     .price-card { flex-direction: column; align-items: stretch; gap: 12px; padding: 16px; }
@@ -401,7 +373,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
         
         <!-- CARD SUMMARY COMPONENT -->
         <div class="w-full lg:w-96 card-summary">
-            <!-- SECCIÓN DE PELÍCULA -->
+            <!-- SECCIÓN DE PELÍCULA: PADDINGS Y GAP REDUCIDOS (p-2.5 px-3 gap-3) PARA EVITAR SALTO DE LÍNEA EN HORA -->
             <div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
                 <?php if (!empty($showtime['poster_url'])): ?>
                     <img src="<?= htmlspecialchars($showtime['poster_url']) ?>" 
@@ -411,15 +383,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                 <?php endif; ?>
                 <div class="flex flex-col justify-start text-left text-gray-900 flex-1 min-w-0">
                     <div class="font-extrabold text-lg leading-tight text-gray-900"><?= htmlspecialchars($showtime['title']) ?></div>
-                    
-                    <!-- Idioma -->
                     <div class="text-sm text-gray-700 font-medium mt-1.5">Idioma: <?= htmlspecialchars($languageLabel) ?></div>
-                    
-                    <!-- ✅ FORMATO - AGREGADO DEBAJO DE IDIOMA -->
-                    <div class="text-sm text-gray-700 font-medium mt-1">
-                        Formato: <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($format) ?></span>
-                    </div>
-                    
                     <div class="text-sm text-gray-700 font-medium mt-1 whitespace-nowrap">
                         <?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?>
                     </div>
