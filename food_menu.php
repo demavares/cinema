@@ -684,7 +684,7 @@ body {
                         <i class="fas fa-credit-card mr-2"></i> Ir a Pagar
                     </button>
                 </form>
-				<a href="<?= $backUrl ?>?from=food" class="btn-back">
+				<a href="<?= $backUrl ?>&from=food" class="btn-back">
 					<i class="fas fa-arrow-left mr-2"></i> Volver a Asientos
 				</a>
             </div>

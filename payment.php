@@ -811,7 +811,7 @@ body {
                 <div class="text-xs text-gray-500 text-center font-medium">
                     <i class="fas fa-shield-alt text-green-600 mr-1"></i> Pago seguro y encriptado
                 </div>
-				<a href="<?= $backUrl ?>?from=payment" class="btn-back">
+				<a href="<?= $backUrl ?>&from=payment" class="btn-back">
 					<i class="fas fa-arrow-left mr-2"></i> Volver a Comida
 				</a>
             </div>
