@@ -597,44 +597,61 @@ $hasFavicon = !empty($siteFavicon) && file_exists($siteFavicon);
             return;
         }
         
-        fetch('check_session.php?showtime_id=' + showtimeId + '&t=' + Date.now())
-            .then(response => response.json())
-            .then(data => {
-                if (!data.valid) {
-                    sessionStorage.removeItem('food_timeout_' + showtimeId);
-                    sessionStorage.removeItem('food_seats_' + showtimeId);
-                    
-                    if (data.reason === 'timeout_expired') {
-                        window.location.href = 'index.php?timeout=1';
-                    } else {
-                        window.location.href = 'index.php';
-                    }
-                } else {
-                    if (data.timeLeft !== undefined) {
-                        if (data.timeLeft <= 0) {
-                            sessionStorage.removeItem('food_timeout_' + showtimeId);
-                            sessionStorage.removeItem('food_seats_' + showtimeId);
-                            window.location.href = 'index.php?timeout=1';
-                            return;
-                        }
-                        sessionStorage.setItem('food_timeout_' + showtimeId, data.timeLeft.toString());
-                    }
-                    
-                    if (data.seats) {
-                        const currentSeats = urlParams.get('seats');
-                        if (currentSeats && data.seats !== currentSeats) {
-                            sessionStorage.removeItem('food_timeout_' + showtimeId);
-                            sessionStorage.removeItem('food_seats_' + showtimeId);
-                            window.location.href = 'index.php';
-                            return;
-                        }
-                        sessionStorage.setItem('food_seats_' + showtimeId, data.seats);
-                    }
-                }
-            })
-            .catch(error => {
-                console.log('Error verificando sesión:', error);
-            });
+		fetch('check_session.php?showtime_id=' + showtimeId + '&t=' + Date.now())
+			.then(response => response.json())
+			.then(data => {
+				if (!data.valid) {
+					sessionStorage.removeItem('food_timeout_' + showtimeId);
+					sessionStorage.removeItem('food_seats_' + showtimeId);
+					
+					if (data.reason === 'timeout_expired') {
+						// ✅ El servidor ya limpió las sesiones
+						window.location.href = 'index.php?timeout=1';
+					} else if (data.reason === 'showtime_inactive') {
+						window.location.href = 'index.php?error=showtime_inactive';
+					} else {
+						window.location.href = 'index.php';
+					}
+				} else {
+					if (data.timeLeft !== undefined) {
+						if (data.timeLeft <= 0) {
+							sessionStorage.removeItem('food_timeout_' + showtimeId);
+							sessionStorage.removeItem('food_seats_' + showtimeId);
+							window.location.href = 'index.php?timeout=1';
+							return;
+						}
+						
+						// ✅ Usar tiempo formateado si está disponible
+						sessionStorage.setItem('food_timeout_' + showtimeId, data.timeLeft.toString());
+						
+						// ✅ Mostrar contador en tiempo real si existe el elemento
+						const timerElement = document.getElementById('session-timer');
+						if (timerElement && data.timeLeftFormatted) {
+							timerElement.textContent = data.timeLeftFormatted;
+							
+							// Cambiar color si queda poco tiempo (< 2 minutos)
+							if (data.timeLeft < 120) {
+								timerElement.classList.add('text-red-500');
+								timerElement.classList.remove('text-green-500');
+							}
+						}
+					}
+					
+					if (data.seats) {
+						sessionStorage.setItem('food_seats_' + showtimeId, data.seats);
+					}
+					
+					// ✅ Log de estado (solo en desarrollo)
+					console.log('📊 Sesión válida:', {
+						tiempo: data.timeLeftFormatted,
+						asientos: data.seatCount,
+						compraPendiente: data.hasPendingPurchase
+					});
+				}
+			})
+			.catch(error => {
+				console.log('Error verificando sesión:', error);
+			});
     })();
     </script>
 </body>

@@ -5,7 +5,7 @@ require_once 'config.php';
 // ✅ RATE LIMITING - PROTECCIÓN CONTRA FUERZA BRUTA
 // ============================================
 $maxAttempts = 5;                    // Máximo intentos permitidos
-$lockoutMinutes = 15;                // Minutos de bloqueo
+$lockoutMinutes = 10;                // Minutos de bloqueo
 $attemptWindow = 30 * 60;            // Ventana de tiempo (30 minutos)
 
 // Identificar al cliente (IP + User Agent)

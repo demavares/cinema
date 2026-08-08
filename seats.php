@@ -1375,11 +1375,18 @@ document.addEventListener('DOMContentLoaded', function() {
         btnZoomReset.addEventListener('click', () => applyZoom(1));
     }
 
-    // Verificar asientos ocupados periódicamente
-    setInterval(function() {
-        fetch('check_seats.php?showtime_id=<?= $showtime['id'] ?>')
-            .then(response => response.json())
-            .then(data => {
+// Verificar asientos ocupados periódicamente
+setInterval(function() {
+    fetch('check_seats.php?showtime_id=<?= $showtime['id'] ?>')
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                console.warn('Error verificando asientos:', data.error);
+                return;
+            }
+            
+            // ✅ Actualizar asientos ocupados
+            if (data.occupied && Array.isArray(data.occupied)) {
                 data.occupied.forEach(seatId => {
                     const seatEl = document.querySelector('[data-seat="' + seatId + '"]');
                     if (seatEl && !seatEl.classList.contains('seat-occupied')) {
@@ -1387,13 +1394,22 @@ document.addEventListener('DOMContentLoaded', function() {
                         seatEl.classList.add('seat-occupied');
                         seatEl.disabled = true;
                         const index = selectedSeats.indexOf(seatId);
-                        if (index > -1) selectedSeats.splice(index, 1);
+                        if (index > -1) {
+                            selectedSeats.splice(index, 1);
+                            showNotification('⚠️ El asiento ' + seatId + ' acaba de ser reservado por otro usuario.', 'warning');
+                        }
                     }
                 });
                 updateSummary();
-            })
-            .catch(err => console.log('Error checking seats:', err));
-    }, 30000);
+            }
+            
+            // ✅ Actualizar timestamp de última verificación
+            console.log('🔄 Asientos verificados:', data.count, 'ocupados | Timestamp:', data.timestamp);
+        })
+        .catch(err => {
+            console.log('Error checking seats:', err);
+        });
+}, 30000);
 });
 </script>
 </body>
