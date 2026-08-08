@@ -107,14 +107,15 @@ foreach ($foodOrders as $food) {
 }
 
 // ============================================
-// ✅ CALCULAR TOTALES CORRECTAMENTE
+// ✅ USAR LOS TOTALES GUARDADOS EN LA COMPRA (NO RECALCULAR)
 // ============================================
 $subtotal = floatval($purchase['subtotal'] ?? 0);
 $taxAmount = floatval($purchase['tax_amount'] ?? 0);
 $totalAmount = floatval($purchase['total_amount'] ?? 0);
 $taxRate = floatval($purchase['tax_rate'] ?? 16);
+$totalTickets = intval($purchase['total_tickets'] ?? 0);
 
-// ✅ CALCULAR DESGLOSE DE BOLETOS
+// ✅ CALCULAR DESGLOSE DE BOLETOS POR TIPO
 $ticketTypes = [];
 $ticketTotal = 0;
 foreach ($purchaseTickets as $pt) {
@@ -151,6 +152,20 @@ foreach ($foodOrders as $food) {
     $groupedFood[$key]['quantity'] += $food['quantity'];
     $groupedFood[$key]['total'] += $food['total_price'];
     $foodTotal += $food['total_price'];
+}
+
+// ============================================
+// ✅ VALIDAR QUE LOS TOTALES COINCIDAN
+// ============================================
+$calculatedSubtotal = $ticketTotal + $foodTotal;
+$calculatedTax = $calculatedSubtotal * ($taxRate / 100);
+$calculatedTotal = $calculatedSubtotal + $calculatedTax;
+
+// Si hay diferencia, usar los valores calculados (más precisos)
+if (abs($calculatedSubtotal - $subtotal) > 0.01) {
+    $subtotal = $calculatedSubtotal;
+    $taxAmount = $calculatedTax;
+    $totalAmount = $calculatedTotal;
 }
 
 $siteConfig = getSiteConfig($pdo);
@@ -886,7 +901,7 @@ body {
                     </div>
 
                     <div class="info-tags">
-                        <span class="tag-item"><strong><?= $ticketCount ?></strong> boleto<?= $ticketCount > 1 ? 's' : '' ?></span>
+                        <span class="tag-item"><strong><?= $totalTickets ?></strong> boleto<?= $totalTickets > 1 ? 's' : '' ?></span>
                         <?php if (!empty($foodOrders)): ?>
                             <span class="tag-item"><strong><?= count($groupedFood) ?></strong> producto<?= count($groupedFood) > 1 ? 's' : '' ?> de comida</span>
                         <?php endif; ?>
@@ -896,12 +911,12 @@ body {
         </div>
 
         <!-- ============================================ -->
-        <!-- ✅ DETALLE DE TU COMPRA - NUEVO DISEÑO       -->
+        <!-- ✅ DETALLE DE TU COMPRA                     -->
         <!-- ============================================ -->
         <div class="detail-section">
             <p class="detail-title">📋 Detalle de tu compra</p>
 
-            <!-- ✅ BOLETOS POR TIPO - DESGLOSADOS CORRECTAMENTE -->
+            <!-- ✅ BOLETOS POR TIPO -->
             <?php if (!empty($ticketTypes)): ?>
                 <div class="mb-2">
                     <?php foreach ($ticketTypes as $code => $info): 
@@ -923,12 +938,18 @@ body {
             <div class="mt-3 pt-3 border-t border-[#e2e8f0]">
                 <p class="text-sm font-semibold text-gray-700 mb-1">🎫 Asientos</p>
                 <div class="seat-list">
-                    <?php foreach ($seatsArray as $seat):
-                        $isAccessible = strpos($seat, '♿') !== false;
-                        $cleanSeat = str_replace('♿', '', $seat);
+                    <?php 
+                    // Limpiar los asientos (remover ♿ para mostrar)
+                    $cleanSeatsArray = array_map(function($seat) {
+                        return str_replace('♿', '', $seat);
+                    }, $seatsArray);
+                    
+                    // Mostrar los asientos con su estado de accesibilidad
+                    foreach ($cleanSeatsArray as $index => $seat):
+                        $isAccessible = in_array($seat, $accessibleSeats);
                     ?>
                         <span class="seat-item <?= $isAccessible ? 'accessible' : '' ?>">
-                            <span class="seat-label"><?= htmlspecialchars($cleanSeat) ?></span>
+                            <span class="seat-label"><?= htmlspecialchars($seat) ?></span>
                             <?php if ($isAccessible): ?>
                                 <span class="accessible-icon">♿</span>
                                 <span class="seat-accessible-badge">Accesible</span>
@@ -1026,7 +1047,7 @@ body {
             </p>
             <p class="flex items-center gap-2 mt-1">
                 <i class="fas fa-qrcode text-indigo-400"></i>
-                <span>Presenta este código en taquilla: <strong class="font-mono">#<?= str_pad($purchase['id'], 6, '0', STR_PAD_LEFT) ?>-<?= str_pad($ticketCount, 2, '0', STR_PAD_LEFT) ?></strong></span>
+                <span>Presenta este código en taquilla: <strong class="font-mono">#<?= str_pad($purchase['id'], 6, '0', STR_PAD_LEFT) ?>-<?= str_pad($totalTickets, 2, '0', STR_PAD_LEFT) ?></strong></span>
             </p>
             <?php if (!empty($accessibleSeats)): ?>
                 <p class="flex items-center gap-2 mt-1 text-sky-600">
