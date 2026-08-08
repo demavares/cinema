@@ -54,16 +54,6 @@ if (empty($token) || !verifyPurchaseTokenWithTimeout($token, $showtimeId)) {
 }
 
 // ============================================
-// ✅ VERIFICAR TIMEOUT DE COMIDA
-// ============================================
-$timeoutKey = 'food_timeout_' . $showtimeId;
-if (isset($_SESSION[$timeoutKey]) && $_SESSION[$timeoutKey] <= 0) {
-    clearPurchaseSession($showtimeId);
-    header('Location: index.php?timeout=1');
-    exit;
-}
-
-// ============================================
 // ✅ OBTENER Y RECALCULAR TODO EN EL SERVIDOR
 // ============================================
 
@@ -106,21 +96,6 @@ $totalSeats = $validation['total_seats'];
 if (count($seatsArray) != $totalSeats) {
     header('Location: seats.php?showtime_id=' . $showtimeId . '&error=La+cantidad+de+asientos+no+coincide');
     exit;
-}
-
-$stmt = $pdo->prepare("
-    SELECT s.*, r.seat_layout
-    FROM showtimes s
-    JOIN rooms r ON s.room_id = r.id
-    WHERE s.id = ?
-");
-$stmt->execute([$showtimeId]);
-$showtimeData = $stmt->fetch();
-
-$accessibleSeats = [];
-if ($showtimeData && !empty($showtimeData['seat_layout'])) {
-    $layout = json_decode($showtimeData['seat_layout'], true);
-    $accessibleSeats = $layout['wheelchairSeats'] ?? $layout['accessibleSeats'] ?? [];
 }
 
 // ============================================
@@ -207,33 +182,43 @@ try {
         throw new Exception("Los siguientes asientos están bloqueados: " . implode(', ', $blockedRequested));
     }
     
+    // ✅ OBTENER ASIENTOS ACCESIBLES DEL LAYOUT
+    $accessibleSeats = $layout['wheelchairSeats'] ?? ($layout['accessibleSeats'] ?? []);
+    
     $transactionId = generateTransactionId();
     
-    $pricePerTicket = $validation['prices']['adult'];
+    // ============================================
+    // ✅ INSERTAR TICKETS CON PRECIO CORRECTO SEGÚN TIPO
+    // ============================================
+    $totalAdults = $ticketQuantities['adult'] ?? 0;
+    $totalChildren = $ticketQuantities['child'] ?? 0;
+    $totalSeniors = $ticketQuantities['senior'] ?? 0;
+    
     $stmtInsert = $pdo->prepare("INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid) VALUES (?, ?, ?, ?)");
     $ticketIds = [];
-    foreach ($seatsArray as $seat) {
-        $stmtInsert->execute([$userId, $showtimeId, $seat, $pricePerTicket]);
-        $ticketIds[] = $pdo->lastInsertId();
-    }
     
-    // ============================================
-    // 8. REGISTRAR LA COMPRA PRIMERO PARA OBTENER purchase_id
-    // ============================================
-    $seatsWithMarkers = [];
     foreach ($seatsArray as $index => $seat) {
-        $type = 'adult';
-        $remainingAdult = $ticketQuantities['adult'] ?? 0;
-        $remainingChild = $ticketQuantities['child'] ?? 0;
-        
-        if ($index < $remainingAdult) {
+        // ✅ Determinar el tipo de ticket según el índice del asiento
+        if ($index < $totalAdults) {
             $type = 'adult';
-        } elseif ($index < $remainingAdult + $remainingChild) {
+        } elseif ($index < $totalAdults + $totalChildren) {
             $type = 'child';
         } else {
             $type = 'senior';
         }
         
+        // ✅ Obtener el precio correcto según el tipo de ticket
+        $priceByType = getTicketPriceByType($showtime, $type);
+        
+        $stmtInsert->execute([$userId, $showtimeId, $seat, $priceByType]);
+        $ticketIds[] = $pdo->lastInsertId();
+    }
+    
+    // ============================================
+    // REGISTRAR LA COMPRA PRIMERO PARA OBTENER purchase_id
+    // ============================================
+    $seatsWithMarkers = [];
+    foreach ($seatsArray as $index => $seat) {
         if (in_array($seat, $accessibleSeats)) {
             $seatsWithMarkers[] = $seat . '♿';
         } else {
@@ -270,10 +255,10 @@ try {
         $seatsFormatted,
         $totalSeats,
         $totalFood,
-        $subtotalGeneral,      // ✅ Subtotal = boletos + comida
-        $taxAmountGeneral,     // ✅ IVA calculado sobre subtotal general
+        $subtotalGeneral,
+        $taxAmountGeneral,
         $taxRate,
-        $totalGeneral,         // ✅ Total = subtotal + IVA
+        $totalGeneral,
         $sessionToken,
         $expiresAt,
         $paymentMethod,
@@ -283,7 +268,7 @@ try {
     $purchaseId = $pdo->lastInsertId();
     
     // ============================================
-    // 9. INSERTAR purchase_tickets
+    // INSERTAR purchase_tickets
     // ============================================
     $stmtPurchaseTicket = $pdo->prepare("
         INSERT INTO purchase_tickets (purchase_id, showtime_id, ticket_type_id, seat_code, price) 
@@ -316,7 +301,7 @@ try {
     }
     
     // ============================================
-    // 10. INSERTAR food_orders CON purchase_id
+    // INSERTAR food_orders CON purchase_id
     // ============================================
     if (!empty($foodItems)) {
         $stmtFood = $pdo->prepare("

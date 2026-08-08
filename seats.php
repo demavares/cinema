@@ -16,6 +16,11 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
+// ✅ DETECTAR SI VIENE DE FOOD_MENU.PHP
+// ============================================
+$fromFood = isset($_GET['from']) && $_GET['from'] === 'food';
+
+// ============================================
 // ✅ VERIFICAR TIMEOUT DEL TOKEN DE COMPRA
 // ============================================
 if (isPurchaseTokenExpired($showtimeId)) {
@@ -51,7 +56,8 @@ $stmt->execute([$_SESSION['user_id'], $showtimeId]);
 $purchase = $stmt->fetch();
 
 // Si hay una compra pendiente (sin completar), limpiarla para permitir nueva compra
-if ($purchase && $purchase['status'] === 'pending') {
+// ✅ PERO NO SI VIENE DE FOOD_MENU.PHP
+if ($purchase && $purchase['status'] === 'pending' && !$fromFood) {
     $stmt = $pdo->prepare("DELETE FROM purchases WHERE id = ?");
     $stmt->execute([$purchase['id']]);
     
@@ -109,7 +115,6 @@ if (!$ticketsData || $totalSeats <= 0) {
         $totalSeatsFromFood = count($seatsArrayTemp);
         
         if ($totalSeatsFromFood > 0) {
-            // Obtener datos del showtime para calcular precios
             $stmtTemp = $pdo->prepare("
                 SELECT s.*, m.title, m.poster_url, m.description, m.duration,
                        r.name as room_name, r.capacity, r.seat_layout, r.seat_image, r.aisle_config
@@ -148,13 +153,56 @@ if (!$ticketsData || $totalSeats <= 0) {
 
 // Si aún no hay datos y no hay sesión de comida válida, redirigir a price_selection
 if (!$ticketsData || $totalSeats <= 0) {
-    if ($hasFoodSession) {
-        unset($_SESSION[$foodValidKey]);
-        unset($_SESSION[$foodSeatsKey]);
-        unset($_SESSION[$foodTimeoutKey]);
+    if ($fromFood && $hasFoodSession && isset($_SESSION[$foodSeatsKey]) && !empty($_SESSION[$foodSeatsKey])) {
+        $foodSeats = $_SESSION[$foodSeatsKey];
+        $seatsArrayTemp = array_filter(array_map('trim', explode(',', $foodSeats)));
+        $totalSeatsFromFood = count($seatsArrayTemp);
+        
+        if ($totalSeatsFromFood > 0) {
+            $stmtTemp = $pdo->prepare("
+                SELECT s.*, m.title, m.poster_url, m.description, m.duration,
+                       r.name as room_name, r.capacity, r.seat_layout, r.seat_image, r.aisle_config
+                FROM showtimes s
+                JOIN movies m ON s.movie_id = m.id
+                JOIN rooms r ON s.room_id = r.id
+                WHERE s.id = ? AND s.is_active = 1
+            ");
+            $stmtTemp->execute([$showtimeId]);
+            $showtimeTemp = $stmtTemp->fetch();
+            
+            if ($showtimeTemp) {
+                $ticketsData = ['adult' => $totalSeatsFromFood, 'child' => 0, 'senior' => 0];
+                $priceTemp = getShowtimePrice($showtimeTemp);
+                $subtotal = $totalSeatsFromFood * $priceTemp;
+                
+                $stmtTax = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
+                $taxTemp = $stmtTax->fetch();
+                $taxRateTemp = $taxTemp ? floatval($taxTemp['tax_rate']) : 16;
+                
+                $taxAmount = $subtotal * ($taxRateTemp / 100);
+                $totalAmount = $subtotal + $taxAmount;
+                $totalSeats = $totalSeatsFromFood;
+                
+                $_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
+                $_SESSION['total_seats_' . $showtimeId] = $totalSeats;
+                $_SESSION['subtotal_' . $showtimeId] = $subtotal;
+                $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
+                $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
+                
+                error_log("✅ Datos reconstruidos desde sesión de comida al regresar a seats.php");
+            }
+        }
     }
-    header('Location: price_selection.php?showtime_id=' . $showtimeId);
-    exit;
+    
+    if (!$ticketsData || $totalSeats <= 0) {
+        if ($hasFoodSession) {
+            unset($_SESSION[$foodValidKey]);
+            unset($_SESSION[$foodSeatsKey]);
+            unset($_SESSION[$foodTimeoutKey]);
+        }
+        header('Location: price_selection.php?showtime_id=' . $showtimeId);
+        exit;
+    }
 }
 
 // ============================================
@@ -229,6 +277,10 @@ $hasPresale = in_array('preventa', $promotions);
 $language = $showtime['language'] ?? 'español';
 $lang_label = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 
+// ✅ OBTENER FORMATO Y SU CLASE CSS
+$format = $showtime['format'] ?? '2D';
+$formatClass = 'format-' . strtolower(str_replace([' ', '/'], '-', $format));
+
 $pageTitle = "Selección de Asientos - " . $showtime['title'];
 $backUrl = 'price_selection.php?showtime_id=' . $showtimeId;
 
@@ -267,9 +319,17 @@ body {
     width: 100%;
     order: 2;
 }
+
+/* ============================================
+   ✅ VARIABLE CSS PARA CONTROLAR EL ZOOM
+   ============================================ */
+:root {
+    --seat-size: clamp(1.2rem, 2.2vw, 1.8rem);
+}
+
 .seat {
-    width: clamp(1.2rem, 2.2vw, 1.8rem);
-    height: clamp(1.2rem, 2.2vw, 1.8rem);
+    width: var(--seat-size);
+    height: var(--seat-size);
     border-radius: 0.3rem 0.3rem 0.2rem 0.2rem;
     transition: all 0.2s ease;
     cursor: pointer;
@@ -313,7 +373,7 @@ body {
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    font-size: clamp(0.9rem, 1.8vw, 1.4rem) !important;
+    font-size: calc(var(--seat-size) * 0.6) !important;
     line-height: 1 !important;
     color: #ffffff !important;
 }
@@ -326,7 +386,7 @@ body {
 }
 .seat-blocked .seat-label { display: none !important; }
 .seat-label {
-    font-size: clamp(0.5rem, 1vw, 0.7rem);
+    font-size: calc(var(--seat-size) * 0.35);
     color: #0f172a;
     text-align: center;
     position: absolute;
@@ -395,26 +455,75 @@ body {
 }
 .seat-grid-wrapper { display: inline-block; min-width: 100%; }
 .seats-container { display: flex; flex-direction: column; align-items: center; width: 100%; }
+
+/* ============================================
+   ✅ CONTENEDOR DE SCROLL - AMBOS EJES
+   ============================================ */
 .seat-grid-scroll-wrapper {
     width: 100%;
-    max-height: 60vh;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
     padding: 8px;
     position: relative;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
 }
+
 .seat-grid-container {
     display: grid;
     gap: clamp(2px, 0.4vw, 4px);
     padding: clamp(4px, 0.8vw, 10px);
     width: max-content;
     margin: 0 auto;
-    transform-origin: top left;
-    transition: transform 0.2s ease-out;
 }
-.seat-grid-scroll-wrapper::-webkit-scrollbar { width: 6px; height: 6px; }
-.seat-grid-scroll-wrapper::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
-.seat-grid-scroll-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+/* ============================================
+   ✅ CONTROLES DE ZOOM - OCULTOS POR DEFECTO (solo móvil)
+   ============================================ */
+.zoom-controls {
+    display: none;
+}
+
+.zoom-btn {
+    width: 44px;
+    height: 44px;
+    border: 2px solid #6366f1;
+    background: #ffffff;
+    color: #6366f1;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: bold;
+    transition: all 0.2s ease;
+    touch-action: manipulation;
+}
+
+.zoom-btn:hover {
+    background: #6366f1;
+    color: #ffffff;
+    transform: scale(1.05);
+}
+
+.zoom-btn:active {
+    transform: scale(0.95);
+}
+
+.zoom-label {
+    min-width: 60px;
+    text-align: center;
+    color: #4f46e5;
+    font-size: 14px;
+    font-weight: 700;
+    background: #ffffff;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
 .selected-info { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; min-height: 60px; }
 #subtotal { color: #0f172a !important; }
 
@@ -471,7 +580,7 @@ body {
     color: #0f172a;
 }
 
-/* ✅ PROMOCIONES - BADGES BORDER AND DOT (como price_selection.php) */
+/* ✅ PROMOCIONES */
 .promo-tag {
     display: inline-flex;
     align-items: center;
@@ -494,17 +603,13 @@ body {
     color: #15803d;
     border-color: #bbf7d0;
 }
-.promo-tag.monday .promo-dot {
-    background: #15803d;
-}
+.promo-tag.monday .promo-dot { background: #15803d; }
 .promo-tag.presale {
     background: #fef3c7;
     color: #b45309;
     border-color: #fde68a;
 }
-.promo-tag.presale .promo-dot {
-    background: #b45309;
-}
+.promo-tag.presale .promo-dot { background: #b45309; }
 
 /* FORMATO BADGE */
 .format-badge {
@@ -578,7 +683,7 @@ body {
 }
 
 /* ============================================
-   NOTIFICACIÓN CENTRAL MEJORADA
+   NOTIFICACIÓN CENTRAL
    ============================================ */
 .notification-container {
     position: fixed;
@@ -656,7 +761,83 @@ body {
     to { opacity: 0; transform: scale(0.9); }
 }
 
-@media (max-width: 640px) {
+/* ============================================
+   ✅ VISTA MÓVIL - ZOOM Y SCROLLBARS VISIBLES
+   ============================================ */
+@media (max-width: 768px) {
+    .zoom-controls {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+        justify-content: center;
+        flex-wrap: wrap;
+        padding: 10px;
+        background: #ffffff;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .seat-grid-scroll-wrapper {
+        max-height: 50vh;
+        padding: 6px;
+        overflow-y: auto !important;
+        overflow-x: auto !important;
+    }
+    
+    .seat-grid-scroll-wrapper::-webkit-scrollbar { 
+        width: 12px; 
+        height: 12px; 
+    }
+    .seat-grid-scroll-wrapper::-webkit-scrollbar-track { 
+        background: #e2e8f0; 
+        border-radius: 6px; 
+    }
+    .seat-grid-scroll-wrapper::-webkit-scrollbar-thumb { 
+        background: #6366f1; 
+        border-radius: 6px;
+        border: 2px solid #e2e8f0;
+    }
+    .seat-grid-scroll-wrapper::-webkit-scrollbar-thumb:hover { 
+        background: #4f46e5; 
+    }
+    .seat-grid-scroll-wrapper::-webkit-scrollbar-corner {
+        background: #e2e8f0;
+    }
+    
+    .seat-grid-scroll-wrapper {
+        scrollbar-width: thin;
+        scrollbar-color: #6366f1 #e2e8f0;
+    }
+    
+    .zoom-btn {
+        width: 48px;
+        height: 48px;
+        font-size: 22px;
+    }
+    
+    .zoom-label {
+        font-size: 16px;
+        padding: 10px 16px;
+    }
+    
+    .card-summary { 
+        padding: 16px; 
+        position: relative; 
+        top: auto; 
+    }
+    .summary-movie-poster { 
+        width: 60px; 
+        height: 90px; 
+    }
+    .summary-movie-title { 
+        font-size: 0.95rem; 
+    }
+    
     .notification-container .notification {
         padding: 16px 20px;
         font-size: 1rem;
@@ -667,28 +848,69 @@ body {
     }
 }
 
-/* Responsive para la card-summary */
-@media (max-width: 768px) {
-    .seat-grid-scroll-wrapper { max-height: 50vh; }
-    .card-summary { padding: 16px; position: relative; top: auto; }
-    .summary-movie-poster { width: 60px; height: 90px; }
-    .summary-movie-title { font-size: 0.95rem; }
-}
 @media (max-width: 640px) {
-    .seat { width: 1.35rem; height: 1.35rem; border-radius: 3px; }
-    .seat-label { font-size: 0.5rem; bottom: 0px; }
-    .row-label { width: 18px; font-size: 0.55rem; padding-right: 4px; }
-    .seat-grid-container { gap: 3px; padding: 4px; }
-    .seat-row { gap: 3px; }
-    .cinema-screen { margin-top: 20px; padding: 8px; font-size: 0.6rem; }
+    .seat-label { 
+        font-size: calc(var(--seat-size) * 0.35);
+    }
+    .row-label { 
+        width: 18px; 
+        font-size: 0.55rem; 
+        padding-right: 4px; 
+    }
+    .seat-grid-container { 
+        gap: 3px; 
+        padding: 4px; 
+    }
+    .seat-row { 
+        gap: 3px; 
+    }
+    .cinema-screen { 
+        margin-top: 20px; 
+        padding: 8px; 
+        font-size: 0.6rem; 
+    }
+    
+    .zoom-controls {
+        gap: 8px;
+        padding: 8px;
+    }
+    
+    .zoom-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 20px;
+    }
 }
+
 @media (max-width: 480px) {
-    .seat { width: 1.2rem; height: 1.2rem; border-radius: 2px; }
-    .seat-label { font-size: 0.45rem; bottom: 0px; }
-    .row-label { width: 16px; font-size: 0.5rem; padding-right: 3px; }
-    .seat-grid-container { gap: 2.5px; padding: 3px; }
-    .seat-row { gap: 2.5px; }
-    .cinema-screen { margin-top: 16px; padding: 6px; font-size: 0.5rem; letter-spacing: 2px; }
+    .row-label { 
+        width: 16px; 
+        font-size: 0.5rem; 
+        padding-right: 3px; 
+    }
+    .seat-grid-container { 
+        gap: 2.5px; 
+        padding: 3px; 
+    }
+    .seat-row { 
+        gap: 2.5px; 
+    }
+    .cinema-screen { 
+        margin-top: 16px; 
+        padding: 6px; 
+        font-size: 0.5rem; 
+        letter-spacing: 2px; 
+    }
+    
+    .seat-grid-scroll-wrapper { 
+        max-height: 45vh;
+        padding: 4px;
+    }
+    
+    .seat-grid-scroll-wrapper::-webkit-scrollbar { 
+        width: 14px; 
+        height: 14px; 
+    }
 }
 </style>
 
@@ -713,17 +935,11 @@ body {
                 </span>
             </div>
 
-            <div class="flex sm:hidden justify-end gap-2 mb-3 items-center">
-                <span class="text-xs text-gray-400 mr-auto"><i class="fas fa-search-plus mr-1"></i> Zoom:</span>
-                <button type="button" id="btn-zoom-out" class="bg-[#1a1a2e] border border-[#2a2a3e] text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition-all">
-                    <i class="fas fa-minus"></i>
-                </button>
-                <button type="button" id="btn-zoom-reset" class="bg-[#1a1a2e] border border-[#2a2a3e] text-gray-400 hover:text-white px-2.5 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition-all">
-                    100%
-                </button>
-                <button type="button" id="btn-zoom-in" class="bg-[#1a1a2e] border border-[#2a2a3e] text-gray-300 hover:text-white px-3 py-1.5 rounded-lg text-xs font-bold active:scale-95 transition-all">
-                    <i class="fas fa-plus"></i>
-                </button>
+            <!-- ✅ CONTROLES DE ZOOM (solo visibles en móvil) -->
+            <div class="zoom-controls">
+                <button type="button" class="zoom-btn" id="btn-zoom-out" title="Alejar">−</button>
+                <span class="zoom-label" id="btn-zoom-reset">100%</span>
+                <button type="button" class="zoom-btn" id="btn-zoom-in" title="Acercar">+</button>
             </div>
 
             <div class="seats-container">
@@ -784,47 +1000,37 @@ body {
             </div>
         </div>
 
-        <!-- Panel de Reserva - CARD SUMMARY -->
+        <!-- ============================================
+             ✅ CARD SUMMARY CON INFORMACIÓN DE LA PELÍCULA
+             ============================================ -->
         <div class="w-full xl:w-96 card-summary">
+            
             <!-- SECCIÓN DE PELÍCULA -->
             <div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
-                <img src="<?= $tmdb_poster ? 'https://image.tmdb.org/t/p/w200' . $tmdb_poster : ($showtime['poster_url'] ? htmlspecialchars($showtime['poster_url']) : '') ?>" 
-                     alt="<?= htmlspecialchars($showtime['title']) ?>" 
-                     title="<?= htmlspecialchars($showtime['title']) ?>"
-                     class="summary-movie-poster"
-                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22100%22 height=%22150%22 viewBox=%220 0 100 150%22%3E%3Crect fill=%22%231a1a2e%22 width=%22100%22 height=%22150%22/%3E%3Ctext x=%2250%22 y=%2275%22 text-anchor=%22middle%22 fill=%22%236b7280%22 font-size=%2240%22 font-family=%22Arial%22%3E🎬%3C/text%3E%3C/svg%3E'">
-
+                <?php 
+                $posterUrl = !empty($showtime['poster_url']) ? $showtime['poster_url'] : ($tmdb_poster ? 'https://image.tmdb.org/t/p/w200' . $tmdb_poster : '');
+                if (!empty($posterUrl)): 
+                ?>
+                    <img src="<?= htmlspecialchars($posterUrl) ?>" 
+                         alt="<?= htmlspecialchars($showtime['title']) ?>" 
+                         title="<?= htmlspecialchars($showtime['title']) ?>" 
+                         class="summary-movie-poster">
+                <?php endif; ?>
                 <div class="flex flex-col justify-start text-left text-gray-900 flex-1 min-w-0">
-                    <div class="font-extrabold text-lg leading-tight text-gray-900 summary-movie-title">
-                        <?= htmlspecialchars($showtime['title']) ?>
+                    <div class="summary-movie-title"><?= htmlspecialchars($showtime['title']) ?></div>
+                    
+                    <div class="summary-movie-details">
+                        <strong>Idioma:</strong> <?= htmlspecialchars($lang_label) ?>
                     </div>
-
-                    <!-- ✅ IDIOMA - TEXTO PLANO (como price_selection.php) -->
-                    <div class="text-sm text-gray-700 font-medium mt-1.5">
-                        Idioma: <?= htmlspecialchars($lang_label) ?>
+                    
+                    <div class="summary-movie-details">
+                        <?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?>
                     </div>
-
-                    <!-- Sala · Fecha · Hora -->
-                    <div class="text-sm text-gray-700 font-medium mt-1 whitespace-nowrap">
-                        <?= htmlspecialchars($showtime['room_name']) ?> · 
-                        <?= formatDateShort($showtime['show_date']) ?> · 
-                        <?= formatTimeVenezuela($showtime['show_time']) ?>
-                    </div>
-
-                    <!-- FORMATO -->
-                    <?php
-                    $movieFormat = $showtime['format'] ?? '2D';
-                    $formatClass = 'format-2d';
-                    if (!empty($movieFormat)) {
-                        $formatLower = strtolower($movieFormat);
-                        $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
-                    }
-                    ?>
+                    
                     <div class="mt-1.5">
-                        <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
+                        <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($format) ?></span>
                     </div>
 
-                    <!-- ✅ PROMOCIONES - BADGES BORDER AND DOT (como price_selection.php) -->
                     <div class="flex flex-col gap-2 mt-3 items-start">
                         <?php if ($hasMondayPromo): ?>
                             <span class="promo-tag monday">
@@ -842,8 +1048,8 @@ body {
                 </div>
             </div>
 
-            <!-- ✅ BLOQUE DE ASIENTOS SELECCIONADOS - COMO ESTABA ANTES -->
-            <div class="selected-info-box" style="background: #f1f5f9 !important; border: 1px solid #e2e8f0 !important; border-radius: 8px !important; padding: 14px !important; margin-top: 12px; margin-bottom: 16px;">
+            <!-- ASIENTOS ELEGIDOS -->
+            <div class="selected-info" style="margin-bottom: 16px;">
                 <p class="text-sm text-gray-600">
                     Asientos elegidos: <span id="selected-seats-list" class="font-bold text-slate-900">-</span>
                 </p>
@@ -852,10 +1058,8 @@ body {
                 </p>
             </div>
 
-            <!-- LÍNEA PUNTEADA -->
             <div class="summary-dotted-line"></div>
 
-            <!-- CÁLCULOS -->
             <div class="summary-plain-row">
                 <span>Subtotal</span>
                 <span id="subtotalAmount"><?= formatCurrency($subtotal, $siteConfig) ?></span>
@@ -865,10 +1069,8 @@ body {
                 <span id="taxAmount"><?= formatCurrency($taxAmount, $siteConfig) ?></span>
             </div>
 
-            <!-- LÍNEA SÓLIDA MORADA -->
             <div class="summary-solid-line"></div>
 
-            <!-- TOTAL -->
             <div class="summary-plain-row bold-row">
                 <span>Total a Pagar</span>
                 <span id="totalAmount"><?= formatCurrency($totalAmount, $siteConfig) ?></span>
@@ -920,6 +1122,25 @@ let selectedSeats = [];
 const maxSeats = totalSeatsNeeded;
 
 // ============================================
+// ✅ FUNCIÓN PARA FORMATEAR MONEDA
+// ============================================
+function formatCurrency(amount) {
+    if (typeof amount !== 'number' || isNaN(amount)) {
+        amount = 0;
+    }
+    
+    const formatted = amount.toFixed(currencyConfig.decimals)
+        .replace('.', ',')
+        .replace(/\B(?=(\d{3})+(?!\d))/g, currencyConfig.thousands);
+    
+    if (currencyConfig.position === 'left') {
+        return currencyConfig.symbol + formatted;
+    } else {
+        return formatted + currencyConfig.symbol;
+    }
+}
+
+// ============================================
 // FUNCIONES DE ALMACENAMIENTO
 // ============================================
 function saveSeatsToStorage() {
@@ -954,20 +1175,7 @@ function clearSeatsStorage() {
 }
 
 // ============================================
-// FUNCIONES DE FORMATO
-// ============================================
-function formatCurrency(amount) {
-    const symbol = currencyConfig.symbol;
-    const position = currencyConfig.position;
-    const thousands = currencyConfig.thousands;
-    const decimal = currencyConfig.decimal;
-    const decimals = currencyConfig.decimals;
-    let formatted = amount.toFixed(decimals).replace('.', decimal).replace(/\B(?=(\d{3})+(?!\d))/g, thousands);
-    return position === 'right' ? formatted + ' ' + symbol : symbol + formatted;
-}
-
-// ============================================
-// NOTIFICACIÓN CENTRAL MEJORADA
+// NOTIFICACIÓN CENTRAL
 // ============================================
 function showNotification(message, type = 'info', duration = 3000) {
     const container = document.getElementById('notificationContainer');
@@ -1006,14 +1214,12 @@ function showNotification(message, type = 'info', duration = 3000) {
 function updateSummary() {
     const count = selectedSeats.length;
     
-    // Elementos del bloque de asientos (estilo anterior)
     const selectedSeatsList = document.getElementById('selected-seats-list');
     const ticketCountEl = document.getElementById('ticket-count');
     const seatsInput = document.getElementById('seats-input');
     const btnContinue = document.getElementById('btn-continue');
     const btnSeatsCount = document.getElementById('btnSeatsCount');
 
-    // Actualizar lista de asientos
     if (selectedSeatsList) {
         selectedSeatsList.innerText = count > 0 ? selectedSeats.join(', ') : '-';
     }
@@ -1024,17 +1230,14 @@ function updateSummary() {
         btnSeatsCount.textContent = count;
     }
 
-    // Actualizar campos ocultos
     seatsInput.value = selectedSeats.join(',');
 
-    // Actualizar totales (siempre mostrar los valores fijos de la sesión)
     document.getElementById('subtotalAmount').textContent = formatCurrency(subtotal);
     document.getElementById('taxAmount').textContent = formatCurrency(taxAmount);
     document.getElementById('totalAmount').textContent = formatCurrency(totalAmount);
 
-    // Habilitar/deshabilitar botón
     if (btnContinue) {
-        if (count >= maxSeats) {
+        if (count === maxSeats) {
             btnContinue.removeAttribute('disabled');
             btnContinue.innerHTML = '<i class="fas fa-utensils mr-2"></i> Continuar a Comida';
             btnContinue.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -1110,12 +1313,15 @@ window.handleFormSubmit = function(event) {
 // INICIALIZACIÓN
 // ============================================
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Inicializando seats.php');
+    console.log('📊 maxSeats:', maxSeats);
+    console.log('📊 occupiedSeats:', occupiedSeats);
+    console.log('📊 blockedSeats:', blockedSeats);
+
     const seats = document.querySelectorAll('.seat:not(.seat-occupied):not(.seat-blocked)');
+    console.log('🪑 Total de asientos disponibles:', seats.length);
 
-    console.log('🔍 Inicializando seats.php, totalSeatsNeeded:', totalSeatsNeeded);
-    console.log('🔍 Ocupados:', occupiedSeats);
-    console.log('🔍 Bloqueados:', blockedSeats);
-
+    // Cargar asientos guardados
     const hasSavedSeats = loadSeatsFromStorage();
     if (hasSavedSeats) {
         console.log('✅ Asientos restaurados desde sessionStorage (' + selectedSeats.length + ' asientos):', selectedSeats);
@@ -1135,6 +1341,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <?php endif; ?>
     }
 
+    // Marcar visualmente los asientos seleccionados
     seats.forEach(seat => {
         const seatId = seat.getAttribute('data-seat');
         if (selectedSeats.includes(seatId)) {
@@ -1144,6 +1351,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     updateSummary();
 
+    // Agregar event listeners a TODOS los asientos
     seats.forEach(seat => {
         seat.addEventListener('click', function() {
             const seatId = this.getAttribute('data-seat');
@@ -1167,41 +1375,61 @@ document.addEventListener('DOMContentLoaded', function() {
                 selectedSeats.splice(index, 1);
                 this.classList.remove('seat-selected');
                 this.classList.add(isAccessible ? 'seat-accessible' : 'seat-available');
-                console.log('➖ Asiento removido:', seatId);
             } else {
                 if (selectedSeats.length >= maxSeats) {
-                    showNotification(`Máximo ${maxSeats} asientos.`, 'warning');
+                    showNotification(`⚠️ Ya tienes ${maxSeats} asientos seleccionados. Deselecciona uno primero para elegir otro.`, 'warning', 4000);
                     return;
                 }
                 selectedSeats.push(seatId);
                 this.classList.remove('seat-available', 'seat-accessible');
                 this.classList.add('seat-selected');
-                console.log('➕ Asiento agregado:', seatId);
             }
-            console.log('📋 Asientos seleccionados:', selectedSeats);
+            
             updateSummary();
         });
     });
 
+    console.log('✅ Event listeners agregados a', seats.length, 'asientos');
+
+    // ============================================
+    // ✅ ZOOM POR VARIABLE CSS (funciona con scroll vertical y horizontal)
+    // ============================================
     let currentZoom = 1;
     const minZoom = 0.8, maxZoom = 1.8, stepZoom = 0.2;
-    const seatGridContainer = document.querySelector('.seat-grid-container');
-    const seatGridWrapper = document.querySelector('.seat-grid-wrapper');
+    const seatGridScrollWrapper = document.querySelector('.seat-grid-scroll-wrapper');
     const btnZoomIn = document.getElementById('btn-zoom-in');
     const btnZoomOut = document.getElementById('btn-zoom-out');
     const btnZoomReset = document.getElementById('btn-zoom-reset');
 
+    // Tamaño base en rem (debe coincidir con el valor máximo del clamp en CSS)
+    const baseSeatSizeRem = 1.8;
+
     function applyZoom(newZoom) {
         currentZoom = Math.min(Math.max(newZoom, minZoom), maxZoom);
-        seatGridContainer.style.transform = 'scale(' + currentZoom + ')';
-        if (currentZoom > 1) {
-            seatGridWrapper.style.paddingRight = (seatGridContainer.offsetWidth * (currentZoom - 1)) + 'px';
-            seatGridWrapper.style.paddingBottom = (seatGridContainer.offsetHeight * (currentZoom - 1)) + 'px';
-        } else {
-            seatGridWrapper.style.paddingRight = '0px';
-            seatGridWrapper.style.paddingBottom = '0px';
-        }
+        
+        // ✅ Cambiar el tamaño REAL de los asientos usando la variable CSS
+        // Esto hace que el navegador recalcule el layout y el scroll funcione
+        const newSize = baseSeatSizeRem * currentZoom;
+        document.documentElement.style.setProperty('--seat-size', newSize + 'rem');
+        
+        // Actualizar el porcentaje mostrado
         if (btnZoomReset) btnZoomReset.innerText = Math.round(currentZoom * 100) + '%';
+        
+        console.log('🔍 Zoom aplicado:', currentZoom, '| Tamaño de asiento:', newSize + 'rem');
+        
+        // ✅ Verificar el estado del scroll después del cambio
+        setTimeout(function() {
+            if (seatGridScrollWrapper) {
+                console.log('📊 Estado del scroll:', {
+                    scrollWidth: seatGridScrollWrapper.scrollWidth,
+                    scrollHeight: seatGridScrollWrapper.scrollHeight,
+                    clientWidth: seatGridScrollWrapper.clientWidth,
+                    clientHeight: seatGridScrollWrapper.clientHeight,
+                    necesitaScrollV: seatGridScrollWrapper.scrollHeight > seatGridScrollWrapper.clientHeight,
+                    necesitaScrollH: seatGridScrollWrapper.scrollWidth > seatGridScrollWrapper.clientWidth
+                });
+            }
+        }, 100);
     }
 
     if (btnZoomIn && btnZoomOut && btnZoomReset) {
@@ -1210,6 +1438,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btnZoomReset.addEventListener('click', () => applyZoom(1));
     }
 
+    // Verificar asientos ocupados periódicamente
     setInterval(function() {
         fetch('check_seats.php?showtime_id=<?= $showtime['id'] ?>')
             .then(response => response.json())
