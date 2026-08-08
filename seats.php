@@ -146,19 +146,15 @@ if (!$ticketsData || $totalSeats <= 0) {
     }
 }
 
-// ✅ Si aún no hay datos, redirigir a price_selection
-// Pero si estamos volviendo de food_menu.php, debemos mantener los asientos
-$fromFood = isset($_GET['from']) && $_GET['from'] === 'food';
+// Si aún no hay datos y no hay sesión de comida válida, redirigir a price_selection
 if (!$ticketsData || $totalSeats <= 0) {
     if ($hasFoodSession) {
         unset($_SESSION[$foodValidKey]);
         unset($_SESSION[$foodSeatsKey]);
         unset($_SESSION[$foodTimeoutKey]);
     }
-    if (!$fromFood) {
-        header('Location: price_selection.php?showtime_id=' . $showtimeId);
-        exit;
-    }
+    header('Location: price_selection.php?showtime_id=' . $showtimeId);
+    exit;
 }
 
 // ============================================
@@ -244,27 +240,10 @@ if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
 }
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
 
-// ✅ Si venimos de food_menu.php, restaurar los asientos seleccionados desde sessionStorage
-$restoredSeats = [];
-if ($fromFood) {
-    try {
-        $savedSeats = sessionStorage.getItem('selected_seats_' . $showtimeId);
-        if ($savedSeats) {
-            $parsed = json_decode($savedSeats, true);
-            if (is_array($parsed) && !empty($parsed)) {
-                $restoredSeats = $parsed;
-            }
-        }
-    } catch (Exception $e) {
-        // Ignorar errores de sessionStorage
-    }
-}
-
 require_once 'header.php';
 ?>
 
 <style>
-/* ... estilos igual que antes ... */
 body {
     background-color: #ffffff !important;
     color: #1f2937 !important;
@@ -439,7 +418,9 @@ body {
 .selected-info { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; min-height: 60px; }
 #subtotal { color: #0f172a !important; }
 
-/* CARD SUMMARY */
+/* ============================================
+   CARD SUMMARY
+   ============================================ */
 .card-summary {
     background: #ffffff !important;
     border: 1px solid #cbd5e1 !important;
@@ -466,6 +447,7 @@ body {
     font-weight: 800;
     font-size: 1.15rem;
 }
+
 .summary-movie-poster {
     width: 80px;
     height: 120px;
@@ -480,6 +462,16 @@ body {
     font-size: 1.1rem;
     line-height: 1.3;
 }
+.summary-movie-details {
+    font-size: 0.85rem;
+    color: #475569;
+    margin-top: 2px;
+}
+.summary-movie-details strong {
+    color: #0f172a;
+}
+
+/* ✅ PROMOCIONES - BADGES BORDER AND DOT (como price_selection.php) */
 .promo-tag {
     display: inline-flex;
     align-items: center;
@@ -513,6 +505,8 @@ body {
 .promo-tag.presale .promo-dot {
     background: #b45309;
 }
+
+/* FORMATO BADGE */
 .format-badge {
     display: inline-flex;
     align-items: center;
@@ -538,6 +532,7 @@ body {
     border-color: #4f5e71;
     color: #4f5e71;
 }
+
 .btn-continue-food {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: #ffffff !important;
@@ -557,6 +552,7 @@ body {
     box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
 }
 .btn-continue-food:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
 .btn-back {
     background: #ffffff;
     border: 1px solid #cbd5e1;
@@ -573,20 +569,105 @@ body {
     display: block;
 }
 .btn-back:hover { border-color: #6366f1; color: #4f46e5 !important; background: #eef2ff; }
-.selected-info-box {
-    background: #f1f5f9 !important;
-    border: 1px solid #e2e8f0 !important;
-    border-radius: 8px !important;
-    padding: 14px !important;
-    margin-top: 12px;
-    margin-bottom: 16px;
-}
+
 @media (min-width: 1024px) {
     .card-summary {
         position: sticky;
         top: 100px;
     }
 }
+
+/* ============================================
+   NOTIFICACIÓN CENTRAL MEJORADA
+   ============================================ */
+.notification-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 500px;
+    padding: 0 20px;
+}
+
+.notification-container .notification {
+    pointer-events: auto;
+    padding: 10px 22px;
+    border-radius: 16px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    animation: notifFadeIn 0.4s ease, notifPulse 1.5s ease-in-out 0.4s 2;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+}
+
+.notification-container .notification .notif-icon {
+    font-size: 1.8rem;
+    flex-shrink: 0;
+}
+
+.notification-container .notification.info {
+    background: #4f46e5;
+    color: #ffffff;
+    border: 2px solid #818cf8;
+}
+.notification-container .notification.success {
+    background: #16a34a;
+    color: #ffffff;
+    border: 2px solid #4ade80;
+}
+.notification-container .notification.warning {
+    background: #d97706;
+    color: #ffffff;
+}
+.notification-container .notification.error {
+    background: #dc2626;
+    color: #ffffff;
+    border: 2px solid #f87171;
+}
+
+@keyframes notifFadeIn {
+    from { opacity: 0; transform: scale(0.85); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes notifPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.03); }
+}
+
+.notification-container .notification.fade-out {
+    animation: notifFadeOut 0.3s ease forwards;
+}
+
+@keyframes notifFadeOut {
+    from { opacity: 1; transform: scale(1); }
+    to { opacity: 0; transform: scale(0.9); }
+}
+
+@media (max-width: 640px) {
+    .notification-container .notification {
+        padding: 16px 20px;
+        font-size: 1rem;
+        border-radius: 12px;
+    }
+    .notification-container .notification .notif-icon {
+        font-size: 1.4rem;
+    }
+}
+
+/* Responsive para la card-summary */
 @media (max-width: 768px) {
     .seat-grid-scroll-wrapper { max-height: 50vh; }
     .card-summary { padding: 16px; position: relative; top: auto; }
@@ -612,6 +693,9 @@ body {
 </style>
 
 <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl">
+    <!-- Contenedor de Notificaciones Central -->
+    <div class="notification-container" id="notificationContainer"></div>
+
     <div class="flex flex-col xl:flex-row gap-4 sm:gap-8 mt-2">
         <!-- Mapa de Asientos -->
         <div class="flex-1 bg-[#14141e] p-3 sm:p-6 rounded-xl border border-[#1e1e2e]">
@@ -715,16 +799,19 @@ body {
                         <?= htmlspecialchars($showtime['title']) ?>
                     </div>
 
+                    <!-- ✅ IDIOMA - TEXTO PLANO (como price_selection.php) -->
                     <div class="text-sm text-gray-700 font-medium mt-1.5">
                         Idioma: <?= htmlspecialchars($lang_label) ?>
                     </div>
 
+                    <!-- Sala · Fecha · Hora -->
                     <div class="text-sm text-gray-700 font-medium mt-1 whitespace-nowrap">
                         <?= htmlspecialchars($showtime['room_name']) ?> · 
                         <?= formatDateShort($showtime['show_date']) ?> · 
                         <?= formatTimeVenezuela($showtime['show_time']) ?>
                     </div>
 
+                    <!-- FORMATO -->
                     <?php
                     $movieFormat = $showtime['format'] ?? '2D';
                     $formatClass = 'format-2d';
@@ -737,6 +824,7 @@ body {
                         <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
                     </div>
 
+                    <!-- ✅ PROMOCIONES - BADGES BORDER AND DOT (como price_selection.php) -->
                     <div class="flex flex-col gap-2 mt-3 items-start">
                         <?php if ($hasMondayPromo): ?>
                             <span class="promo-tag monday">
@@ -754,8 +842,8 @@ body {
                 </div>
             </div>
 
-            <!-- ✅ BLOQUE DE ASIENTOS SELECCIONADOS -->
-            <div class="selected-info-box">
+            <!-- ✅ BLOQUE DE ASIENTOS SELECCIONADOS - COMO ESTABA ANTES -->
+            <div class="selected-info-box" style="background: #f1f5f9 !important; border: 1px solid #e2e8f0 !important; border-radius: 8px !important; padding: 14px !important; margin-top: 12px; margin-bottom: 16px;">
                 <p class="text-sm text-gray-600">
                     Asientos elegidos: <span id="selected-seats-list" class="font-bold text-slate-900">-</span>
                 </p>
@@ -777,8 +865,10 @@ body {
                 <span id="taxAmount"><?= formatCurrency($taxAmount, $siteConfig) ?></span>
             </div>
 
+            <!-- LÍNEA SÓLIDA MORADA -->
             <div class="summary-solid-line"></div>
 
+            <!-- TOTAL -->
             <div class="summary-plain-row bold-row">
                 <span>Total a Pagar</span>
                 <span id="totalAmount"><?= formatCurrency($totalAmount, $siteConfig) ?></span>
@@ -819,9 +909,6 @@ const occupiedSeats = <?= json_encode($occupiedSeats) ?>;
 const blockedSeats = <?= json_encode($blockedSeats) ?>;
 const accessibleSeats = <?= json_encode($accessibleSeats) ?>;
 const purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
-const fromFood = <?= $fromFood ? 'true' : 'false' ?>;
-const restoredSeats = <?= json_encode($restoredSeats) ?>;
-
 const currencyConfig = {
     symbol: '<?= $siteConfig['currency_symbol'] ?? '$' ?>',
     position: '<?= $siteConfig['currency_position'] ?? 'left' ?>',
@@ -857,6 +944,13 @@ function loadSeatsFromStorage() {
         }
     } catch (e) { console.warn('Error cargando desde sessionStorage:', e); }
     return false;
+}
+
+function clearSeatsStorage() {
+    try {
+        sessionStorage.removeItem('selected_seats_' + showtimeId);
+        sessionStorage.removeItem('selected_seats_count_' + showtimeId);
+    } catch (e) { console.warn('Error limpiando sessionStorage:', e); }
 }
 
 // ============================================
@@ -912,12 +1006,14 @@ function showNotification(message, type = 'info', duration = 3000) {
 function updateSummary() {
     const count = selectedSeats.length;
     
+    // Elementos del bloque de asientos (estilo anterior)
     const selectedSeatsList = document.getElementById('selected-seats-list');
     const ticketCountEl = document.getElementById('ticket-count');
     const seatsInput = document.getElementById('seats-input');
     const btnContinue = document.getElementById('btn-continue');
     const btnSeatsCount = document.getElementById('btnSeatsCount');
 
+    // Actualizar lista de asientos
     if (selectedSeatsList) {
         selectedSeatsList.innerText = count > 0 ? selectedSeats.join(', ') : '-';
     }
@@ -928,8 +1024,15 @@ function updateSummary() {
         btnSeatsCount.textContent = count;
     }
 
+    // Actualizar campos ocultos
     seatsInput.value = selectedSeats.join(',');
 
+    // Actualizar totales (siempre mostrar los valores fijos de la sesión)
+    document.getElementById('subtotalAmount').textContent = formatCurrency(subtotal);
+    document.getElementById('taxAmount').textContent = formatCurrency(taxAmount);
+    document.getElementById('totalAmount').textContent = formatCurrency(totalAmount);
+
+    // Habilitar/deshabilitar botón
     if (btnContinue) {
         if (count >= maxSeats) {
             btnContinue.removeAttribute('disabled');
@@ -939,7 +1042,7 @@ function updateSummary() {
             btnContinue.setAttribute('disabled', 'true');
             btnContinue.classList.add('opacity-50', 'cursor-not-allowed');
             const remaining = maxSeats - count;
-            btnContinue.innerHTML = `<i class="fas fa-chair mr-2"></i> Selecciona ${remaining} asiento${remaining !== 1 ? 's' : ''} más`;
+            btnContinue.innerHTML = `<i class="fas fa-chair mr-2"></i> Selecciona ${remaining} asiento${remaining !== 1 ? 's' : ''}`;
         }
     }
 
@@ -1010,37 +1113,28 @@ document.addEventListener('DOMContentLoaded', function() {
     const seats = document.querySelectorAll('.seat:not(.seat-occupied):not(.seat-blocked)');
 
     console.log('🔍 Inicializando seats.php, totalSeatsNeeded:', totalSeatsNeeded);
-    console.log('🔍 fromFood:', fromFood);
-    console.log('🔍 restoredSeats:', restoredSeats);
+    console.log('🔍 Ocupados:', occupiedSeats);
+    console.log('🔍 Bloqueados:', blockedSeats);
 
-    // ✅ Si venimos de food_menu.php, restaurar los asientos guardados
-    if (fromFood && restoredSeats.length > 0) {
-        selectedSeats = restoredSeats;
-        console.log('✅ Asientos restaurados desde sessionStorage:', selectedSeats);
+    const hasSavedSeats = loadSeatsFromStorage();
+    if (hasSavedSeats) {
+        console.log('✅ Asientos restaurados desde sessionStorage (' + selectedSeats.length + ' asientos):', selectedSeats);
     } else {
-        // Intentar cargar asientos guardados
-        const hasSavedSeats = loadSeatsFromStorage();
-        if (hasSavedSeats) {
-            console.log('✅ Asientos restaurados desde sessionStorage (' + selectedSeats.length + ' asientos):', selectedSeats);
-        } else {
-            // Verificar si hay sesión de comida activa
-            <?php if ($hasFoodSession && isset($_SESSION[$foodSeatsKey]) && !empty($_SESSION[$foodSeatsKey])): ?>
-            const foodSeats = '<?= addslashes($_SESSION[$foodSeatsKey]) ?>';
-            console.log('🔍 Asientos desde sesión de comida:', foodSeats);
-            if (foodSeats) {
-                const seatsFromFood = foodSeats.split(',').filter(s => s.trim());
-                const validSeats = seatsFromFood.filter(seat => !occupiedSeats.includes(seat) && !blockedSeats.includes(seat));
-                if (validSeats.length > 0) {
-                    selectedSeats = validSeats;
-                    saveSeatsToStorage();
-                    console.log('✅ Asientos restaurados desde sesión de comida (' + selectedSeats.length + ' asientos):', selectedSeats);
-                }
+        <?php if ($hasFoodSession && isset($_SESSION[$foodSeatsKey]) && !empty($_SESSION[$foodSeatsKey])): ?>
+        const foodSeats = '<?= addslashes($_SESSION[$foodSeatsKey]) ?>';
+        console.log('🔍 Asientos desde sesión de comida:', foodSeats);
+        if (foodSeats) {
+            const seatsFromFood = foodSeats.split(',').filter(s => s.trim());
+            const validSeats = seatsFromFood.filter(seat => !occupiedSeats.includes(seat) && !blockedSeats.includes(seat));
+            if (validSeats.length > 0) {
+                selectedSeats = validSeats;
+                saveSeatsToStorage();
+                console.log('✅ Asientos restaurados desde sesión de comida (' + selectedSeats.length + ' asientos):', selectedSeats);
             }
-            <?php endif; ?>
         }
+        <?php endif; ?>
     }
 
-    // Restaurar estado visual
     seats.forEach(seat => {
         const seatId = seat.getAttribute('data-seat');
         if (selectedSeats.includes(seatId)) {
@@ -1050,7 +1144,6 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     updateSummary();
 
-    // Eventos de clic en asientos
     seats.forEach(seat => {
         seat.addEventListener('click', function() {
             const seatId = this.getAttribute('data-seat');
@@ -1077,7 +1170,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 console.log('➖ Asiento removido:', seatId);
             } else {
                 if (selectedSeats.length >= maxSeats) {
-                    showNotification(`⚠️ Máximo ${maxSeats} asientos.`, 'warning');
+                    showNotification(`Máximo ${maxSeats} asientos.`, 'warning');
                     return;
                 }
                 selectedSeats.push(seatId);
@@ -1090,7 +1183,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Zoom para móviles
     let currentZoom = 1;
     const minZoom = 0.8, maxZoom = 1.8, stepZoom = 0.2;
     const seatGridContainer = document.querySelector('.seat-grid-container');
@@ -1118,7 +1210,6 @@ document.addEventListener('DOMContentLoaded', function() {
         btnZoomReset.addEventListener('click', () => applyZoom(1));
     }
 
-    // Actualizar asientos cada 30 segundos
     setInterval(function() {
         fetch('check_seats.php?showtime_id=<?= $showtime['id'] ?>')
             .then(response => response.json())
