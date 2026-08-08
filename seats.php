@@ -1377,7 +1377,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.classList.add(isAccessible ? 'seat-accessible' : 'seat-available');
             } else {
                 if (selectedSeats.length >= maxSeats) {
-                    showNotification(`⚠️ Ya tienes ${maxSeats} asientos seleccionados. Deselecciona uno primero para elegir otro.`, 'warning', 4000);
+                    showNotification(`Ya tienes ${maxSeats} asientos seleccionados.`, 'warning', 4000);
                     return;
                 }
                 selectedSeats.push(seatId);
