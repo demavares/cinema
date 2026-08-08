@@ -250,35 +250,65 @@ function getMovieFromTMDB($title, $year = null) {
 // ============================================
 function releaseExpiredSeats($pdo) {
     $currentDateTime = date('Y-m-d H:i:s');
-    
-    $stmt = $pdo->prepare("
-        SELECT DISTINCT s.id, s.show_date, s.show_time, m.duration, COUNT(t.id) as ticket_count
-        FROM showtimes s
-        JOIN movies m ON s.movie_id = m.id
-        JOIN tickets t ON t.showtime_id = s.id
-        WHERE DATE_ADD(CONCAT(s.show_date, ' ', s.show_time), INTERVAL m.duration MINUTE) < ?
-        AND s.is_active = 1
-        GROUP BY s.id
-    ");
-    $stmt->execute([$currentDateTime]);
-    $expired_showtimes = $stmt->fetchAll();
-    
     $total_released = 0;
     
-    foreach ($expired_showtimes as $showtime) {
-        $ticket_count = $showtime['ticket_count'];
+    try {
+        $pdo->beginTransaction();
         
-        if ($ticket_count > 0) {
-            $stmt_log = $pdo->prepare("INSERT INTO ticket_logs (showtime_id, ticket_count) VALUES (?, ?)");
-            $stmt_log->execute([$showtime['id'], $ticket_count]);
-            $total_released += $ticket_count;
+        // ============================================
+        // 1. LIBERAR COMPRAS PENDIENTES EXPIRADAS
+        // ============================================
+        $stmt = $pdo->prepare("
+            SELECT id, seats, showtime_id 
+            FROM purchases 
+            WHERE status = 'pending' AND expires_at < ?
+            FOR UPDATE
+        ");
+        $stmt->execute([$currentDateTime]);
+        $expired_purchases = $stmt->fetchAll();
+        
+        foreach ($expired_purchases as $purchase) {
+            // Marcar como expirado
+            $stmt = $pdo->prepare("UPDATE purchases SET status = 'expired' WHERE id = ?");
+            $stmt->execute([$purchase['id']]);
+            
+            // Eliminar tickets temporales
+            $seatsArray = explode(',', $purchase['seats']);
+            $placeholders = implode(',', array_fill(0, count($seatsArray), '?'));
+            $stmt = $pdo->prepare("DELETE FROM tickets WHERE showtime_id = ? AND seat_code IN ($placeholders)");
+            $stmt->execute(array_merge([$purchase['showtime_id']], $seatsArray));
+            $total_released += count($seatsArray);
         }
         
-        $stmt_delete = $pdo->prepare("DELETE FROM tickets WHERE showtime_id = ?");
-        $stmt_delete->execute([$showtime['id']]);
+        // ============================================
+        // 2. LIBERAR SHOWTIMES QUE YA PASARON
+        // ============================================
+        $stmt = $pdo->prepare("
+            SELECT DISTINCT s.id, s.show_date, s.show_time, m.duration, COUNT(t.id) as ticket_count
+            FROM showtimes s
+            JOIN movies m ON s.movie_id = m.id
+            JOIN tickets t ON t.showtime_id = s.id
+            WHERE DATE_ADD(CONCAT(s.show_date, ' ', s.show_time), INTERVAL m.duration MINUTE) < ?
+            AND s.is_active = 1
+            GROUP BY s.id
+        ");
+        $stmt->execute([$currentDateTime]);
+        $expired_showtimes = $stmt->fetchAll();
         
-        $stmt_update = $pdo->prepare("UPDATE showtimes SET is_active = 0 WHERE id = ?");
-        $stmt_update->execute([$showtime['id']]);
+        foreach ($expired_showtimes as $showtime) {
+            // Registrar en logs
+            $stmt_log = $pdo->prepare("INSERT INTO ticket_logs (showtime_id, ticket_count) VALUES (?, ?)");
+            $stmt_log->execute([$showtime['id'], $showtime['ticket_count']]);
+            
+            // Marcar showtime como inactivo
+            $stmt_update = $pdo->prepare("UPDATE showtimes SET is_active = 0 WHERE id = ?");
+            $stmt_update->execute([$showtime['id']]);
+        }
+        
+        $pdo->commit();
+    } catch (Exception $e) {
+        $pdo->rollBack();
+        error_log("Error liberando asientos expirados: " . $e->getMessage());
     }
     
     return $total_released;
@@ -619,7 +649,7 @@ function destroySession() {
 }
 
 // ============================================
-// ✅ VALIDAR Y RECALCULAR PRECIOS EN EL SERVIDOR
+// ✅ VALIDAR Y RECALCULAR PRECIOS EN EL SERVIDOR (SOLO BOLETOS)
 // ============================================
 function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
     $stmt = $pdo->prepare("
@@ -702,15 +732,16 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
         return ['error' => 'No hay suficientes asientos disponibles'];
     }
     
+    // ✅ CALCULAR IVA SOBRE EL SUBTOTAL DE BOLETOS
     $taxAmount = $subtotal * ($taxRate / 100);
     $totalAmount = $subtotal + $taxAmount;
     
     return [
         'success' => true,
-        'subtotal' => $subtotal,
+        'subtotal' => $subtotal,          // ✅ Solo boletos, SIN comida
         'tax_rate' => $taxRate,
-        'tax_amount' => $taxAmount,
-        'total_amount' => $totalAmount,
+        'tax_amount' => $taxAmount,       // ✅ IVA solo de boletos
+        'total_amount' => $totalAmount,   // ✅ Total solo de boletos (con IVA)
         'total_seats' => $totalSeats,
         'prices' => [
             'adult' => $priceAdult,

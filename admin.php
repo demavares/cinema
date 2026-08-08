@@ -19,15 +19,13 @@ $csrf_token = generateCSRFToken();
 // ============================================
 
 /**
- * Sanitiza y valida entrada de usuario
+ * ✅ Sanitiza y valida entrada de usuario
+ * CORREGIDO: No aplica htmlspecialchars aquí para evitar doble escape.
+ * El escape se hace al RENDERIZAR con htmlspecialchars().
  */
-function sanitizeInput($data, $type = 'string', $escape = true) {
+function sanitizeInput($data, $type = 'string') {
     $data = trim($data);
-    
-    if ($escape) {
-        $data = stripslashes($data);
-        $data = htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
-    }
+    $data = stripslashes($data);
     
     switch ($type) {
         case 'email':
@@ -52,19 +50,15 @@ function sanitizeInput($data, $type = 'string', $escape = true) {
  */
 function validateGetAction($action, $id) {
     $allowed_actions = ['delete_movie', 'delete_room', 'delete_showtime', 'toggle_movie', 'toggle_room', 'toggle_showtime', 'delete_food', 'toggle_food', 'update_movie'];
-    
     if (!in_array($action, $allowed_actions)) {
         return false;
     }
-    
     if (!filter_var($id, FILTER_VALIDATE_INT) || $id <= 0) {
         return false;
     }
-    
     if (!isset($_GET['csrf_token']) || !verifyCSRFToken($_GET['csrf_token'])) {
         return false;
     }
-    
     return true;
 }
 
@@ -75,7 +69,6 @@ function secureFileUpload($file, $allowed_types = ['image/jpeg', 'image/png', 'i
     if ($file['error'] !== UPLOAD_ERR_OK) {
         return ['success' => false, 'error' => 'Error al subir el archivo.'];
     }
-    
     if ($file['size'] > $max_size) {
         return ['success' => false, 'error' => 'El archivo excede el tamaño máximo permitido (2MB).'];
     }
@@ -90,12 +83,30 @@ function secureFileUpload($file, $allowed_types = ['image/jpeg', 'image/png', 'i
     
     $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
     $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
-    
     if (!in_array($extension, $allowed_extensions)) {
         return ['success' => false, 'error' => 'Extensión de archivo no permitida.'];
     }
     
     return ['success' => true, 'extension' => $extension, 'mime_type' => $mime_type];
+}
+
+/**
+ * ✅ NUEVA: Valida la fortaleza de una contraseña
+ */
+function validatePasswordStrength($password) {
+    if (strlen($password) < 8) {
+        return "La contraseña debe tener al menos 8 caracteres.";
+    }
+    if (!preg_match('/[A-Z]/', $password)) {
+        return "La contraseña debe contener al menos una letra mayúscula.";
+    }
+    if (!preg_match('/[a-z]/', $password)) {
+        return "La contraseña debe contener al menos una letra minúscula.";
+    }
+    if (!preg_match('/[0-9]/', $password)) {
+        return "La contraseña debe contener al menos un número.";
+    }
+    return null; // Contraseña válida
 }
 
 // ============================================
@@ -106,7 +117,6 @@ $formatos = ['2D', '3D', 'IMAX', 'IMAX 3D', '4DX', 'ScreenX', 'D-BOX'];
 // ============================================
 // PROCESAR FORMULARIOS
 // ============================================
-
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
         $error = "Error de seguridad: Token inválido.";
@@ -121,7 +131,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $classification = sanitizeInput($_POST['classification'] ?? '');
             $trailer_url = sanitizeInput($_POST['trailer_url'] ?? '', 'url');
             $year = !empty($_POST['year']) ? filter_var($_POST['year'], FILTER_VALIDATE_INT) : null;
-            
             $description = $_POST['description'] ?? '';
             $duration = !empty($_POST['duration']) ? filter_var($_POST['duration'], FILTER_VALIDATE_INT) : 0;
             $genre = sanitizeInput($_POST['genre'] ?? '');
@@ -137,6 +146,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $error = "URL del tráiler no válida.";
             } elseif ($year !== null && ($year < 1900 || $year > date('Y') + 2)) {
                 $error = "Año inválido.";
+            } elseif (strlen($description) > 5000) {
+                $error = "La sinopsis no puede exceder los 5000 caracteres.";
             } else {
                 $tmdb_data = getMovieFromTMDB($title, $year);
 
@@ -148,7 +159,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $year = !empty($tmdb_data['year']) ? $tmdb_data['year'] : $year;
                 $poster_url = !empty($tmdb_data['poster_path']) ? 'https://image.tmdb.org/t/p/w500' . $tmdb_data['poster_path'] : $poster_url;
                 $banner_url = !empty($tmdb_data['backdrop_path']) ? 'https://image.tmdb.org/t/p/original' . $tmdb_data['backdrop_path'] : $banner_url;
-                
+
                 if (empty($country_id) && !empty($tmdb_data['country'])) {
                     $country_name = $tmdb_data['country'];
                     $stmt = $pdo->prepare("SELECT id FROM countries WHERE name = ?");
@@ -158,25 +169,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $country_id = $country_result['id'];
                     } else {
                         $country_code = array_search($country_name, [
-                            'Estados Unidos de América' => 'US',
-                            'Japón' => 'JP',
-                            'Reino Unido' => 'GB',
-                            'Francia' => 'FR',
-                            'Alemania' => 'DE',
-                            'Corea del Sur' => 'KR',
-                            'China' => 'CN',
-                            'Canadá' => 'CA',
-                            'España' => 'ES',
-                            'Italia' => 'IT',
-                            'México' => 'MX',
-                            'India' => 'IN',
-                            'Australia' => 'AU',
-                            'Venezuela' => 'VE',
-                            'Argentina' => 'AR',
-                            'Colombia' => 'CO',
-                            'Chile' => 'CL',
-                            'Perú' => 'PE',
-                            'Brasil' => 'BR'
+                            'Estados Unidos de América' => 'US', 'Japón' => 'JP', 'Reino Unido' => 'GB',
+                            'Francia' => 'FR', 'Alemania' => 'DE', 'Corea del Sur' => 'KR',
+                            'China' => 'CN', 'Canadá' => 'CA', 'España' => 'ES', 'Italia' => 'IT',
+                            'México' => 'MX', 'India' => 'IN', 'Australia' => 'AU', 'Venezuela' => 'VE',
+                            'Argentina' => 'AR', 'Colombia' => 'CO', 'Chile' => 'CL', 'Perú' => 'PE', 'Brasil' => 'BR'
                         ]);
                         if ($country_code) {
                             $stmt = $pdo->prepare("SELECT id FROM countries WHERE code = ?");
@@ -201,7 +198,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        
         // -----------------------------------------
         // EDITAR PELÍCULA (SIN FORMATO)
         // -----------------------------------------
@@ -213,7 +209,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $classification = sanitizeInput($_POST['classification'] ?? '');
             $trailer_url = sanitizeInput($_POST['trailer_url'] ?? '', 'url');
             $year = !empty($_POST['year']) ? filter_var($_POST['year'], FILTER_VALIDATE_INT) : null;
-            
             $description = $_POST['description'] ?? '';
             $duration = !empty($_POST['duration']) ? filter_var($_POST['duration'], FILTER_VALIDATE_INT) : 0;
             $genre = sanitizeInput($_POST['genre'] ?? '');
@@ -234,50 +229,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $tmdb_data = getMovieFromTMDB($title, $year);
                 $has_tmdb_data = $tmdb_data !== null;
-                
                 $fields_updated = [];
-                
+
                 if ($has_tmdb_data) {
-                    if (empty($description) && !empty($tmdb_data['description'])) {
-                        $description = $tmdb_data['description'];
-                        $fields_updated[] = 'Sinopsis';
-                    }
-                    
-                    if (empty($duration) && !empty($tmdb_data['runtime'])) {
-                        $duration = intval($tmdb_data['runtime']);
-                        $fields_updated[] = 'Duración';
-                    }
-                    
-                    if (empty($genre) && !empty($tmdb_data['genres'])) {
-                        $genre = $tmdb_data['genres'];
-                        $fields_updated[] = 'Género';
-                    }
-                    
-                    if (empty($director) && !empty($tmdb_data['director']) && $tmdb_data['director'] !== 'No disponible') {
-                        $director = $tmdb_data['director'];
-                        $fields_updated[] = 'Director';
-                    }
-                    
-                    if (empty($cast_members) && !empty($tmdb_data['cast_members'])) {
-                        $cast_members = $tmdb_data['cast_members'];
-                        $fields_updated[] = 'Reparto';
-                    }
-                    
-                    if (empty($year) && !empty($tmdb_data['year'])) {
-                        $year = $tmdb_data['year'];
-                        $fields_updated[] = 'Año';
-                    }
-                    
-                    if (empty($poster_url) && !empty($tmdb_data['poster_path'])) {
-                        $poster_url = 'https://image.tmdb.org/t/p/w500' . $tmdb_data['poster_path'];
-                        $fields_updated[] = 'Póster';
-                    }
-                    
-                    if (empty($banner_url) && !empty($tmdb_data['backdrop_path'])) {
-                        $banner_url = 'https://image.tmdb.org/t/p/original' . $tmdb_data['backdrop_path'];
-                        $fields_updated[] = 'Banner';
-                    }
-                    
+                    if (empty($description) && !empty($tmdb_data['description'])) { $description = $tmdb_data['description']; $fields_updated[] = 'Sinopsis'; }
+                    if (empty($duration) && !empty($tmdb_data['runtime'])) { $duration = intval($tmdb_data['runtime']); $fields_updated[] = 'Duración'; }
+                    if (empty($genre) && !empty($tmdb_data['genres'])) { $genre = $tmdb_data['genres']; $fields_updated[] = 'Género'; }
+                    if (empty($director) && !empty($tmdb_data['director']) && $tmdb_data['director'] !== 'No disponible') { $director = $tmdb_data['director']; $fields_updated[] = 'Director'; }
+                    if (empty($cast_members) && !empty($tmdb_data['cast_members'])) { $cast_members = $tmdb_data['cast_members']; $fields_updated[] = 'Reparto'; }
+                    if (empty($year) && !empty($tmdb_data['year'])) { $year = $tmdb_data['year']; $fields_updated[] = 'Año'; }
+                    if (empty($poster_url) && !empty($tmdb_data['poster_path'])) { $poster_url = 'https://image.tmdb.org/t/p/w500' . $tmdb_data['poster_path']; $fields_updated[] = 'Póster'; }
+                    if (empty($banner_url) && !empty($tmdb_data['backdrop_path'])) { $banner_url = 'https://image.tmdb.org/t/p/original' . $tmdb_data['backdrop_path']; $fields_updated[] = 'Banner'; }
+
                     if (empty($country_id) && !empty($tmdb_data['country'])) {
                         $country_name = $tmdb_data['country'];
                         $stmt = $pdo->prepare("SELECT id FROM countries WHERE name = ?");
@@ -288,25 +251,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $fields_updated[] = 'País';
                         } else {
                             $country_code = array_search($country_name, [
-                                'Estados Unidos de América' => 'US',
-                                'Japón' => 'JP',
-                                'Reino Unido' => 'GB',
-                                'Francia' => 'FR',
-                                'Alemania' => 'DE',
-                                'Corea del Sur' => 'KR',
-                                'China' => 'CN',
-                                'Canadá' => 'CA',
-                                'España' => 'ES',
-                                'Italia' => 'IT',
-                                'México' => 'MX',
-                                'India' => 'IN',
-                                'Australia' => 'AU',
-                                'Venezuela' => 'VE',
-                                'Argentina' => 'AR',
-                                'Colombia' => 'CO',
-                                'Chile' => 'CL',
-                                'Perú' => 'PE',
-                                'Brasil' => 'BR'
+                                'Estados Unidos de América' => 'US', 'Japón' => 'JP', 'Reino Unido' => 'GB',
+                                'Francia' => 'FR', 'Alemania' => 'DE', 'Corea del Sur' => 'KR',
+                                'China' => 'CN', 'Canadá' => 'CA', 'España' => 'ES', 'Italia' => 'IT',
+                                'México' => 'MX', 'India' => 'IN', 'Australia' => 'AU', 'Venezuela' => 'VE',
+                                'Argentina' => 'AR', 'Colombia' => 'CO', 'Chile' => 'CL', 'Perú' => 'PE', 'Brasil' => 'BR'
                             ]);
                             if ($country_code) {
                                 $stmt = $pdo->prepare("SELECT id FROM countries WHERE code = ?");
@@ -324,7 +273,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     $stmt = $pdo->prepare("UPDATE movies SET title=?, description=?, poster_url=?, banner_url=?, duration=?, genre=?, year=?, director=?, cast_members=?, classification=?, trailer_url=?, country_id=? WHERE id=?");
                     $stmt->execute([$title, $description, $poster_url, $banner_url, $duration, $genre, $year, $director, $cast_members, $classification, $trailer_url, $country_id, $id]);
-                    
+
                     if (!empty($fields_updated)) {
                         $msg_text = "Película actualizada exitosamente. Campos autollenados desde TMDb: " . implode(', ', $fields_updated) . ".";
                     } else {
@@ -338,7 +287,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        
         // -----------------------------------------
         // REGISTRAR USUARIO
         // -----------------------------------------
@@ -347,17 +295,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $email = sanitizeInput($_POST['user_email'] ?? '', 'email');
             $password = $_POST['user_password'] ?? '';
             $role = sanitizeInput($_POST['user_role'] ?? 'user');
-            
             $cedula_type = sanitizeInput($_POST['cedula_type'] ?? '');
             $cedula_number = sanitizeInput($_POST['cedula_number'] ?? '', 'alpha_numeric');
             $phone_prefix = sanitizeInput($_POST['phone_prefix'] ?? '');
             $phone_number = sanitizeInput($_POST['phone_number'] ?? '', 'phone');
             $birth_date = !empty($_POST['birth_date']) ? $_POST['birth_date'] : null;
-            
+
+            // ✅ Validar que el rol sea válido (prevenir inyección de roles)
+            if (!in_array($role, ['user', 'admin'])) {
+                $role = 'user';
+            }
+
+            // ✅ Validación de fortaleza de contraseña
+            $password_error = validatePasswordStrength($password);
+
             if (empty($name) || empty($email) || empty($password)) {
                 $error = "Todos los campos son obligatorios.";
-            } elseif (strlen($password) < 8) {
-                $error = "La contraseña debe tener al menos 8 caracteres.";
+            } elseif ($password_error) {
+                $error = $password_error;
             } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $error = "Email no válido.";
             } elseif (strlen($name) < 2 || strlen($name) > 100) {
@@ -377,7 +332,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $error = "El usuario con número de cédula " . $cedula_display . " ya se encuentra registrado.";
                     }
                 }
-                
+
                 if (empty($error)) {
                     $passwordHash = password_hash($password, PASSWORD_BCRYPT);
                     try {
@@ -398,7 +353,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        
         // -----------------------------------------
         // EDITAR USUARIO
         // -----------------------------------------
@@ -408,15 +362,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $email = sanitizeInput($_POST['user_email'] ?? '', 'email');
             $role = sanitizeInput($_POST['user_role'] ?? 'user');
             $new_password = $_POST['user_password'] ?? '';
-            
             $cedula_type = sanitizeInput($_POST['cedula_type'] ?? '');
             $cedula_number = sanitizeInput($_POST['cedula_number'] ?? '', 'alpha_numeric');
             $phone_prefix = sanitizeInput($_POST['phone_prefix'] ?? '');
             $phone_number = sanitizeInput($_POST['phone_number'] ?? '', 'phone');
             $birth_date = !empty($_POST['birth_date']) ? $_POST['birth_date'] : null;
-            
+
+            // ✅ Validar que el rol sea válido
+            if (!in_array($role, ['user', 'admin'])) {
+                $role = 'user';
+            }
+
             if ($user_id <= 0) {
                 $error = "ID de usuario inválido.";
+            }
+            // ✅ NUEVA VALIDACIÓN: Evitar que el admin se degrade a sí mismo
+            elseif ($user_id == $_SESSION['user_id'] && $role !== 'admin') {
+                $error = "⚠️ No puedes cambiar tu propio rol de administrador. Esto bloquearía tu acceso al panel.";
             } elseif (empty($name) || empty($email)) {
                 $error = "Nombre y email son obligatorios.";
             } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
@@ -433,7 +395,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($stmt_check->rowCount() > 0) {
                     $error = "El email ya está registrado por otro usuario.";
                 }
-                
+
                 if (empty($error) && !empty($cedula_type) && !empty($cedula_number)) {
                     $stmt_check = $pdo->prepare("SELECT id FROM users WHERE cedula_type = ? AND cedula_number = ? AND id != ?");
                     $stmt_check->execute([$cedula_type, $cedula_number, $user_id]);
@@ -442,12 +404,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $error = "El usuario con número de cédula " . $cedula_display . " ya se encuentra registrado.";
                     }
                 }
-                
+
                 if (empty($error)) {
                     try {
                         if (!empty($new_password)) {
-                            if (strlen($new_password) < 8) {
-                                $error = "La contraseña debe tener al menos 8 caracteres.";
+                            // ✅ Validar fortaleza de la nueva contraseña
+                            $password_error = validatePasswordStrength($new_password);
+                            if ($password_error) {
+                                $error = $password_error;
                             } else {
                                 $passwordHash = password_hash($new_password, PASSWORD_BCRYPT);
                                 $stmt = $pdo->prepare("UPDATE users SET name = ?, email = ?, cedula_type = ?, cedula_number = ?, phone_prefix = ?, phone_number = ?, birth_date = ?, role = ?, password = ? WHERE id = ?");
@@ -475,14 +439,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        
         // -----------------------------------------
         // BLOQUEAR/DESBLOQUEAR USUARIO
         // -----------------------------------------
         elseif (isset($_POST['toggle_block_user'])) {
             $user_id = filter_var($_POST['user_id'] ?? 0, FILTER_VALIDATE_INT);
             $current_status = filter_var($_POST['current_status'] ?? 0, FILTER_VALIDATE_INT);
-            
+
             if ($user_id <= 0) {
                 $error = "ID de usuario inválido.";
             } elseif ($user_id == $_SESSION['user_id']) {
@@ -501,13 +464,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        
         // -----------------------------------------
         // ELIMINAR USUARIO
         // -----------------------------------------
         elseif (isset($_POST['delete_user'])) {
             $user_id = filter_var($_POST['user_id'] ?? 0, FILTER_VALIDATE_INT);
-            
+
             if ($user_id <= 0) {
                 $error = "ID de usuario inválido.";
             } elseif ($user_id == $_SESSION['user_id']) {
@@ -524,7 +486,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        
         // ============================================
         // AGREGAR HORARIO - CON FORMATO DESPLEGABLE
         // ============================================
@@ -534,17 +495,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $show_date = $_POST['show_date'] ?? '';
             $show_time = $_POST['show_time'] ?? '';
             $format = sanitizeInput($_POST['format'] ?? '2D');
-            
             $price_adult = filter_var($_POST['price_adult'] ?? 0, FILTER_VALIDATE_FLOAT);
             $price_child = filter_var($_POST['price_child'] ?? 0, FILTER_VALIDATE_FLOAT);
             $price_senior = filter_var($_POST['price_senior'] ?? 0, FILTER_VALIDATE_FLOAT);
             $enable_child_price = isset($_POST['enable_child_price']) ? 1 : 0;
             $enable_senior_price = isset($_POST['enable_senior_price']) ? 1 : 0;
-            
             $language = sanitizeInput($_POST['language'] ?? 'español');
             $half_price_monday = isset($_POST['half_price_monday']) ? 1 : 0;
             $preventa = isset($_POST['preventa']) ? 1 : 0;
-            
+
             $promotions = [];
             if ($half_price_monday) $promotions[] = 'lunes_mitad';
             if ($preventa) $promotions[] = 'preventa';
@@ -564,19 +523,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare("SELECT duration FROM movies WHERE id = ? AND is_active = 1");
                 $stmt->execute([$movie_id]);
                 $movie = $stmt->fetch();
-                
+
                 if (!$movie) {
                     $error = "Película no encontrada o inactiva.";
                 } else {
                     $conflict = checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $movie['duration']);
-                    
                     if ($conflict['conflict']) {
                         $error = "❌ " . $conflict['message'];
                     } else {
                         try {
                             $stmt = $pdo->prepare("
                                 INSERT INTO showtimes (
-                                    movie_id, room_id, show_date, show_time, 
+                                    movie_id, room_id, show_date, show_time,
                                     price, price_adult, price_child, price_senior,
                                     enable_child_price, enable_senior_price,
                                     half_price_monday, promotions, language, format
@@ -599,7 +557,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        
         // ============================================
         // EDITAR HORARIO - CON FORMATO DESPLEGABLE
         // ============================================
@@ -610,17 +567,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $show_date = $_POST['show_date'] ?? '';
             $show_time = $_POST['show_time'] ?? '';
             $format = sanitizeInput($_POST['format'] ?? '2D');
-            
             $price_adult = filter_var($_POST['price_adult'] ?? 0, FILTER_VALIDATE_FLOAT);
             $price_child = filter_var($_POST['price_child'] ?? 0, FILTER_VALIDATE_FLOAT);
             $price_senior = filter_var($_POST['price_senior'] ?? 0, FILTER_VALIDATE_FLOAT);
             $enable_child_price = isset($_POST['enable_child_price']) ? 1 : 0;
             $enable_senior_price = isset($_POST['enable_senior_price']) ? 1 : 0;
-            
             $language = sanitizeInput($_POST['language'] ?? 'español');
             $half_price_monday = isset($_POST['half_price_monday']) ? 1 : 0;
             $preventa = isset($_POST['preventa']) ? 1 : 0;
-            
+
             $promotions = [];
             if ($half_price_monday) $promotions[] = 'lunes_mitad';
             if ($preventa) $promotions[] = 'preventa';
@@ -636,7 +591,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare("SELECT * FROM showtimes WHERE id = ?");
                 $stmt->execute([$old_id]);
                 $old_showtime = $stmt->fetch();
-                
+
                 if (!$old_showtime) {
                     $error = "Horario no encontrado.";
                 } else {
@@ -645,7 +600,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $old_showtime['show_date'] != $show_date ||
                         $old_showtime['show_time'] != $show_time
                     );
-                    
+
                     $has_other_changes = (
                         $old_showtime['movie_id'] != $movie_id ||
                         $old_showtime['price_adult'] != $price_adult ||
@@ -658,22 +613,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ($old_showtime['language'] ?? 'español') != $language ||
                         ($old_showtime['format'] ?? '2D') != $format
                     );
-                    
+
                     if (!$has_schedule_change && !$has_other_changes) {
                         header("Location: admin.php?tab=showtimes&msg=" . urlencode("No se detectaron cambios en el horario."));
                         exit;
                     } elseif (!$has_schedule_change && $has_other_changes) {
                         try {
                             $stmt = $pdo->prepare("
-                                UPDATE showtimes SET 
-                                    movie_id = ?, 
-                                    price_adult = ?, 
-                                    price_child = ?, 
+                                UPDATE showtimes SET
+                                    movie_id = ?,
+                                    price_adult = ?,
+                                    price_child = ?,
                                     price_senior = ?,
                                     enable_child_price = ?,
                                     enable_senior_price = ?,
-                                    half_price_monday = ?, 
-                                    promotions = ?, 
+                                    half_price_monday = ?,
+                                    promotions = ?,
                                     language = ?,
                                     format = ?
                                 WHERE id = ?
@@ -694,24 +649,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt = $pdo->prepare("SELECT duration FROM movies WHERE id = ? AND is_active = 1");
                         $stmt->execute([$movie_id]);
                         $movie_duration = $stmt->fetch();
-                        
+
                         if (!$movie_duration) {
                             $error = "Película no encontrada o inactiva.";
                         } else {
                             $conflict = checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $movie_duration['duration'], $old_id);
-                            
                             if ($conflict['conflict']) {
                                 $error = "❌ " . $conflict['message'];
                             } else {
                                 try {
                                     $pdo->beginTransaction();
-                                    
+
                                     $stmt = $pdo->prepare("UPDATE showtimes SET is_active = 0 WHERE id = ?");
                                     $stmt->execute([$old_id]);
-                                    
+
                                     $stmt = $pdo->prepare("
                                         INSERT INTO showtimes (
-                                            movie_id, room_id, show_date, show_time, 
+                                            movie_id, room_id, show_date, show_time,
                                             price, price_adult, price_child, price_senior,
                                             enable_child_price, enable_senior_price,
                                             half_price_monday, promotions, language, is_active, format
@@ -725,13 +679,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                         $format
                                     ]);
                                     $new_id = $pdo->lastInsertId();
-                                    
+
                                     $stmt = $pdo->prepare("UPDATE tickets SET showtime_id = ? WHERE showtime_id = ?");
                                     $stmt->execute([$new_id, $old_id]);
-                                    
+
                                     $stmt = $pdo->prepare("UPDATE ticket_logs SET showtime_id = ? WHERE showtime_id = ?");
                                     $stmt->execute([$new_id, $old_id]);
-                                    
+
+                                    // ✅ NUEVO: Migrar food_orders al nuevo showtime
+                                    try {
+                                        $stmt = $pdo->prepare("UPDATE food_orders SET showtime_id = ? WHERE showtime_id = ?");
+                                        $stmt->execute([$new_id, $old_id]);
+                                    } catch (PDOException $e) {
+                                        error_log("Nota: food_orders no migrados (puede no existir la relación): " . $e->getMessage());
+                                    }
+
+                                    // ✅ NUEVO: Migrar purchases completadas al nuevo showtime
+                                    try {
+                                        $stmt = $pdo->prepare("UPDATE purchases SET showtime_id = ? WHERE showtime_id = ? AND status = 'completed'");
+                                        $stmt->execute([$new_id, $old_id]);
+                                    } catch (PDOException $e) {
+                                        error_log("Nota: purchases no migradas: " . $e->getMessage());
+                                    }
+
                                     $pdo->commit();
                                     $success_msg = "Horario actualizado exitosamente. Se creó una nueva función con los cambios.";
                                     header("Location: admin.php?tab=showtimes&msg=" . urlencode($success_msg));
@@ -747,7 +717,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        
         // ============================================
         // PROCESAR FORMULARIOS - COMIDA
         // ============================================
@@ -765,7 +734,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $image_path = '';
                     if (isset($_FILES['food_image']) && $_FILES['food_image']['error'] === UPLOAD_ERR_OK) {
                         $upload_result = secureFileUpload($_FILES['food_image'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'], 2097152);
-                        
                         if (!$upload_result['success']) {
                             $error = $upload_result['error'];
                         } else {
@@ -796,7 +764,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-
         // EDITAR PRODUCTO DE COMIDA
         elseif (isset($_POST['edit_food'])) {
             $id = filter_var($_POST['food_id'] ?? 0, FILTER_VALIDATE_INT);
@@ -814,7 +781,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $image_path = null;
                     if (isset($_FILES['food_image']) && $_FILES['food_image']['error'] === UPLOAD_ERR_OK) {
                         $upload_result = secureFileUpload($_FILES['food_image'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'], 2097152);
-                        
                         if (!$upload_result['success']) {
                             $error = $upload_result['error'];
                         } else {
@@ -822,14 +788,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             if (!is_dir($upload_dir)) {
                                 mkdir($upload_dir, 0755, true);
                             }
-                            
                             $stmt = $pdo->prepare("SELECT image_url FROM food_items WHERE id = ?");
                             $stmt->execute([$id]);
                             $old_image = $stmt->fetchColumn();
                             if (!empty($old_image) && file_exists($old_image)) {
                                 @unlink($old_image);
                             }
-                            
                             $filename = 'food_' . time() . '_' . uniqid() . '.' . $upload_result['extension'];
                             $destination = $upload_dir . $filename;
                             if (move_uploaded_file($_FILES['food_image']['tmp_name'], $destination)) {
@@ -867,7 +831,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
-        
         // -----------------------------------------
         // CONFIGURACIÓN DEL SITIO
         // -----------------------------------------
@@ -879,11 +842,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'address', 'phone', 'email',
                     'instagram', 'facebook', 'twitter', 'telegram', 'whatsapp'
                 ];
-                
+
                 foreach ($config_keys as $key) {
                     if (isset($_POST[$key])) {
                         $value = sanitizeInput($_POST[$key]);
-                        
                         if ($key === 'email' && !empty($value) && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
                             $error = "Email de contacto no válido.";
                             break;
@@ -892,23 +854,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             $error = "URL de " . $key . " no válida.";
                             break;
                         }
-                        
                         $stmt = $pdo->prepare("UPDATE site_config SET value = ? WHERE key_name = ?");
                         $stmt->execute([$value, $key]);
                     }
                 }
-                
+
                 if (isset($_POST['tax_rate'])) {
                     $tax_rate = filter_var($_POST['tax_rate'], FILTER_VALIDATE_FLOAT);
-                    if ($tax_rate !== false && $tax_rate >= 0) {
+                    if ($tax_rate !== false && $tax_rate >= 0 && $tax_rate <= 100) {
                         $stmt = $pdo->prepare("UPDATE tax_config SET tax_rate = ?, updated_at = NOW() WHERE is_active = 1");
                         $stmt->execute([$tax_rate]);
                     }
                 }
-                
+
                 if (empty($error) && isset($_FILES['site_logo']) && $_FILES['site_logo']['error'] === UPLOAD_ERR_OK) {
                     $upload_result = secureFileUpload($_FILES['site_logo']);
-                    
                     if (!$upload_result['success']) {
                         $error = $upload_result['error'];
                     } else {
@@ -916,17 +876,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (!is_dir($upload_dir)) {
                             mkdir($upload_dir, 0755, true);
                         }
-                        
                         $filename = 'logo.' . $upload_result['extension'];
                         $destination = $upload_dir . $filename;
-                        
                         $stmt = $pdo->prepare("SELECT value FROM site_config WHERE key_name = 'site_logo'");
                         $stmt->execute();
                         $old_logo = $stmt->fetchColumn();
                         if (!empty($old_logo) && file_exists($old_logo) && $old_logo !== $destination) {
                             @unlink($old_logo);
                         }
-                        
                         if (move_uploaded_file($_FILES['site_logo']['tmp_name'], $destination)) {
                             $stmt = $pdo->prepare("UPDATE site_config SET value = ? WHERE key_name = 'site_logo'");
                             $stmt->execute([$destination]);
@@ -935,10 +892,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                 }
-                
+
                 if (empty($error) && isset($_FILES['footer_logo']) && $_FILES['footer_logo']['error'] === UPLOAD_ERR_OK) {
                     $upload_result = secureFileUpload($_FILES['footer_logo']);
-                    
                     if (!$upload_result['success']) {
                         $error = $upload_result['error'];
                     } else {
@@ -946,17 +902,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (!is_dir($upload_dir)) {
                             mkdir($upload_dir, 0755, true);
                         }
-                        
                         $filename = 'footer_logo.' . $upload_result['extension'];
                         $destination = $upload_dir . $filename;
-                        
                         $stmt = $pdo->prepare("SELECT value FROM site_config WHERE key_name = 'footer_logo'");
                         $stmt->execute();
                         $old_logo = $stmt->fetchColumn();
                         if (!empty($old_logo) && file_exists($old_logo) && $old_logo !== $destination) {
                             @unlink($old_logo);
                         }
-                        
                         if (move_uploaded_file($_FILES['footer_logo']['tmp_name'], $destination)) {
                             $stmt = $pdo->prepare("UPDATE site_config SET value = ? WHERE key_name = 'footer_logo'");
                             $stmt->execute([$destination]);
@@ -965,17 +918,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                 }
-                
+
                 if (empty($error) && isset($_FILES['site_favicon']) && $_FILES['site_favicon']['error'] === UPLOAD_ERR_OK) {
                     $finfo = finfo_open(FILEINFO_MIME_TYPE);
                     $mime_type = finfo_file($finfo, $_FILES['site_favicon']['tmp_name']);
                     finfo_close($finfo);
-                    
                     $allowed_mimes = ['image/png', 'image/x-icon', 'image/vnd.microsoft.icon'];
                     $allowed_extensions = ['png', 'ico'];
-                    
                     $extension = strtolower(pathinfo($_FILES['site_favicon']['name'], PATHINFO_EXTENSION));
-                    
                     if (!in_array($mime_type, $allowed_mimes) || !in_array($extension, $allowed_extensions)) {
                         $error = "Tipo de archivo no permitido para favicon. Solo PNG o ICO.";
                     } elseif ($_FILES['site_favicon']['size'] > 1048576) {
@@ -985,17 +935,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         if (!is_dir($upload_dir)) {
                             mkdir($upload_dir, 0755, true);
                         }
-                        
                         $filename = 'favicon.' . $extension;
                         $destination = $upload_dir . $filename;
-                        
                         $stmt = $pdo->prepare("SELECT value FROM site_config WHERE key_name = 'site_favicon'");
                         $stmt->execute();
                         $old_favicon = $stmt->fetchColumn();
                         if (!empty($old_favicon) && file_exists($old_favicon) && $old_favicon !== $destination) {
                             @unlink($old_favicon);
                         }
-                        
                         if (move_uploaded_file($_FILES['site_favicon']['tmp_name'], $destination)) {
                             $stmt = $pdo->prepare("UPDATE site_config SET value = ? WHERE key_name = 'site_favicon'");
                             $stmt->execute([$destination]);
@@ -1004,7 +951,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         }
                     }
                 }
-                
+
                 if (empty($error) && isset($_POST['remove_logo']) && $_POST['remove_logo'] == '1') {
                     $stmt = $pdo->prepare("SELECT value FROM site_config WHERE key_name = 'site_logo'");
                     $stmt->execute();
@@ -1015,7 +962,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt = $pdo->prepare("UPDATE site_config SET value = '' WHERE key_name = 'site_logo'");
                     $stmt->execute([]);
                 }
-                
+
                 if (empty($error) && isset($_POST['remove_footer_logo']) && $_POST['remove_footer_logo'] == '1') {
                     $stmt = $pdo->prepare("SELECT value FROM site_config WHERE key_name = 'footer_logo'");
                     $stmt->execute();
@@ -1026,7 +973,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt = $pdo->prepare("UPDATE site_config SET value = '' WHERE key_name = 'footer_logo'");
                     $stmt->execute([]);
                 }
-                
+
                 if (empty($error) && isset($_POST['remove_favicon']) && $_POST['remove_favicon'] == '1') {
                     $stmt = $pdo->prepare("SELECT value FROM site_config WHERE key_name = 'site_favicon'");
                     $stmt->execute();
@@ -1037,13 +984,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stmt = $pdo->prepare("UPDATE site_config SET value = '' WHERE key_name = 'site_favicon'");
                     $stmt->execute([]);
                 }
-                
+
                 if (empty($error)) {
                     $success_msg = "Configuración actualizada exitosamente.";
                     header("Location: admin.php?tab=config&msg=" . urlencode($success_msg));
                     exit;
                 }
-                
             } catch (PDOException $e) {
                 error_log("Error al guardar configuración: " . $e->getMessage());
                 $error = "Error al guardar configuración. Por favor, intente nuevamente.";
@@ -1055,7 +1001,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ============================================
 // MANEJAR ACCIONES GET CON CSRF
 // ============================================
-
 $csrf_token_get = $_GET['csrf_token'] ?? '';
 
 // ============================================
@@ -1067,12 +1012,11 @@ if (isset($_GET['update_movie']) && validateGetAction('update_movie', $_GET['upd
         $stmt = $pdo->prepare("SELECT * FROM movies WHERE id = ?");
         $stmt->execute([$id]);
         $movie = $stmt->fetch();
-        
+
         if (!$movie) {
             $error = "Película no encontrada.";
         } else {
             $tmdb_data = getMovieFromTMDB($movie['title'], $movie['year']);
-            
             if (!$tmdb_data) {
                 $error = "No se pudieron obtener datos de TMDb para la película: " . $movie['title'];
             } else {
@@ -1084,8 +1028,8 @@ if (isset($_GET['update_movie']) && validateGetAction('update_movie', $_GET['upd
                 $year = !empty($tmdb_data['year']) ? $tmdb_data['year'] : $movie['year'];
                 $poster_url = !empty($tmdb_data['poster_path']) ? 'https://image.tmdb.org/t/p/w500' . $tmdb_data['poster_path'] : $movie['poster_url'];
                 $banner_url = !empty($tmdb_data['backdrop_path']) ? 'https://image.tmdb.org/t/p/original' . $tmdb_data['backdrop_path'] : $movie['banner_url'];
-                
                 $country_id = $movie['country_id'];
+
                 if (empty($country_id) && !empty($tmdb_data['country'])) {
                     $country_name = $tmdb_data['country'];
                     $stmt = $pdo->prepare("SELECT id FROM countries WHERE name = ?");
@@ -1095,25 +1039,11 @@ if (isset($_GET['update_movie']) && validateGetAction('update_movie', $_GET['upd
                         $country_id = $country_result['id'];
                     } else {
                         $country_code = array_search($country_name, [
-                            'Estados Unidos de América' => 'US',
-                            'Japón' => 'JP',
-                            'Reino Unido' => 'GB',
-                            'Francia' => 'FR',
-                            'Alemania' => 'DE',
-                            'Corea del Sur' => 'KR',
-                            'China' => 'CN',
-                            'Canadá' => 'CA',
-                            'España' => 'ES',
-                            'Italia' => 'IT',
-                            'México' => 'MX',
-                            'India' => 'IN',
-                            'Australia' => 'AU',
-                            'Venezuela' => 'VE',
-                            'Argentina' => 'AR',
-                            'Colombia' => 'CO',
-                            'Chile' => 'CL',
-                            'Perú' => 'PE',
-                            'Brasil' => 'BR'
+                            'Estados Unidos de América' => 'US', 'Japón' => 'JP', 'Reino Unido' => 'GB',
+                            'Francia' => 'FR', 'Alemania' => 'DE', 'Corea del Sur' => 'KR',
+                            'China' => 'CN', 'Canadá' => 'CA', 'España' => 'ES', 'Italia' => 'IT',
+                            'México' => 'MX', 'India' => 'IN', 'Australia' => 'AU', 'Venezuela' => 'VE',
+                            'Argentina' => 'AR', 'Colombia' => 'CO', 'Chile' => 'CL', 'Perú' => 'PE', 'Brasil' => 'BR'
                         ]);
                         if ($country_code) {
                             $stmt = $pdo->prepare("SELECT id FROM countries WHERE code = ?");
@@ -1125,7 +1055,7 @@ if (isset($_GET['update_movie']) && validateGetAction('update_movie', $_GET['upd
                         }
                     }
                 }
-                
+
                 $updated_fields = [];
                 if ($description != $movie['description']) $updated_fields[] = 'Sinopsis';
                 if ($duration != $movie['duration']) $updated_fields[] = 'Duración';
@@ -1136,39 +1066,23 @@ if (isset($_GET['update_movie']) && validateGetAction('update_movie', $_GET['upd
                 if ($poster_url != $movie['poster_url']) $updated_fields[] = 'Póster';
                 if ($banner_url != $movie['banner_url']) $updated_fields[] = 'Banner';
                 if ($country_id != $movie['country_id']) $updated_fields[] = 'País';
-                
+
                 $stmt = $pdo->prepare("
-                    UPDATE movies SET 
-                        description = ?,
-                        duration = ?,
-                        genre = ?,
-                        director = ?,
-                        cast_members = ?,
-                        year = ?,
-                        poster_url = ?,
-                        banner_url = ?,
-                        country_id = ?
+                    UPDATE movies SET
+                        description = ?, duration = ?, genre = ?, director = ?,
+                        cast_members = ?, year = ?, poster_url = ?, banner_url = ?, country_id = ?
                     WHERE id = ?
                 ");
                 $stmt->execute([
-                    $description,
-                    $duration,
-                    $genre,
-                    $director,
-                    $cast_members,
-                    $year,
-                    $poster_url,
-                    $banner_url,
-                    $country_id,
-                    $id
+                    $description, $duration, $genre, $director,
+                    $cast_members, $year, $poster_url, $banner_url, $country_id, $id
                 ]);
-                
+
                 if (!empty($updated_fields)) {
                     $msg_text = "Película «" . $movie['title'] . "» fue actualizada desde TMDb. Campos actualizados: " . implode(', ', $updated_fields) . ".";
                 } else {
                     $msg_text = "Película «" . $movie['title'] . "» ya está actualizada. No se detectaron cambios.";
                 }
-                
                 header("Location: admin.php?tab=movies&msg=" . urlencode($msg_text));
                 exit;
             }
@@ -1184,19 +1098,14 @@ if (isset($_GET['delete_movie']) && validateGetAction('delete_movie', $_GET['del
     $id = intval($_GET['delete_movie']);
     try {
         $pdo->beginTransaction();
-        
         $stmt = $pdo->prepare("DELETE t FROM tickets t INNER JOIN showtimes s ON t.showtime_id = s.id WHERE s.movie_id = ?");
         $stmt->execute([$id]);
-        
         $stmt = $pdo->prepare("DELETE tl FROM ticket_logs tl INNER JOIN showtimes s ON tl.showtime_id = s.id WHERE s.movie_id = ?");
         $stmt->execute([$id]);
-        
         $stmt = $pdo->prepare("DELETE FROM showtimes WHERE movie_id = ?");
         $stmt->execute([$id]);
-        
         $stmt = $pdo->prepare("DELETE FROM movies WHERE id = ?");
         $stmt->execute([$id]);
-        
         $pdo->commit();
         header("Location: admin.php?tab=movies&msg=" . urlencode("Película eliminada correctamente."));
         exit;
@@ -1292,7 +1201,6 @@ if (isset($_GET['toggle_showtime']) && validateGetAction('toggle_showtime', $_GE
 // ============================================
 // MANEJAR ACCIONES GET PARA COMIDA
 // ============================================
-
 // Eliminar Producto de Comida
 if (isset($_GET['delete_food']) && validateGetAction('delete_food', $_GET['delete_food'])) {
     $id = intval($_GET['delete_food']);
@@ -1303,7 +1211,6 @@ if (isset($_GET['delete_food']) && validateGetAction('delete_food', $_GET['delet
         if (!empty($image) && file_exists($image)) {
             @unlink($image);
         }
-        
         $stmt = $pdo->prepare("DELETE FROM food_items WHERE id = ?");
         $stmt->execute([$id]);
         header("Location: admin.php?tab=food&msg=" . urlencode("Producto eliminado correctamente."));
@@ -1331,41 +1238,31 @@ if (isset($_GET['toggle_food']) && validateGetAction('toggle_food', $_GET['toggl
 // ============================================
 // OBTENER DATOS
 // ============================================
-
-// Buscador por nombre de película
 $search_title = isset($_GET['search_title']) ? trim($_GET['search_title']) : '';
-
 $movies_sql = "SELECT * FROM movies WHERE 1=1";
 $movies_params = [];
-
 if (!empty($search_title)) {
     $movies_sql .= " AND title LIKE ?";
     $movies_params[] = '%' . $search_title . '%';
 }
-
 $movies_sql .= " ORDER BY id DESC";
-
 $stmt = $pdo->prepare($movies_sql);
 $stmt->execute($movies_params);
 $movies = $stmt->fetchAll();
 
 $rooms = $pdo->query("SELECT * FROM rooms ORDER BY id")->fetchAll();
 $countries = $pdo->query("SELECT * FROM countries ORDER BY name ASC")->fetchAll();
-
 $showtimes = $pdo->query("
-    SELECT s.*, m.title as movie_title, m.duration, COALESCE(m.is_active, 0) as movie_active, 
+    SELECT s.*, m.title as movie_title, m.duration, COALESCE(m.is_active, 0) as movie_active,
            r.name as room_name, COALESCE(s.format, '2D') as format
     FROM showtimes s
     LEFT JOIN movies m ON s.movie_id = m.id
     JOIN rooms r ON s.room_id = r.id
     ORDER BY s.show_date DESC, s.show_time
 ")->fetchAll();
-
 $users = $pdo->query("SELECT * FROM users ORDER BY id DESC")->fetchAll();
-
 $food_items = $pdo->query("SELECT f.*, c.name as category_name FROM food_items f LEFT JOIN food_categories c ON f.category_id = c.id ORDER BY f.id DESC")->fetchAll();
 $food_categories = $pdo->query("SELECT * FROM food_categories ORDER BY name ASC")->fetchAll();
-
 $taxConfig = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1")->fetch();
 $taxRate = $taxConfig ? floatval($taxConfig['tax_rate']) : 16;
 
@@ -1388,7 +1285,6 @@ if (isset($_GET['edit_room_id']) && filter_var($_GET['edit_room_id'], FILTER_VAL
     $stmt = $pdo->prepare("SELECT * FROM rooms WHERE id = ?");
     $stmt->execute([intval($_GET['edit_room_id'])]);
     $edit_room = $stmt->fetch();
-    
     if ($edit_room && $edit_room['seat_layout']) {
         $edit_room['seat_layout'] = json_decode($edit_room['seat_layout'], true);
     }
@@ -1428,2300 +1324,1664 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($pageTitle) ?></title>
-    <?php 
-    $favicon_path = $siteConfig['site_favicon'] ?? '';
-    $favicon_exists = !empty($favicon_path) && file_exists($favicon_path);
-    ?>
-    <?php if($favicon_exists): ?>
-        <link rel="icon" type="<?= mime_content_type($favicon_path) ?>" href="<?= htmlspecialchars($favicon_path) . '?v=' . filemtime($favicon_path) ?>">
-    <?php else: ?>
-        <link rel="icon" type="image/png" href="favicon.png">
-    <?php endif; ?>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        .tab-active { background-color: #4f46e5; color: white; }
-        .tab-inactive { background-color: #1f2937; color: #9ca3af; }
-        .tab-inactive:hover { background-color: #374151; color: white; }
-        .time-display { font-family: 'Courier New', monospace; font-weight: bold; }
-        .conflict-warning { background-color: #dc262620; border-color: #dc2626; color: #fca5a5; }
-        .conflict-checking { background-color: #3b82f620; border-color: #3b82f6; color: #93c5fd; }
-        .conflict-safe { background-color: #22c55e20; border-color: #22c55e; color: #86efac; }
-        .aisle-badge {
-            background-color: #1a1a2e;
-            border: 1px solid #374151;
-            color: #4b5563;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 9px;
-        }
-        .screen-display {
-            background: linear-gradient(to bottom, #ffffff, #f0f0f0);
-            border: 1px solid #d1d5db;
-            color: #1a1a2e;
-            text-align: center;
-            padding: 12px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-weight: bold;
-            letter-spacing: 4px;
-            font-size: clamp(0.7rem, 2vw, 1rem);
-        }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .pulsing { animation: pulse 1.5s ease-in-out infinite; }
-        
-        .time-preview {
-            background: #1a1a2e;
-            border-radius: 8px;
-            padding: 12px 16px;
-            border: 1px solid #374151;
-            min-height: 60px;
-            display: flex;
-            align-items: center;
-        }
-        .time-preview .preview-text {
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: #818cf8;
-        }
-        .time-preview .preview-text.conflict {
-            color: #fca5a5;
-        }
-        .time-preview .preview-text.success {
-            color: #86efac;
-        }
-        .time-preview .preview-detail {
-            font-size: 0.75rem;
-            color: #9ca3af;
-            margin-top: 4px;
-        }
-        .btn-disabled {
-            opacity: 0.5;
-            cursor: not-allowed !important;
-        }
-        
-        .classification-select {
-            background: #1a1a2e;
-            border: 1px solid #2a2a3e;
-            color: #e5e7eb;
-        }
-        .classification-select:focus {
-            border-color: #4f46e5;
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
-        }
-        
-        .badge-a {
-            background: #22c55e20;
-            color: #86efac;
-            border: 1px solid #22c55e40;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        .badge-b {
-            background: #3b82f620;
-            color: #93c5fd;
-            border: 1px solid #3b82f640;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        .badge-c {
-            background: #ef444420;
-            color: #fca5a5;
-            border: 1px solid #ef444440;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        
-        .promotion-checkbox {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 12px;
-            background: #1a1a2e;
-            border: 1px solid #2a2a3e;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        .promotion-checkbox:hover {
-            border-color: #4f46e5;
-        }
-        .promotion-checkbox input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            accent-color: #4f46e5;
-            cursor: pointer;
-        }
-        .promotion-checkbox label {
-            color: #e5e7eb;
-            font-size: 13px;
-            cursor: pointer;
-        }
-        
-        .user-status {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        .user-status.active {
-            background: #22c55e20;
-            color: #86efac;
-            border: 1px solid #22c55e40;
-        }
-        .user-status.blocked {
-            background: #dc262620;
-            color: #fca5a5;
-            border: 1px solid #dc262640;
-        }
-        
-        .release-info {
-            background: #3b82f620;
-            border: 1px solid #3b82f640;
-            color: #93c5fd;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 13px;
-        }
-
-        .history-summary {
-            background: #1a1a2e;
-            border: 1px solid #374151;
-            border-radius: 8px;
-            padding: 12px 16px;
-        }
-        
-        .movie-status-badge {
-            display: inline-block;
-            padding: 1px 8px;
-            border-radius: 10px;
-            font-size: 9px;
-            font-weight: 600;
-            margin-left: 4px;
-        }
-        .movie-status-badge.active {
-            background: #22c55e30;
-            color: #86efac;
-            border: 1px solid #22c55e40;
-        }
-        .movie-status-badge.inactive {
-            background: #6b728030;
-            color: #9ca3af;
-            border: 1px solid #6b728040;
-        }
-        
-        .tickets-sold-badge {
-            display: inline-block;
-            padding: 2px 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 700;
-        }
-        .tickets-sold-badge.sold {
-            background: #22c55e30;
-            color: #86efac;
-            border: 1px solid #22c55e40;
-        }
-        .tickets-sold-badge.none {
-            background: #6b728030;
-            color: #9ca3af;
-            border: 1px solid #6b728040;
-        }
-        .movie-deleted {
-            color: #f59e0b;
-            font-style: italic;
-        }
-        .showtime-inactive {
-            opacity: 0.6;
-        }
-        .showtime-inactive td {
-            text-decoration: line-through;
-            text-decoration-color: #6b7280;
-        }
-        
-        .language-badge {
-            display: inline-block;
-            padding: 1px 8px;
-            border-radius: 10px;
-            font-size: 8px;
-            font-weight: 600;
-            margin-left: 4px;
-        }
-        .language-badge.espanol {
-            background: #22c55e30;
-            color: #86efac;
-            border: 1px solid #22c55e40;
-        }
-        .language-badge.subtitulos {
-            background: #3b82f630;
-            color: #93c5fd;
-            border: 1px solid #3b82f640;
-        }
-
-        .promotion-tag {
-            display: inline-block;
-            padding: 1px 8px;
-            border-radius: 10px;
-            font-size: 8px;
-            font-weight: 600;
-            margin: 1px;
-        }
-        .promotion-tag.lunes {
-            background: #22c55e30;
-            color: #86efac;
-            border: 1px solid #22c55e40;
-        }
-        .promotion-tag.preventa {
-            background: #f59e0b20;
-            color: #fbbf24;
-            border: 1px solid #f59e0b40;
-        }
-
-        .password-wrapper {
-            position: relative;
-        }
-        .password-wrapper input {
-            padding-right: 40px;
-        }
-        .password-toggle {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #6b7280;
-            cursor: pointer;
-            transition: color 0.3s ease;
-            background: none;
-            border: none;
-            font-size: 1rem;
-            padding: 4px;
-        }
-        .password-toggle:hover {
-            color: #e5e7eb;
-        }
-
-        .form-group-inline {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        .form-group-inline select {
-            flex: 0 0 80px;
-        }
-        .form-group-inline input {
-            flex: 1;
-        }
-        .phone-group-inline {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        .phone-group-inline select {
-            flex: 0 0 90px;
-        }
-        .phone-group-inline input {
-            flex: 1;
-        }
-        .user-info-display {
-            background: #1f2937;
-            padding: 8px 12px;
-            border-radius: 6px;
-            border: 1px solid #374151;
-            color: #e5e7eb;
-            font-size: 0.9rem;
-        }
-        .user-info-display .label {
-            color: #9ca3af;
-            font-size: 0.75rem;
-        }
-        .logo-preview {
-            max-height: 60px;
-            max-width: 200px;
-            object-fit: contain;
-        }
-        
-        #conflictChecker {
-            transition: all 0.3s ease;
-        }
-        .conflict-checking {
-            background-color: #3b82f620;
-            border-color: #3b82f6;
-            color: #93c5fd;
-        }
-        .conflict-safe {
-            background-color: #22c55e20;
-            border-color: #22c55e;
-            color: #86efac;
-        }
-        .conflict-warning {
-            background-color: #dc262620;
-            border-color: #dc2626;
-            color: #fca5a5;
-        }
-
-        .toggle-switch {
-            position: relative;
-            width: 44px;
-            height: 24px;
-            flex-shrink: 0;
-        }
-        .toggle-switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-        .toggle-slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: #4b5563;
-            transition: .3s;
-            border-radius: 24px;
-        }
-        .toggle-slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 3px;
-            bottom: 3px;
-            background-color: white;
-            transition: .3s;
-            border-radius: 50%;
-        }
-        .toggle-switch input:checked + .toggle-slider {
-            background-color: #4f46e5;
-        }
-        .toggle-switch input:checked + .toggle-slider:before {
-            transform: translateX(20px);
-        }
-        .toggle-switch input:disabled + .toggle-slider {
-            opacity: 0.4;
-            cursor: not-allowed;
-        }
-        .price-input-disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* Estilos para el buscador */
-        .search-box {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            align-items: flex-end;
-            background: #1f2937;
-            padding: 16px;
-            border-radius: 12px;
-            border: 1px solid #374151;
-            margin-bottom: 20px;
-        }
-        .search-box .search-group {
-            flex: 1;
-            min-width: 250px;
-        }
-        .search-box .search-group label {
-            display: block;
-            font-size: 0.7rem;
-            color: #9ca3af;
-            margin-bottom: 4px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-weight: 600;
-        }
-        .search-box .search-group input {
-            width: 100%;
-            background: #111827;
-            border: 1px solid #374151;
-            border-radius: 8px;
-            padding: 8px 12px;
-            color: #e5e7eb;
-            font-size: 0.9rem;
-            transition: border-color 0.3s ease;
-        }
-        .search-box .search-group input:focus {
-            outline: none;
-            border-color: #4f46e5;
-            box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15);
-        }
-        .search-box .search-group input::placeholder {
-            color: #6b7280;
-        }
-        .search-box .search-actions {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        .search-box .search-actions button {
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-weight: 600;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: none;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .search-box .search-actions .btn-search {
-            background: #4f46e5;
-            color: white;
-        }
-        .search-box .search-actions .btn-search:hover {
-            background: #6366f1;
-            transform: translateY(-1px);
-        }
-        .search-box .search-actions .btn-clear {
-            background: #374151;
-            color: #9ca3af;
-        }
-        .search-box .search-actions .btn-clear:hover {
-            background: #4b5563;
-            color: #e5e7eb;
-        }
-        
-        /* Badge de formato en la tabla de horarios */
-        .format-badge {
-            display: inline-block;
-            padding: 1px 8px;
-            border-radius: 4px;
-            font-size: 9px;
-            font-weight: 700;
-            background: #1e293b;
-            color: #94a3b8;
-            border: 1px solid #334155;
-            text-transform: uppercase;
-        }
-        .format-badge.format-2d { background: #1e293b; color: #94a3b8; border-color: #334155; }
-        .format-badge.format-3d { background: #1e1b4b; color: #818cf8; border-color: #4f46e5; }
-        .format-badge.format-imax { background: #1a1a2e; color: #fbbf24; border-color: #f59e0b; }
-        .format-badge.format-imax-3d { background: #1a1a2e; color: #f59e0b; border-color: #d97706; }
-        .format-badge.format-4dx { background: #1a1a2e; color: #34d399; border-color: #10b981; }
-        .format-badge.format-screenx { background: #1a1a2e; color: #60a5fa; border-color: #3b82f6; }
-        .format-badge.format-d-box { background: #1a1a2e; color: #f472b6; border-color: #ec4899; }
-        
-        /* Modal de actualización */
-        .modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(8px);
-            z-index: 9999;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        .modal-overlay.active {
-            display: flex;
-        }
-        .modal-box {
-            background: #1a1a2e;
-            border: 2px solid #22c55e;
-            border-radius: 16px;
-            padding: 40px;
-            max-width: 440px;
-            width: 100%;
-            text-align: center;
-            animation: modalFadeIn 0.4s ease;
-            box-shadow: 0 20px 60px rgba(34, 197, 94, 0.15);
-        }
-        .modal-box .modal-icon {
-            font-size: 4rem;
-            color: #22c55e;
-            margin-bottom: 16px;
-            display: block;
-        }
-        .modal-box .modal-title {
-            color: #e5e7eb;
-            font-size: 1.4rem;
-            font-weight: 700;
-            margin-bottom: 10px;
-        }
-        .modal-box .modal-message {
-            color: #9ca3af;
-            font-size: 0.95rem;
-            line-height: 1.6;
-            margin-bottom: 24px;
-        }
-        .modal-box .modal-btn {
-            background: #22c55e;
-            color: white;
-            padding: 10px 32px;
-            border-radius: 8px;
-            font-weight: 700;
-            border: none;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1rem;
-        }
-        .modal-box .modal-btn:hover {
-            background: #16a34a;
-            transform: scale(1.05);
-        }
-        @keyframes modalFadeIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9) translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1) translateY(0);
-            }
-        }
-        
-        @media (max-width: 640px) {
-            .search-box {
-                flex-direction: column;
-                gap: 10px;
-                padding: 12px;
-            }
-            .search-box .search-group {
-                min-width: 100%;
-                width: 100%;
-            }
-            .search-box .search-actions {
-                width: 100%;
-            }
-            .search-box .search-actions button {
-                flex: 1;
-                justify-content: center;
-            }
-            .modal-box {
-                padding: 28px 20px;
-                margin: 0 12px;
-            }
-            .modal-box .modal-icon {
-                font-size: 3rem;
-            }
-            .modal-box .modal-title {
-                font-size: 1.2rem;
-            }
-            .modal-box .modal-message {
-                font-size: 0.85rem;
-            }
-        }
-        
-        @media (max-width: 480px) {
-            .search-box .search-actions button {
-                font-size: 0.75rem;
-                padding: 6px 12px;
-            }
-            .modal-box {
-                padding: 20px 16px;
-            }
-            .modal-box .modal-icon {
-                font-size: 2.5rem;
-                margin-bottom: 10px;
-            }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title><?= htmlspecialchars($pageTitle) ?></title>
+<?php
+$favicon_path = $siteConfig['site_favicon'] ?? '';
+$favicon_exists = !empty($favicon_path) && file_exists($favicon_path);
+?>
+<?php if($favicon_exists): ?>
+<link rel="icon" type="<?= mime_content_type($favicon_path) ?>" href="<?= htmlspecialchars($favicon_path) . '?v=' . filemtime($favicon_path) ?>">
+<?php else: ?>
+<link rel="icon" type="image/png" href="favicon.png">
+<?php endif; ?>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+.tab-active { background-color: #4f46e5; color: white; }
+.tab-inactive { background-color: #1f2937; color: #9ca3af; }
+.tab-inactive:hover { background-color: #374151; color: white; }
+.time-display { font-family: 'Courier New', monospace; font-weight: bold; }
+.conflict-warning { background-color: #dc262620; border-color: #dc2626; color: #fca5a5; }
+.conflict-checking { background-color: #3b82f620; border-color: #3b82f6; color: #93c5fd; }
+.conflict-safe { background-color: #22c55e20; border-color: #22c55e; color: #86efac; }
+.aisle-badge { background-color: #1a1a2e; border: 1px solid #374151; color: #4b5563; padding: 2px 6px; border-radius: 4px; font-size: 9px; }
+.screen-display { background: linear-gradient(to bottom, #ffffff, #f0f0f0); border: 1px solid #d1d5db; color: #1a1a2e; text-align: center; padding: 12px; border-radius: 8px; margin-bottom: 20px; font-weight: bold; letter-spacing: 4px; font-size: clamp(0.7rem, 2vw, 1rem); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.pulsing { animation: pulse 1.5s ease-in-out infinite; }
+.btn-disabled { opacity: 0.5; cursor: not-allowed !important; }
+.classification-select { background: #1a1a2e; border: 1px solid #2a2a3e; color: #e5e7eb; }
+.classification-select:focus { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
+.badge-a { background: #22c55e20; color: #86efac; border: 1px solid #22c55e40; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-b { background: #3b82f620; color: #93c5fd; border: 1px solid #3b82f640; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-c { background: #ef444420; color: #fca5a5; border: 1px solid #ef444440; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.promotion-checkbox { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #1a1a2e; border: 1px solid #2a2a3e; border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
+.promotion-checkbox:hover { border-color: #4f46e5; }
+.promotion-checkbox input[type="checkbox"] { width: 18px; height: 18px; accent-color: #4f46e5; cursor: pointer; }
+.promotion-checkbox label { color: #e5e7eb; font-size: 13px; cursor: pointer; }
+.user-status { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.user-status.active { background: #22c55e20; color: #86efac; border: 1px solid #22c55e40; }
+.user-status.blocked { background: #dc262620; color: #fca5a5; border: 1px solid #dc262640; }
+.history-summary { background: #1a1a2e; border: 1px solid #374151; border-radius: 8px; padding: 12px 16px; }
+.movie-status-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 9px; font-weight: 600; margin-left: 4px; }
+.movie-status-badge.active { background: #22c55e30; color: #86efac; border: 1px solid #22c55e40; }
+.movie-status-badge.inactive { background: #6b728030; color: #9ca3af; border: 1px solid #6b728040; }
+.tickets-sold-badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 700; }
+.tickets-sold-badge.sold { background: #22c55e30; color: #86efac; border: 1px solid #22c55e40; }
+.tickets-sold-badge.none { background: #6b728030; color: #9ca3af; border: 1px solid #6b728040; }
+.movie-deleted { color: #f59e0b; font-style: italic; }
+.showtime-inactive { opacity: 0.6; }
+.showtime-inactive td { text-decoration: line-through; text-decoration-color: #6b7280; }
+.language-badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 8px; font-weight: 600; margin-left: 4px; }
+.language-badge.espanol { background: #22c55e30; color: #86efac; border: 1px solid #22c55e40; }
+.language-badge.subtitulos { background: #3b82f630; color: #93c5fd; border: 1px solid #3b82f640; }
+.promotion-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 8px; font-weight: 600; margin: 1px; }
+.promotion-tag.lunes { background: #22c55e30; color: #86efac; border: 1px solid #22c55e40; }
+.promotion-tag.preventa { background: #f59e0b20; color: #fbbf24; border: 1px solid #f59e0b40; }
+.password-wrapper { position: relative; }
+.password-wrapper input { padding-right: 40px; }
+.password-toggle { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: #6b7280; cursor: pointer; transition: color 0.3s ease; background: none; border: none; font-size: 1rem; padding: 4px; }
+.password-toggle:hover { color: #e5e7eb; }
+.form-group-inline { display: flex; gap: 8px; align-items: center; }
+.form-group-inline select { flex: 0 0 80px; }
+.form-group-inline input { flex: 1; }
+.phone-group-inline { display: flex; gap: 8px; align-items: center; }
+.phone-group-inline select { flex: 0 0 90px; }
+.phone-group-inline input { flex: 1; }
+.logo-preview { max-height: 60px; max-width: 200px; object-fit: contain; }
+#conflictChecker { transition: all 0.3s ease; }
+.toggle-switch { position: relative; width: 44px; height: 24px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #4b5563; transition: .3s; border-radius: 24px; }
+.toggle-slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .3s; border-radius: 50%; }
+.toggle-switch input:checked + .toggle-slider { background-color: #4f46e5; }
+.toggle-switch input:checked + .toggle-slider:before { transform: translateX(20px); }
+.toggle-switch input:disabled + .toggle-slider { opacity: 0.4; cursor: not-allowed; }
+.price-input-disabled { opacity: 0.5; cursor: not-allowed; }
+.search-box { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; background: #1f2937; padding: 16px; border-radius: 12px; border: 1px solid #374151; margin-bottom: 20px; }
+.search-box .search-group { flex: 1; min-width: 250px; }
+.search-box .search-group label { display: block; font-size: 0.7rem; color: #9ca3af; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+.search-box .search-group input { width: 100%; background: #111827; border: 1px solid #374151; border-radius: 8px; padding: 8px 12px; color: #e5e7eb; font-size: 0.9rem; transition: border-color 0.3s ease; }
+.search-box .search-group input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.15); }
+.search-box .search-group input::placeholder { color: #6b7280; }
+.search-box .search-actions { display: flex; gap: 8px; align-items: center; }
+.search-box .search-actions button { padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 0.85rem; cursor: pointer; transition: all 0.3s ease; border: none; display: flex; align-items: center; gap: 6px; }
+.search-box .search-actions .btn-search { background: #4f46e5; color: white; }
+.search-box .search-actions .btn-search:hover { background: #6366f1; transform: translateY(-1px); }
+.search-box .search-actions .btn-clear { background: #374151; color: #9ca3af; }
+.search-box .search-actions .btn-clear:hover { background: #4b5563; color: #e5e7eb; }
+.format-badge { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: 9px; font-weight: 700; background: #1e293b; color: #94a3b8; border: 1px solid #334155; text-transform: uppercase; }
+.format-badge.format-2d { background: #1e293b; color: #94a3b8; border-color: #334155; }
+.format-badge.format-3d { background: #1e1b4b; color: #818cf8; border-color: #4f46e5; }
+.format-badge.format-imax { background: #1a1a2e; color: #fbbf24; border-color: #f59e0b; }
+.format-badge.format-imax-3d { background: #1a1a2e; color: #f59e0b; border-color: #d97706; }
+.format-badge.format-4dx { background: #1a1a2e; color: #34d399; border-color: #10b981; }
+.format-badge.format-screenx { background: #1a1a2e; color: #60a5fa; border-color: #3b82f6; }
+.format-badge.format-d-box { background: #1a1a2e; color: #f472b6; border-color: #ec4899; }
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); z-index: 9999; align-items: center; justify-content: center; padding: 20px; }
+.modal-overlay.active { display: flex; }
+.modal-box { background: #1a1a2e; border: 2px solid #22c55e; border-radius: 16px; padding: 40px; max-width: 440px; width: 100%; text-align: center; animation: modalFadeIn 0.4s ease; box-shadow: 0 20px 60px rgba(34, 197, 94, 0.15); }
+.modal-box .modal-icon { font-size: 4rem; color: #22c55e; margin-bottom: 16px; display: block; }
+.modal-box .modal-title { color: #e5e7eb; font-size: 1.4rem; font-weight: 700; margin-bottom: 10px; }
+.modal-box .modal-message { color: #9ca3af; font-size: 0.95rem; line-height: 1.6; margin-bottom: 24px; }
+.modal-box .modal-btn { background: #22c55e; color: white; padding: 10px 32px; border-radius: 8px; font-weight: 700; border: none; cursor: pointer; transition: all 0.3s ease; font-size: 1rem; }
+.modal-box .modal-btn:hover { background: #16a34a; transform: scale(1.05); }
+@keyframes modalFadeIn { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@media (max-width: 640px) {
+    .search-box { flex-direction: column; gap: 10px; padding: 12px; }
+    .search-box .search-group { min-width: 100%; width: 100%; }
+    .search-box .search-actions { width: 100%; }
+    .search-box .search-actions button { flex: 1; justify-content: center; }
+    .modal-box { padding: 28px 20px; margin: 0 12px; }
+    .modal-box .modal-icon { font-size: 3rem; }
+    .modal-box .modal-title { font-size: 1.2rem; }
+    .modal-box .modal-message { font-size: 0.85rem; }
+}
+@media (max-width: 480px) {
+    .search-box .search-actions button { font-size: 0.75rem; padding: 6px 12px; }
+    .modal-box { padding: 20px 16px; }
+    .modal-box .modal-icon { font-size: 2.5rem; margin-bottom: 10px; }
+}
+</style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen p-4 md:p-8">
-    <div class="max-w-7xl mx-auto">
-        
-        <!-- Header -->
-        <div class="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4 bg-gray-800 p-4 rounded-lg shadow-md border border-gray-700">
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row justify-between items-center mb-8 gap-4 bg-gray-800 p-4 rounded-lg shadow-md border border-gray-700">
+        <div>
+            <h1 class="text-2xl font-bold text-indigo-400 flex items-center gap-2">🎬 Panel de Control</h1>
+            <p class="text-xs text-gray-400 mt-1">Administrador: <?= htmlspecialchars($_SESSION['user_name']) ?></p>
+        </div>
+        <div class="flex gap-3">
+            <a href="index.php" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">Ver Cartelera</a>
+            <a href="logout.php" class="bg-red-600/20 hover:bg-red-600/40 text-red-400 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">Cerrar Sesión</a>
+        </div>
+    </div>
+
+    <!-- Mensajes -->
+    <?php if($msg): ?>
+        <div class="bg-green-600/20 text-green-400 p-3 rounded-lg mb-6 font-medium border border-green-500/30"><?= htmlspecialchars($msg) ?></div>
+    <?php endif; ?>
+    <?php if($error): ?>
+        <div class="bg-red-600/20 text-red-400 p-3 rounded-lg mb-6 font-medium border border-red-500/30"><?= htmlspecialchars($error) ?></div>
+    <?php endif; ?>
+
+    <!-- Tabs de Navegación -->
+    <div class="flex flex-wrap gap-2 mb-6">
+        <a href="?tab=movies" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'movies' ? 'tab-active' : 'tab-inactive' ?>">🎬 Películas</a>
+        <a href="?tab=showtimes" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'showtimes' ? 'tab-active' : 'tab-inactive' ?>">🕐 Horarios</a>
+        <a href="?tab=rooms" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'rooms' ? 'tab-active' : 'tab-inactive' ?>">🏠 Salas</a>
+        <a href="?tab=users" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'users' ? 'tab-active' : 'tab-inactive' ?>">👥 Usuarios</a>
+        <a href="?tab=food" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'food' ? 'tab-active' : 'tab-inactive' ?>">🍿 Comida</a>
+        <a href="?tab=history" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'history' ? 'tab-active' : 'tab-inactive' ?>">📊 Historial</a>
+        <a href="?tab=config" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'config' ? 'tab-active' : 'tab-inactive' ?>">⚙️ Configuración</a>
+    </div>
+
+    <!-- ============================================ -->
+    <!-- TAB: PELÍCULAS                               -->
+    <!-- ============================================ -->
+    <?php if($activeTab === 'movies'): ?>
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
+        <h2 class="text-lg font-bold mb-4 text-indigo-300">
+            <?= $edit_movie ? '✏️ Editar Película' : '➕ Agregar Película' ?>
+        </h2>
+        <div class="mb-4 p-3 rounded-lg bg-blue-600/10 border border-blue-500/30 text-blue-300 text-sm">
+            <p>ℹ️ Al colocar el <strong>título</strong>, el sistema intentará autocompletar la información desde TMDb. Sin embargo, todos los campos son editables manualmente.</p>
+            <p class="mt-1 text-yellow-300">🔒 Las películas nuevas se registran como <strong>OCULTAS</strong> por defecto. Debes activarlas manualmente.</p>
+            <p class="mt-1 text-red-300">⚠️ Los campos <strong>Director</strong>, <strong>Clasificación</strong> y <strong>URL del Tráiler</strong> son obligatorios.</p>
+        </div>
+        <form action="" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+            <?php if($edit_movie): ?>
+                <input type="hidden" name="movie_id" value="<?= htmlspecialchars($edit_movie['id']) ?>">
+                <input type="hidden" name="edit_movie" value="1">
+            <?php else: ?>
+                <input type="hidden" name="add_movie" value="1">
+            <?php endif; ?>
+            <div class="md:col-span-2">
+                <label class="block text-sm text-gray-400 mb-1">Título *</label>
+                <input type="text" name="title" required maxlength="255" value="<?= $edit_movie ? htmlspecialchars($edit_movie['title']) : '' ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
             <div>
-                <h1 class="text-2xl font-bold text-indigo-400 flex items-center gap-2">🎬 Panel de Control</h1>
-                <p class="text-xs text-gray-400 mt-1">Administrador: <?= htmlspecialchars($_SESSION['user_name']) ?></p>
+                <label class="block text-sm text-gray-400 mb-1">URL del Póster</label>
+                <input type="url" name="poster_url" value="<?= $edit_movie ? htmlspecialchars($edit_movie['poster_url'] ?? '') : '' ?>"
+                       placeholder="https://..."
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
-            <div class="flex gap-3">
-                <a href="index.php" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">Ver Cartelera</a>
-                <a href="logout.php" class="bg-red-600/20 hover:bg-red-600/40 text-red-400 px-4 py-2 rounded-lg text-sm font-semibold transition-colors">Cerrar Sesión</a>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">URL Fondo / Banner</label>
+                <input type="url" name="banner_url" value="<?= $edit_movie ? htmlspecialchars($edit_movie['banner_url'] ?? '') : '' ?>"
+                       placeholder="https://..."
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Duración (minutos)</label>
+                <input type="number" name="duration" min="0" max="999" value="<?= $edit_movie ? htmlspecialchars($edit_movie['duration']) : '' ?>"
+                       placeholder="Ej: 120"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Género</label>
+                <input type="text" name="genre" value="<?= $edit_movie ? htmlspecialchars($edit_movie['genre'] ?? '') : '' ?>" placeholder="Ej: Acción, Ciencia Ficción"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Año de Estreno</label>
+                <input type="number" name="year" min="1900" max="<?= date('Y') + 2 ?>"
+                       value="<?= $edit_movie ? htmlspecialchars($edit_movie['year']) : '' ?>"
+                       placeholder="Ej: 2024"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Clasificación *</label>
+                <select name="classification" required class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 classification-select">
+                    <option value="">Seleccionar</option>
+                    <option value="A (Todo público)" <?= ($edit_movie && $edit_movie['classification'] == 'A (Todo público)') ? 'selected' : '' ?>>A (Todo público)</option>
+                    <option value="B (Mayores de 12)" <?= ($edit_movie && $edit_movie['classification'] == 'B (Mayores de 12)') ? 'selected' : '' ?>>B (Mayores de 12)</option>
+                    <option value="C (Mayores de 18)" <?= ($edit_movie && $edit_movie['classification'] == 'C (Mayores de 18)') ? 'selected' : '' ?>>C (Mayores de 18)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Director *</label>
+                <input type="text" name="director" required value="<?= $edit_movie ? htmlspecialchars($edit_movie['director'] ?? '') : '' ?>" placeholder="Director de la película"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm text-gray-400 mb-1">Reparto Principal</label>
+                <input type="text" name="cast_members" value="<?= $edit_movie ? htmlspecialchars($edit_movie['cast_members'] ?? '') : '' ?>" placeholder="Ej: Actor 1, Actor 2, Actor 3"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">País de Origen</label>
+                <select name="country_id" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Seleccionar País</option>
+                    <?php foreach($countries as $country): ?>
+                        <option value="<?= htmlspecialchars($country['id']) ?>" <?= ($edit_movie && isset($edit_movie['country_id']) && $edit_movie['country_id'] == $country['id']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($country['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">URL del Tráiler (YouTube) *</label>
+                <input type="url" name="trailer_url" required value="<?= $edit_movie ? htmlspecialchars($edit_movie['trailer_url']) : '' ?>"
+                       placeholder="https://www.youtube.com/watch?v=XXXXXX"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm text-gray-400 mb-1">Sinopsis / Descripción</label>
+                <textarea name="description" rows="4" maxlength="5000" placeholder="Sinopsis detallada..."
+                          class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"><?= $edit_movie ? htmlspecialchars($edit_movie['description'] ?? '') : '' ?></textarea>
+            </div>
+            <button type="submit" class="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors mt-2 shadow-md">
+                <?= $edit_movie ? 'Actualizar Película' : 'Guardar Película (Oculta)' ?>
+            </button>
+            <?php if($edit_movie): ?>
+                <a href="?tab=movies" class="md:col-span-2 text-center text-gray-400 hover:text-white text-sm">Cancelar edición</a>
+            <?php endif; ?>
+        </form>
+    </div>
+
+    <!-- Lista de Películas -->
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+        <h2 class="text-lg font-bold mb-4 text-indigo-300">📋 Todas las Películas</h2>
+        <div class="search-box">
+            <div class="search-group">
+                <label><i class="fas fa-search mr-1"></i> Buscar por Título</label>
+                <input type="text" id="searchTitle" placeholder="Ej: Spider-Man, Avatar..." value="<?= htmlspecialchars($search_title) ?>">
+            </div>
+            <div class="search-actions">
+                <button class="btn-search" onclick="applyFilters()"><i class="fas fa-search"></i> Buscar</button>
+                <button class="btn-clear" onclick="clearFilters()"><i class="fas fa-times"></i> Limpiar</button>
             </div>
         </div>
-
-        <!-- Mensajes -->
-        <?php if($msg): ?>
-            <div class="bg-green-600/20 text-green-400 p-3 rounded-lg mb-6 font-medium border border-green-500/30"><?= htmlspecialchars($msg) ?></div>
-        <?php endif; ?>
-        <?php if($error): ?>
-            <div class="bg-red-600/20 text-red-400 p-3 rounded-lg mb-6 font-medium border border-red-500/30"><?= htmlspecialchars($error) ?></div>
-        <?php endif; ?>
-
-        <!-- Tabs de Navegación -->
-        <div class="flex flex-wrap gap-2 mb-6">
-            <a href="?tab=movies" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'movies' ? 'tab-active' : 'tab-inactive' ?>">
-                🎬 Películas
-            </a>
-            <a href="?tab=showtimes" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'showtimes' ? 'tab-active' : 'tab-inactive' ?>">
-                🕐 Horarios
-            </a>
-            <a href="?tab=rooms" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'rooms' ? 'tab-active' : 'tab-inactive' ?>">
-                🏠 Salas
-            </a>
-            <a href="?tab=users" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'users' ? 'tab-active' : 'tab-inactive' ?>">
-                👥 Usuarios
-            </a>
-            <a href="?tab=food" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'food' ? 'tab-active' : 'tab-inactive' ?>">
-                🍿 Comida
-            </a>
-            <a href="?tab=history" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'history' ? 'tab-active' : 'tab-inactive' ?>">
-                📊 Historial
-            </a>
-            <a href="?tab=config" class="px-4 py-2 rounded-lg transition-colors <?= $activeTab === 'config' ? 'tab-active' : 'tab-inactive' ?>">
-                ⚙️ Configuración
-            </a>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-gray-700 text-gray-400 text-sm">
+                        <th class="pb-3 font-semibold">Póster</th>
+                        <th class="pb-3 font-semibold">Título</th>
+                        <th class="pb-3 font-semibold">Duración</th>
+                        <th class="pb-3 font-semibold">Género</th>
+                        <th class="pb-3 font-semibold">Año</th>
+                        <th class="pb-3 font-semibold">Clasificación</th>
+                        <th class="pb-3 font-semibold text-center">Estado</th>
+                        <th class="pb-3 font-semibold text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700/50 text-sm" id="moviesTableBody">
+                    <?php foreach($movies as $m): ?>
+                    <tr>
+                        <td class="py-3">
+                            <img src="<?= htmlspecialchars($m['poster_url']) ?>" alt="<?= htmlspecialchars($m['title']) ?>"
+                                 class="w-10 h-14 object-cover rounded bg-gray-700 shadow"
+                                 onerror="this.style.display='none'">
+                        </td>
+                        <td class="py-3 font-medium text-gray-200"><?= htmlspecialchars($m['title']) ?></td>
+                        <td class="py-3 text-gray-400"><?= $m['duration'] ? htmlspecialchars($m['duration']) . ' min' : '-' ?></td>
+                        <td class="py-3 text-gray-400"><?= htmlspecialchars($m['genre'] ?? '-') ?></td>
+                        <td class="py-3 text-gray-400"><?= htmlspecialchars($m['year'] ?? '-') ?></td>
+                        <td class="py-3">
+                            <?php if($m['classification']): ?>
+                                <span class="
+                                    <?php if(strpos($m['classification'], 'A') !== false): ?>badge-a
+                                    <?php elseif(strpos($m['classification'], 'B') !== false): ?>badge-b
+                                    <?php elseif(strpos($m['classification'], 'C') !== false): ?>badge-c
+                                    <?php endif; ?>">
+                                    <?= htmlspecialchars($m['classification']) ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="text-gray-500 text-xs">No definida</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="py-3 text-center">
+                            <?php if($m['is_active']): ?>
+                                <span class="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-bold border border-green-500/30">Activa</span>
+                            <?php else: ?>
+                                <span class="bg-gray-500/20 text-gray-400 text-xs px-2 py-0.5 rounded-full font-bold border border-gray-500/30">Oculta</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="py-3 text-center">
+                            <div class="flex justify-center gap-2 flex-wrap">
+                                <a href="?tab=movies&edit_movie_id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 transition-colors">Editar</a>
+                                <a href="?update_movie=<?= htmlspecialchars($m['id']) ?>&tab=movies&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 transition-colors"
+                                   onclick="return confirm('¿Actualizar los datos de la película desde TMDb?')">
+                                    <i class="fas fa-sync-alt mr-1"></i> Actualizar
+                                </a>
+                                <a href="?toggle_movie=<?= htmlspecialchars($m['id']) ?>&tab=movies&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors"
+                                   onclick="return confirm('¿Cambiar estado de esta película?')">
+                                    <?= $m['is_active'] ? 'Ocultar' : 'Mostrar' ?>
+                                </a>
+                                <a href="?delete_movie=<?= htmlspecialchars($m['id']) ?>&tab=movies&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
+                                   onclick="return confirm('¿Eliminar esta película permanentemente? Se eliminarán también todos los horarios y boletos asociados.')">
+                                    Eliminar
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php if(empty($movies)): ?>
+                <div class="text-center py-8 text-gray-400">
+                    <p class="text-4xl mb-2">🎬</p>
+                    <p>No se encontraron películas<?= !empty($search_title) ? ' con el filtro aplicado' : '' ?>.</p>
+                </div>
+            <?php endif; ?>
         </div>
+    </div>
+    <?php endif; ?>
 
-        <!-- ============================================ -->
-        <!-- TAB: PELÍCULAS - SIN FORMATO                 -->
-        <!-- ============================================ -->
-        <?php if($activeTab === 'movies'): ?>
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
-            <h2 class="text-lg font-bold mb-4 text-indigo-300">
-                <?= $edit_movie ? '✏️ Editar Película' : '➕ Agregar Película' ?>
-            </h2>
-            <div class="mb-4 p-3 rounded-lg bg-blue-600/10 border border-blue-500/30 text-blue-300 text-sm">
-                <p>ℹ️ Al colocar el <strong>título</strong>, el sistema intentará autocompletar la información desde TMDb. Sin embargo, todos los campos son editables manualmente.</p>
-                <p class="mt-1 text-yellow-300">🔒 Las películas nuevas se registran como <strong>OCULTAS</strong> por defecto. Debes activarlas manualmente.</p>
-                <p class="mt-1 text-indigo-300">✏️ Al editar, los campos vacíos se autollenarán automáticamente desde TMDb.</p>
-                <p class="mt-1 text-red-300">⚠️ Los campos <strong>Director</strong>, <strong>Clasificación</strong> y <strong>URL del Tráiler</strong> son obligatorios.</p>
-            </div>
-            <form action="" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                <?php if($edit_movie): ?>
-                    <input type="hidden" name="movie_id" value="<?= htmlspecialchars($edit_movie['id']) ?>">
-                    <input type="hidden" name="edit_movie" value="1">
-                <?php else: ?>
-                    <input type="hidden" name="add_movie" value="1">
-                <?php endif; ?>
-                
-                <div class="md:col-span-2">
-                    <label class="block text-sm text-gray-400 mb-1">Título *</label>
-                    <input type="text" name="title" required maxlength="255" value="<?= $edit_movie ? htmlspecialchars($edit_movie['title']) : '' ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">URL del Póster</label>
-                    <input type="url" name="poster_url" value="<?= $edit_movie ? htmlspecialchars($edit_movie['poster_url'] ?? '') : '' ?>" 
-                           placeholder="https://..."
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <p class="text-xs text-gray-500 mt-1">Deja vacío para autocompletar vía TMDb</p>
-                </div>
-
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">URL Fondo / Banner</label>
-                    <input type="url" name="banner_url" value="<?= $edit_movie ? htmlspecialchars($edit_movie['banner_url'] ?? '') : '' ?>" 
-                           placeholder="https://..."
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <p class="text-xs text-gray-500 mt-1">Imagen promocional o fondo adaptado</p>
-                </div>
-
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Duración (minutos)</label>
-                    <input type="number" name="duration" min="0" max="999" value="<?= $edit_movie ? htmlspecialchars($edit_movie['duration']) : '' ?>" 
-                           placeholder="Ej: 120"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Género</label>
-                    <input type="text" name="genre" value="<?= $edit_movie ? htmlspecialchars($edit_movie['genre'] ?? '') : '' ?>" placeholder="Ej: Acción, Ciencia Ficción"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Año de Estreno</label>
-                    <input type="number" name="year" min="1900" max="<?= date('Y') + 2 ?>" 
-                           value="<?= $edit_movie ? htmlspecialchars($edit_movie['year']) : '' ?>" 
-                           placeholder="Ej: 2024"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Clasificación *</label>
-                    <select name="classification" required class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 classification-select">
-                        <option value="">Seleccionar</option>
-                        <option value="A (Todo público)" <?= ($edit_movie && $edit_movie['classification'] == 'A (Todo público)') ? 'selected' : '' ?>>A (Todo público)</option>
-                        <option value="B (Mayores de 12)" <?= ($edit_movie && $edit_movie['classification'] == 'B (Mayores de 12)') ? 'selected' : '' ?>>B (Mayores de 12)</option>
-                        <option value="C (Mayores de 18)" <?= ($edit_movie && $edit_movie['classification'] == 'C (Mayores de 18)') ? 'selected' : '' ?>>C (Mayores de 18)</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Director *</label>
-                    <input type="text" name="director" required value="<?= $edit_movie ? htmlspecialchars($edit_movie['director'] ?? '') : '' ?>" placeholder="Director de la película"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <p class="text-xs text-gray-500 mt-1">Deja vacío para autocompletar vía TMDb (múltiples directores se unen con " y ")</p>
-                </div>
-
-                <div class="md:col-span-2">
-                    <label class="block text-sm text-gray-400 mb-1">Reparto Principal</label>
-                    <input type="text" name="cast_members" value="<?= $edit_movie ? htmlspecialchars($edit_movie['cast_members'] ?? '') : '' ?>" placeholder="Ej: Actor 1, Actor 2, Actor 3"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    <p class="text-xs text-gray-500 mt-1">Deja vacío para autocompletar vía TMDb (Top 6 actores principales)</p>
-                </div>
-
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">País de Origen</label>
-                    <select name="country_id" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="">Seleccionar País</option>
-                        <?php foreach($countries as $country): ?>
-                            <option value="<?= htmlspecialchars($country['id']) ?>" <?= ($edit_movie && isset($edit_movie['country_id']) && $edit_movie['country_id'] == $country['id']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($country['name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">URL del Tráiler (YouTube) *</label>
-                    <input type="url" name="trailer_url" required value="<?= $edit_movie ? htmlspecialchars($edit_movie['trailer_url']) : '' ?>" 
-                           placeholder="https://www.youtube.com/watch?v=XXXXXX"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-
-                <div class="md:col-span-2">
-                    <label class="block text-sm text-gray-400 mb-1">Sinopsis / Descripción</label>
-                    <textarea name="description" rows="4" placeholder="Sinopsis detallada..." 
-                              class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"><?= $edit_movie ? htmlspecialchars($edit_movie['description'] ?? '') : '' ?></textarea>
-                </div>
-                
-                <button type="submit" class="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors mt-2 shadow-md">
-                    <?= $edit_movie ? 'Actualizar Película' : 'Guardar Película (Oculta)' ?>
-                </button>
-                <?php if($edit_movie): ?>
-                    <a href="?tab=movies" class="md:col-span-2 text-center text-gray-400 hover:text-white text-sm">Cancelar edición</a>
-                <?php endif; ?>
-            </form>
+    <!-- ============================================ -->
+    <!-- TAB: HORARIOS                                -->
+    <!-- ============================================ -->
+    <?php if($activeTab === 'showtimes'): ?>
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
+        <h2 class="text-lg font-bold mb-4 text-indigo-300">
+            <?= $edit_showtime ? '✏️ Editar Horario' : '➕ Agregar Horario' ?>
+        </h2>
+        <div class="mb-4 p-3 rounded-lg bg-blue-600/10 border border-blue-500/30 text-blue-300 text-sm">
+            <p class="font-semibold">🧹 Tiempo de limpieza:</p>
+            <p>El sistema considera un tiempo de <strong>15 minutos</strong> entre funciones para limpieza de la sala.</p>
+            <p class="mt-1 text-indigo-300">📽️ Selecciona el <strong>Formato</strong> de proyección para esta función.</p>
         </div>
-
-        <!-- Lista de Películas (sin columna de formato) -->
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-            <h2 class="text-lg font-bold mb-4 text-indigo-300">📋 Todas las Películas</h2>
-            
-            <!-- Buscador -->
-            <div class="search-box">
-                <div class="search-group">
-                    <label><i class="fas fa-search mr-1"></i> Buscar por Título</label>
-                    <input type="text" id="searchTitle" placeholder="Ej: Spider-Man, Avatar..." value="<?= htmlspecialchars($search_title) ?>">
-                </div>
-                <div class="search-actions">
-                    <button class="btn-search" onclick="applyFilters()">
-                        <i class="fas fa-search"></i> Buscar
-                    </button>
-                    <button class="btn-clear" onclick="clearFilters()">
-                        <i class="fas fa-times"></i> Limpiar
-                    </button>
-                </div>
+        <div id="conflictChecker" class="mb-4 p-3 rounded-lg border text-sm conflict-checking">
+            <p class="font-semibold">🔍 Verificación de conflictos en tiempo real:</p>
+            <p id="conflictStatus">Selecciona película, sala, fecha y hora para verificar automáticamente si hay conflictos</p>
+        </div>
+        <form action="" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4" id="showtimeForm">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+            <?php if($edit_showtime): ?>
+                <input type="hidden" name="showtime_id" id="showtimeIdInput" value="<?= htmlspecialchars($edit_showtime['id']) ?>">
+                <input type="hidden" name="edit_showtime" value="1">
+            <?php else: ?>
+                <input type="hidden" name="add_showtime" value="1">
+                <input type="hidden" name="showtime_id" id="showtimeIdInput" value="0">
+            <?php endif; ?>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Película *</label>
+                <select name="movie_id" required class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" id="movieSelect">
+                    <option value="">Seleccionar</option>
+                    <?php foreach($movies as $m): ?>
+                        <option value="<?= htmlspecialchars($m['id']) ?>"
+                                data-duration="<?= htmlspecialchars($m['duration']) ?>"
+                                <?= ($edit_showtime && $edit_showtime['movie_id'] == $m['id']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($m['title']) ?> (<?= htmlspecialchars($m['duration']) ?> min)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </div>
-            
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="border-b border-gray-700 text-gray-400 text-sm">
-                            <th class="pb-3 font-semibold">Póster</th>
-                            <th class="pb-3 font-semibold">Título</th>
-                            <th class="pb-3 font-semibold">Duración</th>
-                            <th class="pb-3 font-semibold">Género</th>
-                            <th class="pb-3 font-semibold">Año</th>
-                            <th class="pb-3 font-semibold">Clasificación</th>
-                            <th class="pb-3 font-semibold text-center">Estado</th>
-                            <th class="pb-3 font-semibold text-center">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-700/50 text-sm" id="moviesTableBody">
-                        <?php foreach($movies as $m): ?>
-                            <tr>
-                                <td class="py-3">
-                                    <img src="<?= htmlspecialchars($m['poster_url']) ?>" 
-                                         alt="<?= htmlspecialchars($m['title']) ?>"
-                                         class="w-10 h-14 object-cover rounded bg-gray-700 shadow">
-                                </td>
-                                <td class="py-3 font-medium text-gray-200"><?= htmlspecialchars($m['title']) ?></td>
-                                <td class="py-3 text-gray-400"><?= $m['duration'] ? htmlspecialchars($m['duration']) . ' min' : '-' ?></td>
-                                <td class="py-3 text-gray-400"><?= htmlspecialchars($m['genre'] ?? '-') ?></td>
-                                <td class="py-3 text-gray-400"><?= htmlspecialchars($m['year'] ?? '-') ?></td>
-                                <td class="py-3">
-                                    <?php if($m['classification']): ?>
-                                        <span class="
-                                            <?php if(strpos($m['classification'], 'A') !== false): ?>badge-a
-                                            <?php elseif(strpos($m['classification'], 'B') !== false): ?>badge-b
-                                            <?php elseif(strpos($m['classification'], 'C') !== false): ?>badge-c
-                                            <?php endif; ?>
-                                        ">
-                                            <?= htmlspecialchars($m['classification']) ?>
-                                        </span>
-                                    <?php else: ?>
-                                        <span class="text-gray-500 text-xs">No definida</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3 text-center">
-                                    <?php if($m['is_active']): ?>
-                                        <span class="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-bold border border-green-500/30">Activa</span>
-                                    <?php else: ?>
-                                        <span class="bg-gray-500/20 text-gray-400 text-xs px-2 py-0.5 rounded-full font-bold border border-gray-500/30">Oculta</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3 text-center">
-                                    <div class="flex justify-center gap-2 flex-wrap">
-                                        <a href="?tab=movies&edit_movie_id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 transition-colors">
-                                            Editar
-                                        </a>
-                                        <a href="?update_movie=<?= htmlspecialchars($m['id']) ?>&tab=movies&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 transition-colors"
-                                           onclick="return confirm('¿Actualizar los datos de la película «<?= htmlspecialchars($m['title']) ?>» desde TMDb?')">
-                                            <i class="fas fa-sync-alt mr-1"></i> Actualizar
-                                        </a>
-                                        <a href="?toggle_movie=<?= htmlspecialchars($m['id']) ?>&tab=movies&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors"
-                                           onclick="return confirm('¿Cambiar estado de esta película?')">
-                                            <?= $m['is_active'] ? 'Ocultar' : 'Mostrar' ?>
-                                        </a>
-                                        <a href="?delete_movie=<?= htmlspecialchars($m['id']) ?>&tab=movies&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
-                                           onclick="return confirm('¿Eliminar esta película permanentemente? Se eliminarán también todos los horarios y boletos asociados.')">
-                                            Eliminar
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <?php if(empty($movies)): ?>
-                    <div class="text-center py-8 text-gray-400">
-                        <p class="text-4xl mb-2">🎬</p>
-                        <p>No se encontraron películas<?= !empty($search_title) ? ' con el filtro aplicado' : '' ?>.</p>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Sala *</label>
+                <select name="room_id" required class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" id="roomSelect">
+                    <option value="">Seleccionar</option>
+                    <?php foreach($rooms as $r): ?>
+                        <option value="<?= htmlspecialchars($r['id']) ?>" <?= ($edit_showtime && $edit_showtime['room_id'] == $r['id']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($r['name']) ?> (Cap: <?= htmlspecialchars($r['capacity']) ?>)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Fecha *</label>
+                <input type="date" name="show_date" required min="<?= date('Y-m-d') ?>" value="<?= $edit_showtime ? htmlspecialchars($edit_showtime['show_date']) : '' ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" id="dateInput">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Hora *</label>
+                <input type="time" name="show_time" required value="<?= $edit_showtime ? htmlspecialchars($edit_showtime['show_time']) : '' ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" id="timeInput">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Idioma *</label>
+                <select name="language" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="español" <?= ($edit_showtime && ($edit_showtime['language'] ?? 'español') == 'español') || !$edit_showtime ? 'selected' : '' ?>>Español</option>
+                    <option value="subtitulos" <?= ($edit_showtime && ($edit_showtime['language'] ?? '') == 'subtitulos') ? 'selected' : '' ?>>Subtítulos</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Formato *</label>
+                <select name="format" required class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Seleccionar Formato</option>
+                    <?php foreach($formatos as $fmt): ?>
+                        <option value="<?= htmlspecialchars($fmt) ?>" <?= ($edit_showtime && isset($edit_showtime['format']) && $edit_showtime['format'] == $fmt) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($fmt) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="md:col-span-3">
+                <label class="block text-sm text-gray-400 mb-2">💰 Precios</label>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Adulto *</label>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-semibold"><?= htmlspecialchars($siteConfig['currency_symbol'] ?? '$') ?></span>
+                            <input type="number" step="0.01" min="0.01" name="price_adult" required
+                                   value="<?= $edit_showtime ? htmlspecialchars($edit_showtime['price_adult'] ?? $edit_showtime['price']) : '' ?>"
+                                   class="w-full bg-gray-700 p-2.5 pl-7 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                   placeholder="0.00">
+                        </div>
                     </div>
-                <?php endif; ?>
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-sm text-gray-400">Niño</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" name="enable_child_price" id="enable_child_price"
+                                       <?= ($edit_showtime && isset($edit_showtime['enable_child_price']) && $edit_showtime['enable_child_price'] == 1) ? 'checked' : '' ?>
+                                       onchange="togglePriceInput(this, 'price_child')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-semibold"><?= htmlspecialchars($siteConfig['currency_symbol'] ?? '$') ?></span>
+                            <input type="number" step="0.01" min="0" name="price_child" id="price_child"
+                                   value="<?= $edit_showtime ? htmlspecialchars($edit_showtime['price_child'] ?? '') : '' ?>"
+                                   class="w-full bg-gray-700 p-2.5 pl-7 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 <?= ($edit_showtime && isset($edit_showtime['enable_child_price']) && $edit_showtime['enable_child_price'] == 0) ? 'price-input-disabled' : '' ?>"
+                                   placeholder="0.00"
+                                   <?= ($edit_showtime && isset($edit_showtime['enable_child_price']) && $edit_showtime['enable_child_price'] == 0) ? 'disabled' : '' ?>>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Menores de 12 años</p>
+                    </div>
+                    <div>
+                        <div class="flex items-center justify-between mb-1">
+                            <label class="block text-sm text-gray-400">Tercera Edad</label>
+                            <label class="toggle-switch">
+                                <input type="checkbox" name="enable_senior_price" id="enable_senior_price"
+                                       <?= ($edit_showtime && isset($edit_showtime['enable_senior_price']) && $edit_showtime['enable_senior_price'] == 1) ? 'checked' : '' ?>
+                                       onchange="togglePriceInput(this, 'price_senior')">
+                                <span class="toggle-slider"></span>
+                            </label>
+                        </div>
+                        <div class="relative">
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-semibold"><?= htmlspecialchars($siteConfig['currency_symbol'] ?? '$') ?></span>
+                            <input type="number" step="0.01" min="0" name="price_senior" id="price_senior"
+                                   value="<?= $edit_showtime ? htmlspecialchars($edit_showtime['price_senior'] ?? '') : '' ?>"
+                                   class="w-full bg-gray-700 p-2.5 pl-7 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 <?= ($edit_showtime && isset($edit_showtime['enable_senior_price']) && $edit_showtime['enable_senior_price'] == 0) ? 'price-input-disabled' : '' ?>"
+                                   placeholder="0.00"
+                                   <?= ($edit_showtime && isset($edit_showtime['enable_senior_price']) && $edit_showtime['enable_senior_price'] == 0) ? 'disabled' : '' ?>>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Mayores de 60 años</p>
+                    </div>
+                </div>
             </div>
-        </div>
-        <?php endif; ?>
+            <div class="md:col-span-3">
+                <label class="block text-sm text-gray-400 mb-2">🎯 Promociones</label>
+                <div class="flex flex-wrap gap-3">
+                    <div class="promotion-checkbox">
+                        <input type="checkbox" name="half_price_monday" id="half_price_monday"
+                               <?= ($edit_showtime && in_array('lunes_mitad', $edit_showtime['promotions_array'] ?? [])) ? 'checked' : '' ?>>
+                        <label for="half_price_monday">🌙 Lunes ½ Precio</label>
+                    </div>
+                    <div class="promotion-checkbox">
+                        <input type="checkbox" name="preventa" id="preventa"
+                               <?= ($edit_showtime && in_array('preventa', $edit_showtime['promotions_array'] ?? [])) ? 'checked' : '' ?>>
+                        <label for="preventa">🎫 Preventa</label>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="md:col-span-3 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors mt-2 shadow-md" id="submitBtn">
+                <?= $edit_showtime ? 'Actualizar Horario' : 'Guardar Horario' ?>
+            </button>
+            <?php if($edit_showtime): ?>
+                <a href="?tab=showtimes" class="md:col-span-3 text-center text-gray-400 hover:text-white text-sm">Cancelar edición</a>
+            <?php endif; ?>
+        </form>
+    </div>
 
-        <!-- ============================================ -->
-        <!-- TAB: HORARIOS - CON FORMATO DESPLEGABLE       -->
-        <!-- ============================================ -->
-        <?php if($activeTab === 'showtimes'): ?>
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
-            <h2 class="text-lg font-bold mb-4 text-indigo-300">
-                <?= $edit_showtime ? '✏️ Editar Horario' : '➕ Agregar Horario' ?>
-            </h2>
-            
-            <div class="mb-4 p-3 rounded-lg bg-blue-600/10 border border-blue-500/30 text-blue-300 text-sm">
-                <p class="font-semibold">🧹 Tiempo de limpieza:</p>
-                <p>El sistema considera un tiempo de <strong>15 minutos</strong> entre funciones para limpieza de la sala.</p>
-                <p class="mt-1 text-indigo-300">📽️ Selecciona el <strong>Formato</strong> de proyección para esta función.</p>
-            </div>
-            
-            <div id="conflictChecker" class="mb-4 p-3 rounded-lg border text-sm conflict-checking">
-                <p class="font-semibold">🔍 Verificación de conflictos en tiempo real:</p>
-                <p id="conflictStatus">
-                    Selecciona película, sala, fecha y hora para verificar automáticamente si hay conflictos
-                </p>
-                <div id="debugInfo" class="text-xs text-gray-500 mt-1 hidden"></div>
-            </div>
-            
-            <form action="" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4" id="showtimeForm">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                <?php if($edit_showtime): ?>
-                    <input type="hidden" name="showtime_id" id="showtimeIdInput" value="<?= htmlspecialchars($edit_showtime['id']) ?>">
-                    <input type="hidden" name="edit_showtime" value="1">
-                <?php else: ?>
-                    <input type="hidden" name="add_showtime" value="1">
-                    <input type="hidden" name="showtime_id" id="showtimeIdInput" value="0">
-                <?php endif; ?>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Película *</label>
-                    <select name="movie_id" required class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" id="movieSelect">
-                        <option value="">Seleccionar</option>
-                        <?php foreach($movies as $m): ?>
-                            <option value="<?= htmlspecialchars($m['id']) ?>" 
-                                    data-duration="<?= htmlspecialchars($m['duration']) ?>"
-                                    <?= ($edit_showtime && $edit_showtime['movie_id'] == $m['id']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($m['title']) ?> (<?= htmlspecialchars($m['duration']) ?> min)
-                                <?php if($m['is_active']): ?>
-                                    <span class="movie-status-badge active">✓ Activa</span>
-                                <?php else: ?>
-                                    <span class="movie-status-badge inactive">⊙ Oculta</span>
+    <!-- Lista de Horarios -->
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+        <h2 class="text-lg font-bold mb-4 text-indigo-300">🕐 Todos los Horarios</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-gray-700 text-gray-400 text-sm">
+                        <th class="pb-3 font-semibold">Película</th>
+                        <th class="pb-3 font-semibold">Sala</th>
+                        <th class="pb-3 font-semibold">Fecha</th>
+                        <th class="pb-3 font-semibold">Hora</th>
+                        <th class="pb-3 font-semibold">Formato</th>
+                        <th class="pb-3 font-semibold">Adulto</th>
+                        <th class="pb-3 font-semibold">Niño</th>
+                        <th class="pb-3 font-semibold">Abuelo</th>
+                        <th class="pb-3 font-semibold">Idioma</th>
+                        <th class="pb-3 font-semibold">Promociones</th>
+                        <th class="pb-3 font-semibold text-center">Estado</th>
+                        <th class="pb-3 font-semibold text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700/50 text-sm">
+                    <?php foreach($showtimes as $s):
+                        $promo_labels = [];
+                        $promotions = $s['promotions'] ? explode(',', $s['promotions']) : [];
+                        if(in_array('lunes_mitad', $promotions)) $promo_labels[] = '🌙 Lunes ½ Precio';
+                        if(in_array('preventa', $promotions)) $promo_labels[] = '🎫 Preventa';
+                        $movie_exists = $s['movie_title'] !== null;
+                        $is_inactive = $s['is_active'] == 0;
+                        $language = $s['language'] ?? 'español';
+                        $lang_label = $language == 'español' ? '🎬 Español' : '📝 Subtítulos';
+                        $lang_class = $language == 'español' ? 'espanol' : 'subtitulos';
+                        $price_adult = $s['price_adult'] ?? $s['price'] ?? 0;
+                        $price_child = $s['price_child'] ?? 0;
+                        $price_senior = $s['price_senior'] ?? 0;
+                        $enable_child = $s['enable_child_price'] ?? 1;
+                        $enable_senior = $s['enable_senior_price'] ?? 1;
+                        $format = $s['format'] ?? '2D';
+                        $formatClass = 'format-2d';
+                        if (!empty($format)) {
+                            $formatLower = strtolower($format);
+                            $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
+                        }
+                    ?>
+                    <tr class="<?= $is_inactive ? 'showtime-inactive' : '' ?>">
+                        <td class="py-3 font-medium <?= $movie_exists ? 'text-gray-200' : 'movie-deleted' ?>">
+                            <?= htmlspecialchars($s['movie_title'] ?? 'Película eliminada') ?>
+                            <?php if($is_inactive): ?><span class="text-xs text-gray-500 ml-1">(Inactiva)</span><?php endif; ?>
+                            <?php if(!$movie_exists): ?><span class="text-xs text-gray-500 ml-1">(Eliminada)</span><?php endif; ?>
+                        </td>
+                        <td class="py-3 text-gray-400"><?= htmlspecialchars($s['room_name']) ?></td>
+                        <td class="py-3 text-gray-400"><?= formatDateShort($s['show_date']) ?></td>
+                        <td class="py-3 text-indigo-300 font-semibold time-display"><?= formatTimeVenezuela($s['show_time']) ?></td>
+                        <td class="py-3"><span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($format) ?></span></td>
+                        <td class="py-3 text-green-400 font-semibold"><?= formatCurrency($price_adult, $siteConfig) ?></td>
+                        <td class="py-3 <?= $enable_child ? 'text-green-400' : 'text-gray-500' ?> font-semibold">
+                            <?= $enable_child ? formatCurrency($price_child, $siteConfig) : '—' ?>
+                        </td>
+                        <td class="py-3 <?= $enable_senior ? 'text-green-400' : 'text-gray-500' ?> font-semibold">
+                            <?= $enable_senior ? formatCurrency($price_senior, $siteConfig) : '—' ?>
+                        </td>
+                        <td class="py-3"><span class="language-badge <?= $lang_class ?>"><?= $lang_label ?></span></td>
+                        <td class="py-3">
+                            <?php foreach($promo_labels as $label): ?>
+                                <span class="promotion-tag <?= strpos($label, 'Lunes') !== false ? 'lunes' : 'preventa' ?>"><?= $label ?></span>
+                            <?php endforeach; ?>
+                            <?php if(empty($promo_labels)): ?><span class="text-gray-500 text-xs">—</span><?php endif; ?>
+                        </td>
+                        <td class="py-3 text-center">
+                            <?php if($s['is_active']): ?>
+                                <span class="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-bold border border-green-500/30">Activo</span>
+                            <?php else: ?>
+                                <span class="bg-gray-500/20 text-gray-400 text-xs px-2 py-0.5 rounded-full font-bold border border-gray-500/30">Inactivo</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="py-3 text-center">
+                            <div class="flex justify-center gap-2 flex-wrap">
+                                <?php if($s['is_active']): ?>
+                                    <a href="?tab=showtimes&edit_showtime_id=<?= htmlspecialchars($s['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                       class="text-xs px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 transition-colors">Editar</a>
                                 <?php endif; ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Sala *</label>
-                    <select name="room_id" required class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" id="roomSelect">
-                        <option value="">Seleccionar</option>
-                        <?php foreach($rooms as $r): ?>
-                            <option value="<?= htmlspecialchars($r['id']) ?>" <?= ($edit_showtime && $edit_showtime['room_id'] == $r['id']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($r['name']) ?> (Cap: <?= htmlspecialchars($r['capacity']) ?>)
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Fecha *</label>
-                    <input type="date" name="show_date" required min="<?= date('Y-m-d') ?>" value="<?= $edit_showtime ? htmlspecialchars($edit_showtime['show_date']) : '' ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" id="dateInput">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Hora *</label>
-                    <input type="time" name="show_time" required value="<?= $edit_showtime ? htmlspecialchars($edit_showtime['show_time']) : '' ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" id="timeInput">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Idioma *</label>
-                    <select name="language" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="español" <?= ($edit_showtime && ($edit_showtime['language'] ?? 'español') == 'español') || !$edit_showtime ? 'selected' : '' ?>>Español</option>
-                        <option value="subtitulos" <?= ($edit_showtime && ($edit_showtime['language'] ?? '') == 'subtitulos') ? 'selected' : '' ?>>Subtítulos</option>
-                    </select>
-                </div>
-                
-                <!-- ✅ FORMATO - MENÚ DESPLEGABLE -->
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Formato *</label>
-                    <select name="format" required class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="">Seleccionar Formato</option>
-                        <?php foreach($formatos as $fmt): ?>
-                            <option value="<?= htmlspecialchars($fmt) ?>" <?= ($edit_showtime && isset($edit_showtime['format']) && $edit_showtime['format'] == $fmt) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($fmt) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <p class="text-xs text-gray-500 mt-1">Formato de proyección para esta función</p>
-                </div>
-                
-                <!-- PRECIOS Y CONFIGURACIÓN -->
-                <div class="md:col-span-3">
-                    <label class="block text-sm text-gray-400 mb-2">💰 Precios</label>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                            <label class="block text-sm text-gray-400 mb-1">Adulto *</label>
-                            <div class="relative">
-                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-semibold">
-                                    <?= htmlspecialchars($siteConfig['currency_symbol'] ?? '$') ?>
-                                </span>
-                                <input type="number" step="0.01" min="0.01" name="price_adult" required 
-                                       value="<?= $edit_showtime ? htmlspecialchars($edit_showtime['price_adult'] ?? $edit_showtime['price']) : '' ?>" 
-                                       class="w-full bg-gray-700 p-2.5 pl-7 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                                       placeholder="0.00">
+                                <a href="?toggle_showtime=<?= htmlspecialchars($s['id']) ?>&tab=showtimes&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors"
+                                   onclick="return confirm('¿Cambiar estado de este horario?')">
+                                    <?= $s['is_active'] ? 'Ocultar' : 'Mostrar' ?>
+                                </a>
+                                <a href="?delete_showtime=<?= htmlspecialchars($s['id']) ?>&tab=showtimes&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
+                                   onclick="return confirm('¿Eliminar este horario?')">Eliminar</a>
                             </div>
-                        </div>
-                        
-                        <div>
-                            <div class="flex items-center justify-between mb-1">
-                                <label class="block text-sm text-gray-400">Niño</label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" name="enable_child_price" id="enable_child_price"
-                                           <?= ($edit_showtime && isset($edit_showtime['enable_child_price']) && $edit_showtime['enable_child_price'] == 1) ? 'checked' : '' ?>
-                                           onchange="togglePriceInput(this, 'price_child')">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            <div class="relative">
-                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-semibold">
-                                    <?= htmlspecialchars($siteConfig['currency_symbol'] ?? '$') ?>
-                                </span>
-                                <input type="number" step="0.01" min="0" name="price_child" id="price_child"
-                                       value="<?= $edit_showtime ? htmlspecialchars($edit_showtime['price_child'] ?? '') : '' ?>" 
-                                       class="w-full bg-gray-700 p-2.5 pl-7 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 <?= ($edit_showtime && isset($edit_showtime['enable_child_price']) && $edit_showtime['enable_child_price'] == 0) ? 'price-input-disabled' : '' ?>" 
-                                       placeholder="0.00"
-                                       <?= ($edit_showtime && isset($edit_showtime['enable_child_price']) && $edit_showtime['enable_child_price'] == 0) ? 'disabled' : '' ?>>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-1">Menores de 12 años</p>
-                        </div>
-                        
-                        <div>
-                            <div class="flex items-center justify-between mb-1">
-                                <label class="block text-sm text-gray-400">Tercera Edad</label>
-                                <label class="toggle-switch">
-                                    <input type="checkbox" name="enable_senior_price" id="enable_senior_price"
-                                           <?= ($edit_showtime && isset($edit_showtime['enable_senior_price']) && $edit_showtime['enable_senior_price'] == 1) ? 'checked' : '' ?>
-                                           onchange="togglePriceInput(this, 'price_senior')">
-                                    <span class="toggle-slider"></span>
-                                </label>
-                            </div>
-                            <div class="relative">
-                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-semibold">
-                                    <?= htmlspecialchars($siteConfig['currency_symbol'] ?? '$') ?>
-                                </span>
-                                <input type="number" step="0.01" min="0" name="price_senior" id="price_senior"
-                                       value="<?= $edit_showtime ? htmlspecialchars($edit_showtime['price_senior'] ?? '') : '' ?>" 
-                                       class="w-full bg-gray-700 p-2.5 pl-7 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 <?= ($edit_showtime && isset($edit_showtime['enable_senior_price']) && $edit_showtime['enable_senior_price'] == 0) ? 'price-input-disabled' : '' ?>" 
-                                       placeholder="0.00"
-                                       <?= ($edit_showtime && isset($edit_showtime['enable_senior_price']) && $edit_showtime['enable_senior_price'] == 0) ? 'disabled' : '' ?>>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-1">Mayores de 60 años</p>
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Promociones -->
-                <div class="md:col-span-3">
-                    <label class="block text-sm text-gray-400 mb-2">🎯 Promociones</label>
-                    <div class="flex flex-wrap gap-3">
-                        <div class="promotion-checkbox">
-                            <input type="checkbox" name="half_price_monday" id="half_price_monday" 
-                                   <?= ($edit_showtime && in_array('lunes_mitad', $edit_showtime['promotions_array'] ?? [])) ? 'checked' : '' ?>>
-                            <label for="half_price_monday">🌙 Lunes ½ Precio</label>
-                        </div>
-                        <div class="promotion-checkbox">
-                            <input type="checkbox" name="preventa" id="preventa" 
-                                   <?= ($edit_showtime && in_array('preventa', $edit_showtime['promotions_array'] ?? [])) ? 'checked' : '' ?>>
-                            <label for="preventa">🎫 Preventa</label>
-                        </div>
-                    </div>
-                </div>
-                
-                <button type="submit" class="md:col-span-3 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors mt-2 shadow-md" id="submitBtn">
-                    <?= $edit_showtime ? 'Actualizar Horario' : 'Guardar Horario' ?>
-                </button>
-                <?php if($edit_showtime): ?>
-                    <a href="?tab=showtimes" class="md:col-span-3 text-center text-gray-400 hover:text-white text-sm">Cancelar edición</a>
-                <?php endif; ?>
-            </form>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
+    </div>
+    <?php endif; ?>
 
-        <!-- Lista de Horarios - CON FORMATO -->
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-            <h2 class="text-lg font-bold mb-4 text-indigo-300">🕐 Todos los Horarios</h2>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="border-b border-gray-700 text-gray-400 text-sm">
-                            <th class="pb-3 font-semibold">Película</th>
-                            <th class="pb-3 font-semibold">Sala</th>
-                            <th class="pb-3 font-semibold">Fecha</th>
-                            <th class="pb-3 font-semibold">Hora</th>
-                            <th class="pb-3 font-semibold">Formato</th>
-                            <th class="pb-3 font-semibold">Adulto</th>
-                            <th class="pb-3 font-semibold">Niño</th>
-                            <th class="pb-3 font-semibold">Abuelo</th>
-                            <th class="pb-3 font-semibold">Idioma</th>
-                            <th class="pb-3 font-semibold">Promociones</th>
-                            <th class="pb-3 font-semibold text-center">Estado</th>
-                            <th class="pb-3 font-semibold text-center">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-700/50 text-sm">
-                        <?php foreach($showtimes as $s): 
-                            $end_time = date('H:i:s', strtotime($s['show_time'] . ' + ' . $s['duration'] . ' minutes'));
-                            $promo_labels = [];
-                            $promotions = $s['promotions'] ? explode(',', $s['promotions']) : [];
-                            if(in_array('lunes_mitad', $promotions)) $promo_labels[] = '🌙 Lunes ½ Precio';
-                            if(in_array('preventa', $promotions)) $promo_labels[] = '🎫 Preventa';
-                            $movie_exists = $s['movie_title'] !== null;
-                            $is_inactive = $s['is_active'] == 0;
-                            $language = $s['language'] ?? 'español';
-                            $lang_label = $language == 'español' ? '🎬 Español' : '📝 Subtítulos';
-                            $lang_class = $language == 'español' ? 'espanol' : 'subtitulos';
-                            
-                            $price_adult = $s['price_adult'] ?? $s['price'] ?? 0;
-                            $price_child = $s['price_child'] ?? 0;
-                            $price_senior = $s['price_senior'] ?? 0;
-                            $enable_child = $s['enable_child_price'] ?? 1;
-                            $enable_senior = $s['enable_senior_price'] ?? 1;
-                            
-                            $format = $s['format'] ?? '2D';
-                            $formatClass = 'format-2d';
-                            if (!empty($format)) {
-                                $formatLower = strtolower($format);
-                                $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
-                            }
-                        ?>
-                            <tr class="<?= $is_inactive ? 'showtime-inactive' : '' ?>">
-                                <td class="py-3 font-medium <?= $movie_exists ? 'text-gray-200' : 'movie-deleted' ?>">
-                                    <?= htmlspecialchars($s['movie_title'] ?? 'Película eliminada') ?>
-                                    <?php if($is_inactive): ?>
-                                        <span class="text-xs text-gray-500 ml-1">(Inactiva)</span>
-                                    <?php endif; ?>
-                                    <?php if(!$movie_exists): ?>
-                                        <span class="text-xs text-gray-500 ml-1">(Eliminada)</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3 text-gray-400"><?= htmlspecialchars($s['room_name']) ?></td>
-                                <td class="py-3 text-gray-400"><?= formatDateShort($s['show_date']) ?></td>
-                                <td class="py-3 text-indigo-300 font-semibold time-display"><?= formatTimeVenezuela($s['show_time']) ?></td>
-                                <td class="py-3">
-                                    <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($format) ?></span>
-                                </td>
-                                <td class="py-3 text-green-400 font-semibold"><?= formatCurrency($price_adult, $siteConfig) ?></td>
-                                <td class="py-3 <?= $enable_child ? 'text-green-400' : 'text-gray-500' ?> font-semibold">
-                                    <?= $enable_child ? formatCurrency($price_child, $siteConfig) : '—' ?>
-                                </td>
-                                <td class="py-3 <?= $enable_senior ? 'text-green-400' : 'text-gray-500' ?> font-semibold">
-                                    <?= $enable_senior ? formatCurrency($price_senior, $siteConfig) : '—' ?>
-                                </td>
-                                <td class="py-3">
-                                    <span class="language-badge <?= $lang_class ?>"><?= $lang_label ?></span>
-                                </td>
-                                <td class="py-3">
-                                    <?php foreach($promo_labels as $label): ?>
-                                        <span class="promotion-tag <?= strpos($label, 'Lunes') !== false ? 'lunes' : 'preventa' ?>"><?= $label ?></span>
-                                    <?php endforeach; ?>
-                                    <?php if(empty($promo_labels)): ?>
-                                        <span class="text-gray-500 text-xs">—</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3 text-center">
-                                    <?php if($s['is_active']): ?>
-                                        <span class="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-bold border border-green-500/30">Activo</span>
-                                    <?php else: ?>
-                                        <span class="bg-gray-500/20 text-gray-400 text-xs px-2 py-0.5 rounded-full font-bold border border-gray-500/30">Inactivo</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3 text-center">
-                                    <div class="flex justify-center gap-2 flex-wrap">
-                                        <?php if($s['is_active']): ?>
-                                        <a href="?tab=showtimes&edit_showtime_id=<?= htmlspecialchars($s['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 transition-colors">
-                                            Editar
-                                        </a>
-                                        <?php endif; ?>
-                                        <a href="?toggle_showtime=<?= htmlspecialchars($s['id']) ?>&tab=showtimes&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors"
-                                           onclick="return confirm('¿Cambiar estado de este horario?')">
-                                            <?= $s['is_active'] ? 'Ocultar' : 'Mostrar' ?>
-                                        </a>
-                                        <a href="?delete_showtime=<?= htmlspecialchars($s['id']) ?>&tab=showtimes&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
-                                           onclick="return confirm('¿Eliminar este horario?')">
-                                            Eliminar
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+    <!-- ============================================ -->
+    <!-- TAB: SALAS                                   -->
+    <!-- ============================================ -->
+    <?php if($activeTab === 'rooms'): ?>
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-lg font-bold text-indigo-300">🏠 Gestión de Salas</h2>
+            <a href="room_builder.php" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
+                🎨 <span>Crear Nueva Sala</span>
+            </a>
         </div>
-        <?php endif; ?>
-
-        <!-- ============================================ -->
-        <!-- TAB: SALAS                                   -->
-        <!-- ============================================ -->
-        <?php if($activeTab === 'rooms'): ?>
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-            <div class="flex justify-between items-center mb-6">
-                <h2 class="text-lg font-bold text-indigo-300">🏠 Gestión de Salas</h2>
-                <a href="room_builder.php" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2">
-                    🎨 <span>Crear Nueva Sala</span>
-                </a>
-            </div>
-            
-            <div class="mb-4 p-3 rounded-lg bg-blue-600/10 border border-blue-500/30 text-blue-300 text-sm">
-                <p>💡 Las salas se crean y editan desde el <strong>Constructor Visual</strong>.</p>
-                <p class="mt-1">Haz clic en el botón <strong>"Crear Nueva Sala"</strong> o en el icono 🛠️ Diseñar de cada sala.</p>
-            </div>
-
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="border-b border-gray-700 text-gray-400 text-sm">
-                            <th class="pb-3 font-semibold">Nombre</th>
-                            <th class="pb-3 font-semibold">Capacidad</th>
-                            <th class="pb-3 font-semibold">Distribución</th>
-                            <th class="pb-3 font-semibold">Configuración</th>
-                            <th class="pb-3 font-semibold text-center">Estado</th>
-                            <th class="pb-3 font-semibold text-center">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-700/50 text-sm">
-                        <?php foreach($rooms as $r): 
-                            $layout = $r['seat_layout'] ? json_decode($r['seat_layout'], true) : null;
-                            $blockedSeats = $layout['blockedSeats'] ?? [];
-                            $hasBlocked = count($blockedSeats) > 0;
-                        ?>
-                            <tr>
-                                <td class="py-3 font-medium text-gray-200"><?= htmlspecialchars($r['name']) ?></td>
-                                <td class="py-3 text-gray-400"><?= htmlspecialchars($r['capacity']) ?></td>
-                                <td class="py-3 text-gray-400">
-                                    <?php if($layout): ?>
-                                        <span class="text-xs"><?= count($layout['rows'] ?? []) ?> filas × <?= $layout['seatsPerRow'] ?? 0 ?> asientos</span>
-                                        <br><span class="text-xs text-gray-500">Total: <?= $layout['totalSeats'] ?? 0 ?></span>
-                                    <?php else: ?>
-                                        <span class="text-gray-500">-</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3">
-                                    <?php if($hasBlocked): ?>
-                                        <span class="aisle-badge">🚫 <?= count($blockedSeats) ?> bloqueados</span>
-                                    <?php else: ?>
-                                        <span class="text-gray-500 text-xs">Sin pasillos</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3 text-center">
-                                    <?php if($r['is_active']): ?>
-                                        <span class="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-bold border border-green-500/30">Activa</span>
-                                    <?php else: ?>
-                                        <span class="bg-gray-500/20 text-gray-400 text-xs px-2 py-0.5 rounded-full font-bold border border-gray-500/30">Inactiva</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3 text-center">
-                                    <div class="flex justify-center gap-2 flex-wrap">
-                                        <a href="room_builder.php?room_id=<?= htmlspecialchars($r['id']) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 transition-colors flex items-center gap-1">
-                                            🛠️ Diseñar
-                                        </a>
-                                        <a href="?toggle_room=<?= htmlspecialchars($r['id']) ?>&tab=rooms&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors"
-                                           onclick="return confirm('¿Cambiar estado de esta sala?')">
-                                            <?= $r['is_active'] ? 'Ocultar' : 'Mostrar' ?>
-                                        </a>
-                                        <a href="?delete_room=<?= htmlspecialchars($r['id']) ?>&tab=rooms&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
-                                           onclick="return confirm('¿Eliminar esta sala permanentemente?')">
-                                            Eliminar
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
+        <div class="mb-4 p-3 rounded-lg bg-blue-600/10 border border-blue-500/30 text-blue-300 text-sm">
+            <p>💡 Las salas se crean y editan desde el <strong>Constructor Visual</strong>.</p>
         </div>
-        <?php endif; ?>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-gray-700 text-gray-400 text-sm">
+                        <th class="pb-3 font-semibold">Nombre</th>
+                        <th class="pb-3 font-semibold">Capacidad</th>
+                        <th class="pb-3 font-semibold">Distribución</th>
+                        <th class="pb-3 font-semibold">Configuración</th>
+                        <th class="pb-3 font-semibold text-center">Estado</th>
+                        <th class="pb-3 font-semibold text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700/50 text-sm">
+                    <?php foreach($rooms as $r):
+                        $layout = $r['seat_layout'] ? json_decode($r['seat_layout'], true) : null;
+                        $blockedSeats = $layout['blockedSeats'] ?? [];
+                        $hasBlocked = count($blockedSeats) > 0;
+                    ?>
+                    <tr>
+                        <td class="py-3 font-medium text-gray-200"><?= htmlspecialchars($r['name']) ?></td>
+                        <td class="py-3 text-gray-400"><?= htmlspecialchars($r['capacity']) ?></td>
+                        <td class="py-3 text-gray-400">
+                            <?php if($layout): ?>
+                                <span class="text-xs"><?= count($layout['rows'] ?? []) ?> filas × <?= $layout['seatsPerRow'] ?? 0 ?> asientos</span>
+                                <br><span class="text-xs text-gray-500">Total: <?= $layout['totalSeats'] ?? 0 ?></span>
+                            <?php else: ?>
+                                <span class="text-gray-500">-</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="py-3">
+                            <?php if($hasBlocked): ?>
+                                <span class="aisle-badge">🚫 <?= count($blockedSeats) ?> bloqueados</span>
+                            <?php else: ?>
+                                <span class="text-gray-500 text-xs">Sin pasillos</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="py-3 text-center">
+                            <?php if($r['is_active']): ?>
+                                <span class="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-bold border border-green-500/30">Activa</span>
+                            <?php else: ?>
+                                <span class="bg-gray-500/20 text-gray-400 text-xs px-2 py-0.5 rounded-full font-bold border border-gray-500/30">Inactiva</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="py-3 text-center">
+                            <div class="flex justify-center gap-2 flex-wrap">
+                                <a href="room_builder.php?room_id=<?= htmlspecialchars($r['id']) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-400 transition-colors flex items-center gap-1">
+                                    🛠️ Diseñar
+                                </a>
+                                <a href="?toggle_room=<?= htmlspecialchars($r['id']) ?>&tab=rooms&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors"
+                                   onclick="return confirm('¿Cambiar estado de esta sala?')">
+                                    <?= $r['is_active'] ? 'Ocultar' : 'Mostrar' ?>
+                                </a>
+                                <a href="?delete_room=<?= htmlspecialchars($r['id']) ?>&tab=rooms&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
+                                   onclick="return confirm('¿Eliminar esta sala permanentemente?')">Eliminar</a>
+                            </div>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php endif; ?>
 
-        <!-- ============================================ -->
-        <!-- TAB: USUARIOS                                -->
-        <!-- ============================================ -->
-        <?php if($activeTab === 'users'): ?>
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
-            <h2 class="text-lg font-bold mb-4 text-indigo-300">
-                <?= $edit_user ? '✏️ Editar Usuario' : '➕ Registrar Nuevo Usuario' ?>
-            </h2>
-            <form action="admin.php?tab=users" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                
+    <!-- ============================================ -->
+    <!-- TAB: USUARIOS                                -->
+    <!-- ============================================ -->
+    <?php if($activeTab === 'users'): ?>
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
+        <h2 class="text-lg font-bold mb-4 text-indigo-300">
+            <?= $edit_user ? '✏️ Editar Usuario' : '➕ Registrar Nuevo Usuario' ?>
+        </h2>
+        <form action="admin.php?tab=users" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+            <?php if($edit_user): ?>
+                <input type="hidden" name="edit_user" value="1">
+                <input type="hidden" name="user_id" value="<?= htmlspecialchars($edit_user['id']) ?>">
+            <?php else: ?>
+                <input type="hidden" name="add_user" value="1">
+            <?php endif; ?>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Nombres y Apellidos *</label>
+                <input type="text" name="user_name" required value="<?= $edit_user ? htmlspecialchars($edit_user['name']) : '' ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Email *</label>
+                <input type="email" name="user_email" required value="<?= $edit_user ? htmlspecialchars($edit_user['email']) : '' ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Cédula</label>
+                <div class="form-group-inline">
+                    <select name="cedula_type" class="bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="V" <?= ($edit_user && $edit_user['cedula_type'] == 'V') ? 'selected' : '' ?>>V</option>
+                        <option value="E" <?= ($edit_user && $edit_user['cedula_type'] == 'E') ? 'selected' : '' ?>>E</option>
+                        <option value="P" <?= ($edit_user && $edit_user['cedula_type'] == 'P') ? 'selected' : '' ?>>P</option>
+                    </select>
+                    <input type="text" name="cedula_number" value="<?= $edit_user ? htmlspecialchars((string)$edit_user['cedula_number']) : '' ?>"
+                           placeholder="Número de cédula" pattern="[0-9]*" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Solo números</p>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Teléfono</label>
+                <div class="phone-group-inline">
+                    <select name="phone_prefix" class="bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="412" <?= ($edit_user && $edit_user['phone_prefix'] == '412') ? 'selected' : '' ?>>0412</option>
+                        <option value="414" <?= ($edit_user && $edit_user['phone_prefix'] == '414') ? 'selected' : '' ?>>0414</option>
+                        <option value="424" <?= ($edit_user && $edit_user['phone_prefix'] == '424') ? 'selected' : '' ?>>0424</option>
+                        <option value="426" <?= ($edit_user && $edit_user['phone_prefix'] == '426') ? 'selected' : '' ?>>0426</option>
+                        <option value="4016" <?= ($edit_user && $edit_user['phone_prefix'] == '4016') ? 'selected' : '' ?>>04016</option>
+                    </select>
+                    <input type="text" name="phone_number" value="<?= $edit_user ? htmlspecialchars((string)$edit_user['phone_number']) : '' ?>"
+                           placeholder="Número de teléfono" pattern="[0-9]*" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Solo números</p>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Fecha de Nacimiento</label>
+                <input type="date" name="birth_date" value="<?= $edit_user ? htmlspecialchars($edit_user['birth_date']) : '' ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Contraseña <?= $edit_user ? '(dejar vacío para mantener)' : '*' ?></label>
+                <div class="password-wrapper">
+                    <input type="password" name="user_password" id="userPassword" <?= !$edit_user ? 'required' : '' ?>
+                           placeholder="<?= $edit_user ? 'Nueva contraseña...' : 'Mín. 8 caracteres, mayúscula y número' ?>"
+                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 pr-10">
+                    <button type="button" class="password-toggle" onclick="togglePasswordVisibility('userPassword', this)">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                </div>
                 <?php if($edit_user): ?>
-                    <input type="hidden" name="edit_user" value="1">
-                    <input type="hidden" name="user_id" value="<?= htmlspecialchars($edit_user['id']) ?>">
+                    <p class="text-xs text-gray-500 mt-1">Deja vacío para mantener la contraseña actual</p>
                 <?php else: ?>
-                    <input type="hidden" name="add_user" value="1">
+                    <p class="text-xs text-gray-500 mt-1">Mínimo 8 caracteres, una mayúscula, una minúscula y un número</p>
                 <?php endif; ?>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Rol</label>
+                <select name="user_role" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        <?= ($edit_user && $edit_user['id'] == $_SESSION['user_id']) ? 'disabled' : '' ?>>
+                    <option value="user" <?= ($edit_user && $edit_user['role'] == 'user') || !$edit_user ? 'selected' : '' ?>>Usuario</option>
+                    <option value="admin" <?= ($edit_user && $edit_user['role'] == 'admin') ? 'selected' : '' ?>>Administrador</option>
+                </select>
+                <?php if($edit_user && $edit_user['id'] == $_SESSION['user_id']): ?>
+                    <input type="hidden" name="user_role" value="admin">
+                    <p class="text-xs text-yellow-400 mt-1">🔒 No puedes cambiar tu propio rol</p>
+                <?php endif; ?>
+            </div>
+            <?php if($edit_user): ?>
+            <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                <div>
+                    <p class="text-xs text-gray-500">Estado</p>
+                    <div class="flex items-center gap-3 mt-1">
+                        <span class="user-status <?= $edit_user['is_blocked'] ? 'blocked' : 'active' ?>">
+                            <?= $edit_user['is_blocked'] ? '🚫 Bloqueado' : '✅ Activo' ?>
+                        </span>
+                    </div>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500">Fecha de registro</p>
+                    <p class="text-sm text-white mt-1"><?= formatDateVenezuela($edit_user['created_at']) ?></p>
+                </div>
+                <div>
+                    <p class="text-xs text-gray-500">Último acceso</p>
+                    <p class="text-sm text-white mt-1"><?= $edit_user['last_login'] ? formatDateVenezuela($edit_user['last_login']) : 'Nunca' ?></p>
+                </div>
+            </div>
+            <?php endif; ?>
+            <button type="submit" class="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors mt-2 shadow-md">
+                <?= $edit_user ? 'Actualizar Usuario' : 'Registrar Usuario' ?>
+            </button>
+            <?php if($edit_user): ?>
+                <a href="?tab=users" class="md:col-span-2 text-center text-gray-400 hover:text-white text-sm">Cancelar edición</a>
+            <?php endif; ?>
+        </form>
+    </div>
 
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Nombres y Apellidos *</label>
-                    <input type="text" name="user_name" required value="<?= $edit_user ? htmlspecialchars($edit_user['name']) : '' ?>"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+    <!-- Lista de Usuarios -->
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+        <h2 class="text-lg font-bold mb-4 text-indigo-300">📋 Todos los Usuarios</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-gray-700 text-gray-400 text-sm">
+                        <th class="pb-3 font-semibold">ID</th>
+                        <th class="pb-3 font-semibold">Nombre</th>
+                        <th class="pb-3 font-semibold">Email</th>
+                        <th class="pb-3 font-semibold">Cédula</th>
+                        <th class="pb-3 font-semibold">Teléfono</th>
+                        <th class="pb-3 font-semibold">Rol</th>
+                        <th class="pb-3 font-semibold">Estado</th>
+                        <th class="pb-3 font-semibold text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700/50 text-sm">
+                    <?php foreach($users as $u):
+                        $cedula_display = '';
+                        if (!empty($u['cedula_type']) && !empty($u['cedula_number'])) {
+                            $cedula_display = $u['cedula_type'] . '-' . $u['cedula_number'];
+                        }
+                        $phone_display = '';
+                        if (!empty($u['phone_prefix']) && !empty($u['phone_number'])) {
+                            $phone_display = '0' . $u['phone_prefix'] . '-' . $u['phone_number'];
+                        }
+                    ?>
+                    <tr>
+                        <td class="py-3 text-gray-400">#<?= htmlspecialchars($u['id']) ?></td>
+                        <td class="py-3 font-medium text-gray-200"><?= htmlspecialchars($u['name']) ?></td>
+                        <td class="py-3 text-gray-400"><?= htmlspecialchars($u['email']) ?></td>
+                        <td class="py-3 text-gray-400"><?= htmlspecialchars($cedula_display) ?: '-' ?></td>
+                        <td class="py-3 text-gray-400"><?= htmlspecialchars($phone_display) ?: '-' ?></td>
+                        <td class="py-3">
+                            <?php if($u['role'] == 'admin'): ?>
+                                <span class="text-indigo-400 font-semibold">Admin</span>
+                            <?php else: ?>
+                                <span class="text-gray-400">Usuario</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="py-3">
+                            <span class="user-status <?= $u['is_blocked'] ? 'blocked' : 'active' ?>">
+                                <?= $u['is_blocked'] ? '🚫 Bloqueado' : '✅ Activo' ?>
+                            </span>
+                        </td>
+                        <td class="py-3 text-center">
+                            <div class="flex justify-center gap-2 flex-wrap">
+                                <a href="?tab=users&edit_user_id=<?= htmlspecialchars($u['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 transition-colors">Editar</a>
+                                <?php if($u['id'] != $_SESSION['user_id']): ?>
+                                <form action="admin.php?tab=users" method="POST" class="inline">
+                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+                                    <input type="hidden" name="user_id" value="<?= htmlspecialchars($u['id']) ?>">
+                                    <input type="hidden" name="current_status" value="<?= htmlspecialchars($u['is_blocked']) ?>">
+                                    <input type="hidden" name="toggle_block_user" value="1">
+                                    <button type="submit" class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors">
+                                        <?= $u['is_blocked'] ? 'Desbloquear' : 'Bloquear' ?>
+                                    </button>
+                                </form>
+                                <form action="admin.php?tab=users" method="POST" class="inline" onsubmit="return confirm('¿Eliminar este usuario?')">
+                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+                                    <input type="hidden" name="user_id" value="<?= htmlspecialchars($u['id']) ?>">
+                                    <input type="hidden" name="delete_user" value="1">
+                                    <button type="submit" class="text-xs px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors">
+                                        Eliminar
+                                    </button>
+                                </form>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <!-- ============================================ -->
+    <!-- TAB: COMIDA                                  -->
+    <!-- ============================================ -->
+    <?php if($activeTab === 'food'): ?>
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
+        <h2 class="text-lg font-bold mb-4 text-indigo-300">
+            <?= $edit_food ? '✏️ Editar Producto' : '➕ Agregar Producto' ?>
+        </h2>
+        <form action="" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+            <?php if($edit_food): ?>
+                <input type="hidden" name="food_id" value="<?= htmlspecialchars($edit_food['id']) ?>">
+                <input type="hidden" name="edit_food" value="1">
+            <?php else: ?>
+                <input type="hidden" name="add_food" value="1">
+            <?php endif; ?>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Nombre del Producto *</label>
+                <input type="text" name="food_name" required maxlength="100" value="<?= $edit_food ? htmlspecialchars($edit_food['name']) : '' ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Categoría</label>
+                <select name="category_id" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="">Sin categoría</option>
+                    <?php foreach($food_categories as $cat): ?>
+                        <option value="<?= htmlspecialchars($cat['id']) ?>" <?= ($edit_food && isset($edit_food['category_id']) && $edit_food['category_id'] == $cat['id']) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($cat['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Precio *</label>
+                <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-semibold"><?= htmlspecialchars($siteConfig['currency_symbol'] ?? '$') ?></span>
+                    <input type="number" step="0.01" min="0.01" name="food_price" required value="<?= $edit_food ? htmlspecialchars($edit_food['price']) : '' ?>"
+                           class="w-full bg-gray-700 p-2.5 pl-7 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                           placeholder="0.00">
                 </div>
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Email *</label>
-                    <input type="email" name="user_email" required value="<?= $edit_user ? htmlspecialchars($edit_user['email']) : '' ?>"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                
-                <!-- Cédula -->
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Cédula</label>
-                    <div class="form-group-inline">
-                        <select name="cedula_type" class="bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="V" <?= ($edit_user && $edit_user['cedula_type'] == 'V') ? 'selected' : '' ?>>V</option>
-                            <option value="E" <?= ($edit_user && $edit_user['cedula_type'] == 'E') ? 'selected' : '' ?>>E</option>
-                            <option value="P" <?= ($edit_user && $edit_user['cedula_type'] == 'P') ? 'selected' : '' ?>>P</option>
-                        </select>
-                        <input type="text" name="cedula_number" value="<?= $edit_user ? htmlspecialchars((string)$edit_user['cedula_number']) : '' ?>" 
-                               placeholder="Número de cédula" pattern="[0-9]*" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')"
-                               class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    </div>
-                    <p class="text-xs text-gray-500 mt-1">Solo números</p>
-                </div>
-                
-                <!-- Teléfono -->
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Teléfono</label>
-                    <div class="phone-group-inline">
-                        <select name="phone_prefix" class="bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                            <option value="412" <?= ($edit_user && $edit_user['phone_prefix'] == '412') ? 'selected' : '' ?>>0412</option>
-                            <option value="414" <?= ($edit_user && $edit_user['phone_prefix'] == '414') ? 'selected' : '' ?>>0414</option>
-                            <option value="424" <?= ($edit_user && $edit_user['phone_prefix'] == '424') ? 'selected' : '' ?>>0424</option>
-                            <option value="426" <?= ($edit_user && $edit_user['phone_prefix'] == '426') ? 'selected' : '' ?>>0426</option>
-                            <option value="4016" <?= ($edit_user && $edit_user['phone_prefix'] == '4016') ? 'selected' : '' ?>>04016</option>
-                        </select>
-                        <input type="text" name="phone_number" value="<?= $edit_user ? htmlspecialchars((string)$edit_user['phone_number']) : '' ?>" 
-                               placeholder="Número de teléfono" pattern="[0-9]*" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')"
-                               class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    </div>
-                    <p class="text-xs text-gray-500 mt-1">Solo números</p>
-                </div>
-                
-                <!-- Fecha de Nacimiento -->
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Fecha de Nacimiento</label>
-                    <input type="date" name="birth_date" value="<?= $edit_user ? htmlspecialchars($edit_user['birth_date']) : '' ?>"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Contraseña <?= $edit_user ? '(dejar vacío para mantener)' : '*' ?></label>
-                    <div class="password-wrapper">
-                        <input type="password" name="user_password" id="userPassword" <?= !$edit_user ? 'required' : '' ?>
-                               placeholder="<?= $edit_user ? 'Nueva contraseña...' : 'Mínimo 8 caracteres' ?>"
-                               class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 pr-10">
-                        <button type="button" class="password-toggle" onclick="togglePasswordVisibility('userPassword', this)">
-                            <i class="fas fa-eye"></i>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Imagen del Producto</label>
+                <input type="file" name="food_image" accept="image/*"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
+                <?php if($edit_food && !empty($edit_food['image_url']) && file_exists($edit_food['image_url'])): ?>
+                <div class="mt-3 flex items-center gap-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+                    <img src="<?= htmlspecialchars($edit_food['image_url']) . '?v=' . time() ?>" alt="Imagen actual" class="h-16 w-16 object-cover rounded bg-gray-900">
+                    <div class="flex-1">
+                        <p class="text-xs text-gray-400">Imagen actual</p>
+                        <p class="text-xs text-gray-500 truncate"><?= htmlspecialchars(basename($edit_food['image_url'])) ?></p>
+                        <button type="submit" name="remove_image" value="1"
+                                class="text-xs text-red-400 hover:text-red-300 transition-colors mt-1"
+                                onclick="return confirm('¿Eliminar la imagen actual?')">
+                            <i class="fas fa-trash mr-1"></i> Eliminar imagen
                         </button>
                     </div>
-                    <?php if($edit_user): ?>
-                        <p class="text-xs text-gray-500 mt-1">Deja vacío para mantener la contraseña actual</p>
-                    <?php endif; ?>
                 </div>
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Rol</label>
-                    <select name="user_role" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="user" <?= ($edit_user && $edit_user['role'] == 'user') || !$edit_user ? 'selected' : '' ?>>Usuario</option>
-                        <option value="admin" <?= ($edit_user && $edit_user['role'] == 'admin') ? 'selected' : '' ?>>Administrador</option>
-                    </select>
-                </div>
+                <?php endif; ?>
+                <p class="text-xs text-gray-500 mt-1">Formatos: JPG, PNG, GIF, WEBP, SVG. Máx: 2MB</p>
+            </div>
+            <div class="md:col-span-2">
+                <label class="block text-sm text-gray-400 mb-1">Descripción</label>
+                <textarea name="food_description" rows="3" placeholder="Descripción del producto..."
+                          class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"><?= $edit_food ? htmlspecialchars($edit_food['description'] ?? '') : '' ?></textarea>
+            </div>
+            <button type="submit" class="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors mt-2 shadow-md">
+                <?= $edit_food ? 'Actualizar Producto' : 'Guardar Producto (Oculto)' ?>
+            </button>
+            <?php if($edit_food): ?>
+                <a href="?tab=food" class="md:col-span-2 text-center text-gray-400 hover:text-white text-sm">Cancelar edición</a>
+            <?php endif; ?>
+        </form>
+    </div>
 
-                <?php if($edit_user): ?>
-                    <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-4 bg-gray-900/50 p-4 rounded-lg border border-gray-700">
-                        <div>
-                            <p class="text-xs text-gray-500">Estado</p>
-                            <div class="flex items-center gap-3 mt-1">
-                                <span class="user-status <?= $edit_user['is_blocked'] ? 'blocked' : 'active' ?>">
-                                    <?= $edit_user['is_blocked'] ? '🚫 Bloqueado' : '✅ Activo' ?>
-                                </span>
+    <!-- Lista de Productos -->
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+        <h2 class="text-lg font-bold mb-4 text-indigo-300">📋 Todos los Productos</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-gray-700 text-gray-400 text-sm">
+                        <th class="pb-3 font-semibold">Imagen</th>
+                        <th class="pb-3 font-semibold">Nombre</th>
+                        <th class="pb-3 font-semibold">Categoría</th>
+                        <th class="pb-3 font-semibold">Precio</th>
+                        <th class="pb-3 font-semibold">Descripción</th>
+                        <th class="pb-3 font-semibold text-center">Estado</th>
+                        <th class="pb-3 font-semibold text-center">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700/50 text-sm">
+                    <?php foreach($food_items as $f): ?>
+                    <tr>
+                        <td class="py-3">
+                            <?php if(!empty($f['image_url']) && file_exists($f['image_url'])): ?>
+                                <img src="<?= htmlspecialchars($f['image_url']) ?>" alt="<?= htmlspecialchars($f['name']) ?>"
+                                     class="w-12 h-12 object-cover rounded bg-gray-700 shadow">
+                            <?php else: ?>
+                                <div class="w-12 h-12 bg-gray-700 rounded flex items-center justify-center text-2xl">🍿</div>
+                            <?php endif; ?>
+                        </td>
+                        <td class="py-3 font-medium text-gray-200"><?= htmlspecialchars($f['name']) ?></td>
+                        <td class="py-3 text-gray-400"><?= htmlspecialchars($f['category_name'] ?? '-') ?></td>
+                        <td class="py-3 text-green-400 font-semibold"><?= formatCurrency($f['price'], $siteConfig) ?></td>
+                        <td class="py-3 text-gray-400 text-sm max-w-xs truncate"><?= htmlspecialchars($f['description'] ?? '-') ?></td>
+                        <td class="py-3 text-center">
+                            <?php if($f['is_active']): ?>
+                                <span class="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-bold border border-green-500/30">Activo</span>
+                            <?php else: ?>
+                                <span class="bg-gray-500/20 text-gray-400 text-xs px-2 py-0.5 rounded-full font-bold border border-gray-500/30">Oculto</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="py-3 text-center">
+                            <div class="flex justify-center gap-2 flex-wrap">
+                                <a href="?tab=food&edit_food_id=<?= htmlspecialchars($f['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 transition-colors">Editar</a>
+                                <a href="?toggle_food=<?= htmlspecialchars($f['id']) ?>&tab=food&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors"
+                                   onclick="return confirm('¿Cambiar estado de este producto?')">
+                                    <?= $f['is_active'] ? 'Ocultar' : 'Publicar' ?>
+                                </a>
+                                <a href="?delete_food=<?= htmlspecialchars($f['id']) ?>&tab=food&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                   class="text-xs px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
+                                   onclick="return confirm('¿Eliminar este producto permanentemente?')">Eliminar</a>
                             </div>
-                        </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Fecha de registro</p>
-                            <p class="text-sm text-white mt-1"><?= formatDateVenezuela($edit_user['created_at']) ?></p>
-                        </div>
-                        <div>
-                            <p class="text-xs text-gray-500">Último acceso</p>
-                            <p class="text-sm text-white mt-1"><?= $edit_user['last_login'] ? formatDateVenezuela($edit_user['last_login']) : 'Nunca' ?></p>
-                        </div>
-                    </div>
-                <?php endif; ?>
-
-                <button type="submit" class="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors mt-2 shadow-md">
-                    <?= $edit_user ? 'Actualizar Usuario' : 'Registrar Usuario' ?>
-                </button>
-                <?php if($edit_user): ?>
-                    <a href="?tab=users" class="md:col-span-2 text-center text-gray-400 hover:text-white text-sm">Cancelar edición</a>
-                <?php endif; ?>
-            </form>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
         </div>
+    </div>
+    <?php endif; ?>
 
-        <!-- Lista de Usuarios -->
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-            <h2 class="text-lg font-bold mb-4 text-indigo-300">📋 Todos los Usuarios</h2>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="border-b border-gray-700 text-gray-400 text-sm">
-                            <th class="pb-3 font-semibold">ID</th>
-                            <th class="pb-3 font-semibold">Nombre</th>
-                            <th class="pb-3 font-semibold">Email</th>
-                            <th class="pb-3 font-semibold">Cédula</th>
-                            <th class="pb-3 font-semibold">Teléfono</th>
-                            <th class="pb-3 font-semibold">Rol</th>
-                            <th class="pb-3 font-semibold">Estado</th>
-                            <th class="pb-3 font-semibold text-center">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-700/50 text-sm">
-                        <?php foreach($users as $u): 
-                            $cedula_display = '';
-                            if (!empty($u['cedula_type']) && !empty($u['cedula_number'])) {
-                                $cedula_display = $u['cedula_type'] . '-' . $u['cedula_number'];
-                            }
-                            $phone_display = '';
-                            if (!empty($u['phone_prefix']) && !empty($u['phone_number'])) {
-                                $phone_display = '0' . $u['phone_prefix'] . '-' . $u['phone_number'];
-                            }
-                        ?>
-                            <tr>
-                                <td class="py-3 text-gray-400">#<?= htmlspecialchars($u['id']) ?></td>
-                                <td class="py-3 font-medium text-gray-200"><?= htmlspecialchars($u['name']) ?></td>
-                                <td class="py-3 text-gray-400"><?= htmlspecialchars($u['email']) ?></td>
-                                <td class="py-3 text-gray-400"><?= htmlspecialchars($cedula_display) ?: '-' ?></td>
-                                <td class="py-3 text-gray-400"><?= htmlspecialchars($phone_display) ?: '-' ?></td>
-                                <td class="py-3">
-                                    <?php if($u['role'] == 'admin'): ?>
-                                        <span class="text-indigo-400 font-semibold">Admin</span>
-                                    <?php else: ?>
-                                        <span class="text-gray-400">Usuario</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3">
-                                    <span class="user-status <?= $u['is_blocked'] ? 'blocked' : 'active' ?>">
-                                        <?= $u['is_blocked'] ? '🚫 Bloqueado' : '✅ Activo' ?>
-                                    </span>
-                                </td>
-                                <td class="py-3 text-center">
-                                    <div class="flex justify-center gap-2 flex-wrap">
-                                        <a href="?tab=users&edit_user_id=<?= htmlspecialchars($u['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 transition-colors">
-                                            Editar
-                                        </a>
-                                        <form action="admin.php?tab=users" method="POST" class="inline">
-                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                                            <input type="hidden" name="user_id" value="<?= htmlspecialchars($u['id']) ?>">
-                                            <input type="hidden" name="current_status" value="<?= htmlspecialchars($u['is_blocked']) ?>">
-                                            <input type="hidden" name="toggle_block_user" value="1">
-                                            <button type="submit" class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors">
-                                                <?= $u['is_blocked'] ? 'Desbloquear' : 'Bloquear' ?>
-                                            </button>
-                                        </form>
-                                        <?php if($u['id'] != $_SESSION['user_id']): ?>
-                                            <form action="admin.php?tab=users" method="POST" class="inline" onsubmit="return confirm('¿Eliminar este usuario?')">
-                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                                                <input type="hidden" name="user_id" value="<?= htmlspecialchars($u['id']) ?>">
-                                                <input type="hidden" name="delete_user" value="1">
-                                                <button type="submit" class="text-xs px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors">
-                                                    Eliminar
-                                                </button>
-                                            </form>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+    <!-- ============================================ -->
+    <!-- TAB: HISTORIAL                               -->
+    <!-- ============================================ -->
+    <?php if($activeTab === 'history'): ?>
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
+        <h2 class="text-lg font-bold mb-4 text-indigo-300">📊 Historial de Funciones</h2>
+        <form method="GET" class="flex flex-wrap gap-4 items-end mb-6">
+            <input type="hidden" name="tab" value="history">
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Desde</label>
+                <input type="date" name="history_start_date" value="<?= htmlspecialchars($_GET['history_start_date'] ?? '') ?>"
+                       class="bg-gray-700 p-2 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
-        </div>
-        <?php endif; ?>
-
-        <!-- ============================================ -->
-        <!-- TAB: COMIDA                                  -->
-        <!-- ============================================ -->
-        <?php if($activeTab === 'food'): ?>
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
-            <h2 class="text-lg font-bold mb-4 text-indigo-300">
-                <?= $edit_food ? '✏️ Editar Producto' : '➕ Agregar Producto' ?>
-            </h2>
-            <form action="" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                <?php if($edit_food): ?>
-                    <input type="hidden" name="food_id" value="<?= htmlspecialchars($edit_food['id']) ?>">
-                    <input type="hidden" name="edit_food" value="1">
-                <?php else: ?>
-                    <input type="hidden" name="add_food" value="1">
-                <?php endif; ?>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Nombre del Producto *</label>
-                    <input type="text" name="food_name" required maxlength="100" value="<?= $edit_food ? htmlspecialchars($edit_food['name']) : '' ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Categoría</label>
-                    <select name="category_id" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="">Sin categoría</option>
-                        <?php foreach($food_categories as $cat): ?>
-                            <option value="<?= htmlspecialchars($cat['id']) ?>" <?= ($edit_food && isset($edit_food['category_id']) && $edit_food['category_id'] == $cat['id']) ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($cat['name']) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Precio *</label>
-                    <div class="relative">
-                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-semibold">
-                            <?= htmlspecialchars($siteConfig['currency_symbol'] ?? '$') ?>
-                        </span>
-                        <input type="number" step="0.01" min="0.01" name="food_price" required value="<?= $edit_food ? htmlspecialchars($edit_food['price']) : '' ?>" 
-                               class="w-full bg-gray-700 p-2.5 pl-7 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                               placeholder="0.00">
-                    </div>
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Imagen del Producto</label>
-                    <input type="file" name="food_image" accept="image/*" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
-                    
-                    <?php if($edit_food && !empty($edit_food['image_url']) && file_exists($edit_food['image_url'])): ?>
-                        <div class="mt-3 flex items-center gap-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
-                            <img src="<?= htmlspecialchars($edit_food['image_url']) . '?v=' . time() ?>" alt="Imagen actual" class="h-16 w-16 object-cover rounded bg-gray-900">
-                            <div class="flex-1">
-                                <p class="text-xs text-gray-400">Imagen actual</p>
-                                <p class="text-xs text-gray-500 truncate"><?= htmlspecialchars(basename($edit_food['image_url'])) ?></p>
-                                <button type="submit" name="remove_image" value="1" 
-                                        class="text-xs text-red-400 hover:text-red-300 transition-colors mt-1"
-                                        onclick="return confirm('¿Eliminar la imagen actual?')">
-                                    <i class="fas fa-trash mr-1"></i> Eliminar imagen
-                                </button>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                    <p class="text-xs text-gray-500 mt-1">Formatos: JPG, PNG, GIF, WEBP, SVG. Máx: 2MB</p>
-                </div>
-                
-                <div class="md:col-span-2">
-                    <label class="block text-sm text-gray-400 mb-1">Descripción</label>
-                    <textarea name="food_description" rows="3" placeholder="Descripción del producto..." 
-                              class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"><?= $edit_food ? htmlspecialchars($edit_food['description'] ?? '') : '' ?></textarea>
-                </div>
-                
-                <button type="submit" class="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors mt-2 shadow-md">
-                    <?= $edit_food ? 'Actualizar Producto' : 'Guardar Producto (Oculto)' ?>
-                </button>
-                <?php if($edit_food): ?>
-                    <a href="?tab=food" class="md:col-span-2 text-center text-gray-400 hover:text-white text-sm">Cancelar edición</a>
-                <?php endif; ?>
-            </form>
-        </div>
-
-        <!-- Lista de Productos de Comida -->
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-            <h2 class="text-lg font-bold mb-4 text-indigo-300">📋 Todos los Productos</h2>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="border-b border-gray-700 text-gray-400 text-sm">
-                            <th class="pb-3 font-semibold">Imagen</th>
-                            <th class="pb-3 font-semibold">Nombre</th>
-                            <th class="pb-3 font-semibold">Categoría</th>
-                            <th class="pb-3 font-semibold">Precio</th>
-                            <th class="pb-3 font-semibold">Descripción</th>
-                            <th class="pb-3 font-semibold text-center">Estado</th>
-                            <th class="pb-3 font-semibold text-center">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-700/50 text-sm">
-                        <?php foreach($food_items as $f): ?>
-                            <tr>
-                                <td class="py-3">
-                                    <?php if(!empty($f['image_url']) && file_exists($f['image_url'])): ?>
-                                        <img src="<?= htmlspecialchars($f['image_url']) ?>" 
-                                             alt="<?= htmlspecialchars($f['name']) ?>"
-                                             class="w-12 h-12 object-cover rounded bg-gray-700 shadow">
-                                    <?php else: ?>
-                                        <div class="w-12 h-12 bg-gray-700 rounded flex items-center justify-center text-2xl">🍿</div>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3 font-medium text-gray-200"><?= htmlspecialchars($f['name']) ?></td>
-                                <td class="py-3 text-gray-400"><?= htmlspecialchars($f['category_name'] ?? '-') ?></td>
-                                <td class="py-3 text-green-400 font-semibold"><?= formatCurrency($f['price'], $siteConfig) ?></td>
-                                <td class="py-3 text-gray-400 text-sm max-w-xs truncate"><?= htmlspecialchars($f['description'] ?? '-') ?></td>
-                                <td class="py-3 text-center">
-                                    <?php if($f['is_active']): ?>
-                                        <span class="bg-green-500/20 text-green-400 text-xs px-2 py-0.5 rounded-full font-bold border border-green-500/30">Activo</span>
-                                    <?php else: ?>
-                                        <span class="bg-gray-500/20 text-gray-400 text-xs px-2 py-0.5 rounded-full font-bold border border-gray-500/30">Oculto</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3 text-center">
-                                    <div class="flex justify-center gap-2 flex-wrap">
-                                        <a href="?tab=food&edit_food_id=<?= htmlspecialchars($f['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 transition-colors">
-                                            Editar
-                                        </a>
-                                        <a href="?toggle_food=<?= htmlspecialchars($f['id']) ?>&tab=food&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-gray-700 hover:bg-gray-600 transition-colors"
-                                           onclick="return confirm('¿Cambiar estado de este producto?')">
-                                            <?= $f['is_active'] ? 'Ocultar' : 'Publicar' ?>
-                                        </a>
-                                        <a href="?delete_food=<?= htmlspecialchars($f['id']) ?>&tab=food&csrf_token=<?= htmlspecialchars($csrf_token) ?>" 
-                                           class="text-xs px-2 py-1 rounded bg-red-600/20 hover:bg-red-600/40 text-red-400 transition-colors"
-                                           onclick="return confirm('¿Eliminar este producto permanentemente?')">
-                                            Eliminar
-                                        </a>
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Hasta</label>
+                <input type="date" name="history_end_date" value="<?= htmlspecialchars($_GET['history_end_date'] ?? '') ?>"
+                       class="bg-gray-700 p-2 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
-        </div>
-        <?php endif; ?>
+            <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-semibold transition-colors">🔍 Filtrar</button>
+            <a href="?tab=history" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg font-semibold transition-colors">🗑️ Limpiar filtros</a>
+        </form>
+        <?php
+        $history_start_date = $_GET['history_start_date'] ?? '';
+        $history_end_date = $_GET['history_end_date'] ?? '';
 
-        <!-- ============================================ -->
-        <!-- TAB: HISTORIAL                               -->
-        <!-- ============================================ -->
-        <?php if($activeTab === 'history'): ?>
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700 mb-8">
-            <h2 class="text-lg font-bold mb-4 text-indigo-300">📊 Historial de Funciones</h2>
-            
-            <form method="GET" class="flex flex-wrap gap-4 items-end mb-6">
-                <input type="hidden" name="tab" value="history">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Desde</label>
-                    <input type="date" name="history_start_date" value="<?= htmlspecialchars($history_start_date ?? '') ?>" 
-                           class="bg-gray-700 p-2 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Hasta</label>
-                    <input type="date" name="history_end_date" value="<?= htmlspecialchars($history_end_date ?? '') ?>" 
-                           class="bg-gray-700 p-2 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-lg font-semibold transition-colors">
-                    🔍 Filtrar
-                </button>
-                <a href="?tab=history&csrf_token=<?= htmlspecialchars($csrf_token) ?>" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded-lg font-semibold transition-colors">
-                    🗑️ Limpiar filtros
-                </a>
-            </form>
-            
-            <!-- Resumen -->
-            <?php
-            $history_start_date = $_GET['history_start_date'] ?? '';
-            $history_end_date = $_GET['history_end_date'] ?? '';
+        $history_sql = "
+            SELECT
+                s.id as showtime_id,
+                COALESCE(m.title, 'Película eliminada') as movie_title,
+                r.name as room_name,
+                s.show_date, s.show_time, m.duration,
+                DATE_ADD(CONCAT(s.show_date, ' ', s.show_time), INTERVAL m.duration MINUTE) as end_time,
+                (SELECT COUNT(*) FROM tickets t WHERE t.showtime_id = s.id) +
+                (SELECT COALESCE(SUM(ticket_count), 0) FROM ticket_logs tl WHERE tl.showtime_id = s.id) as tickets_sold,
+                (SELECT COALESCE(SUM(t.price_paid), 0) FROM tickets t WHERE t.showtime_id = s.id) +
+                (SELECT COALESCE(SUM(tl.ticket_count * s.price), 0) FROM ticket_logs tl WHERE tl.showtime_id = s.id) as total_revenue,
+                s.price as original_price, s.half_price_monday, s.promotions, s.is_active, s.language
+            FROM showtimes s
+            LEFT JOIN movies m ON s.movie_id = m.id
+            JOIN rooms r ON s.room_id = r.id
+            WHERE 1=1
+        ";
+        $params = [];
+        if (!empty($history_start_date) && !empty($history_end_date)) {
+            $history_sql .= " AND s.show_date BETWEEN ? AND ?";
+            $params[] = $history_start_date;
+            $params[] = $history_end_date;
+        } elseif (!empty($history_start_date)) {
+            $history_sql .= " AND s.show_date >= ?";
+            $params[] = $history_start_date;
+        } elseif (!empty($history_end_date)) {
+            $history_sql .= " AND s.show_date <= ?";
+            $params[] = $history_end_date;
+        }
+        $history_sql .= " GROUP BY s.id ORDER BY s.show_date DESC, s.show_time DESC";
+        $stmt = $pdo->prepare($history_sql);
+        $stmt->execute($params);
+        $history_showtimes = $stmt->fetchAll();
 
-            $history_sql = "
-                SELECT 
-                    s.id as showtime_id,
-                    COALESCE(m.title, 'Película eliminada') as movie_title,
-                    r.name as room_name,
-                    s.show_date,
-                    s.show_time,
-                    m.duration,
-                    DATE_ADD(CONCAT(s.show_date, ' ', s.show_time), INTERVAL m.duration MINUTE) as end_time,
-                    (
-                        SELECT COUNT(*) 
-                        FROM tickets t 
-                        WHERE t.showtime_id = s.id
-                    ) + 
-                    (
-                        SELECT COALESCE(SUM(ticket_count), 0)
-                        FROM ticket_logs tl
-                        WHERE tl.showtime_id = s.id
-                    ) as tickets_sold,
-                    (
-                        SELECT COALESCE(SUM(t.price_paid), 0)
-                        FROM tickets t 
-                        WHERE t.showtime_id = s.id
-                    ) + 
-                    (
-                        SELECT COALESCE(SUM(tl.ticket_count * s.price), 0)
-                        FROM ticket_logs tl
-                        WHERE tl.showtime_id = s.id
-                    ) as total_revenue,
-                    s.price as original_price,
-                    s.half_price_monday,
-                    s.promotions,
-                    s.is_active,
-                    s.language
-                FROM showtimes s
-                LEFT JOIN movies m ON s.movie_id = m.id
-                JOIN rooms r ON s.room_id = r.id
-                WHERE 1=1
-            ";
-
-            $params = [];
-            if (!empty($history_start_date) && !empty($history_end_date)) {
-                $history_sql .= " AND s.show_date BETWEEN ? AND ?";
-                $params[] = $history_start_date;
-                $params[] = $history_end_date;
-            } elseif (!empty($history_start_date)) {
-                $history_sql .= " AND s.show_date >= ?";
-                $params[] = $history_start_date;
-            } elseif (!empty($history_end_date)) {
-                $history_sql .= " AND s.show_date <= ?";
-                $params[] = $history_end_date;
-            }
-
-            $history_sql .= " GROUP BY s.id ORDER BY s.show_date DESC, s.show_time DESC";
-
-            $stmt = $pdo->prepare($history_sql);
-            $stmt->execute($params);
-            $history_showtimes = $stmt->fetchAll();
-
-            $history_total_tickets = 0;
-            $history_total_revenue = 0;
-            foreach ($history_showtimes as $h) {
-                $history_total_tickets += $h['tickets_sold'];
-                $history_total_revenue += $h['total_revenue'];
-            }
-            ?>
-            
-            <div class="history-summary mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div>
-                    <p class="text-gray-400 text-xs">Funciones</p>
-                    <p class="text-2xl font-bold text-white"><?= count($history_showtimes) ?></p>
-                </div>
-                <div>
-                    <p class="text-gray-400 text-xs">Boletos vendidos</p>
-                    <p class="text-2xl font-bold text-green-400"><?= number_format($history_total_tickets) ?></p>
-                </div>
-                <div>
-                    <p class="text-gray-400 text-xs">Ingresos totales</p>
-                    <p class="text-2xl font-bold text-yellow-400"><?= formatCurrency($history_total_revenue, $siteConfig) ?></p>
-                </div>
-                <div>
-                    <p class="text-gray-400 text-xs">Promedio por función</p>
-                    <p class="text-2xl font-bold text-blue-400">
-                        <?= count($history_showtimes) > 0 ? formatCurrency($history_total_revenue / count($history_showtimes), $siteConfig) : formatCurrency(0, $siteConfig) ?>
-                    </p>
-                </div>
-            </div>
-            
-            <div class="overflow-x-auto">
-                <?php if(empty($history_showtimes)): ?>
-                    <div class="text-center py-8 text-gray-400">
-                        <p class="text-4xl mb-2">📭</p>
-                        <p>No hay funciones registradas<?= (!empty($history_start_date) || !empty($history_end_date)) ? ' en el período seleccionado' : '' ?>.</p>
-                    </div>
-                <?php else: ?>
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="border-b border-gray-700 text-gray-400 text-sm">
-                            <th class="pb-3 font-semibold">Película</th>
-                            <th class="pb-3 font-semibold">Sala</th>
-                            <th class="pb-3 font-semibold">Fecha</th>
-                            <th class="pb-3 font-semibold">Hora</th>
-                            <th class="pb-3 font-semibold text-center">Boletos</th>
-                            <th class="pb-3 font-semibold text-right">Precio</th>
-                            <th class="pb-3 font-semibold text-right">Total</th>
-                            <th class="pb-3 font-semibold">Idioma</th>
-                            <th class="pb-3 font-semibold">Promociones</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-700/50 text-sm">
-                        <?php foreach($history_showtimes as $h): 
-                            $promotions = $h['promotions'] ? explode(',', $h['promotions']) : [];
-                            $promo_labels = [];
-                            if(in_array('lunes_mitad', $promotions)) $promo_labels[] = '🌙 ½ Precio';
-                            if(in_array('preventa', $promotions)) $promo_labels[] = '🎫 Preventa';
-                            $display_price = $h['half_price_monday'] ? $h['original_price'] / 2 : $h['original_price'];
-                            $is_ended = strtotime($h['end_time']) < time();
-                            $has_tickets = $h['tickets_sold'] > 0;
-                            $is_deleted = $h['movie_title'] == 'Película eliminada';
-                            $language = $h['language'] ?? 'español';
-                            $lang_label = $language == 'español' ? '🎬 Español' : '📝 Subtítulos';
-                            $lang_class = $language == 'español' ? 'espanol' : 'subtitulos';
-                        ?>
-                            <tr class="hover:bg-gray-700/30 transition-colors <?= $h['is_active'] == 0 ? 'showtime-inactive' : '' ?>">
-                                <td class="py-3 font-medium <?= $is_deleted ? 'movie-deleted' : 'text-gray-200' ?>">
-                                    <?= htmlspecialchars($h['movie_title']) ?>
-                                    <?php if($h['is_active'] == 0): ?>
-                                        <span class="text-xs text-gray-500 ml-1">(Inactiva)</span>
-                                    <?php endif; ?>
-                                    <?php if($is_deleted): ?>
-                                        <span class="text-xs text-gray-500 ml-1">(Eliminada)</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td class="py-3 text-gray-400"><?= htmlspecialchars($h['room_name']) ?></td>
-                                <td class="py-3 text-gray-400"><?= formatDateShort($h['show_date']) ?></td>
-                                <td class="py-3 text-indigo-300 font-semibold time-display"><?= formatTimeVenezuela($h['show_time']) ?></td>
-                                <td class="py-3 text-center">
-                                    <span class="tickets-sold-badge <?= $has_tickets ? 'sold' : 'none' ?>">
-                                        <?= number_format($h['tickets_sold']) ?>
-                                    </span>
-                                </td>
-                                <td class="py-3 text-right text-gray-400">
-                                    <?= formatCurrency($display_price, $siteConfig) ?>
-                                </td>
-                                <td class="py-3 text-right font-bold <?= $h['total_revenue'] > 0 ? 'text-yellow-400' : 'text-gray-500' ?>">
-                                    <?= formatCurrency($h['total_revenue'], $siteConfig) ?>
-                                </td>
-                                <td class="py-3">
-                                    <span class="language-badge <?= $lang_class ?>"><?= $lang_label ?></span>
-                                </td>
-                                <td class="py-3">
-                                    <?php foreach($promo_labels as $label): ?>
-                                        <span class="promotion-tag <?= strpos($label, '½') !== false ? 'lunes' : 'preventa' ?>"><?= $label ?></span>
-                                    <?php endforeach; ?>
-                                    <?php if(empty($promo_labels)): ?>
-                                        <span class="text-gray-500 text-xs">—</span>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-                <?php endif; ?>
-            </div>
-        </div>
-        <?php endif; ?>
-
-        <!-- ============================================ -->
-        <!-- TAB: CONFIGURACIÓN                            -->
-        <!-- ============================================ -->
-        <?php if($activeTab === 'config'): 
-            $config = getSiteConfig($pdo);
+        $history_total_tickets = 0;
+        $history_total_revenue = 0;
+        foreach ($history_showtimes as $h) {
+            $history_total_tickets += $h['tickets_sold'];
+            $history_total_revenue += $h['total_revenue'];
+        }
         ?>
-        <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
-            <h2 class="text-lg font-bold mb-4 text-indigo-300">⚙️ Configuración del Sitio</h2>
-            <p class="text-sm text-gray-400 mb-4">Configura los parámetros globales que afectan a todo el sitio web.</p>
-            
-            <form action="" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
-                <input type="hidden" name="save_config" value="1">
-                
-                <!-- Columna 1: Información General -->
-                <div class="md:col-span-2">
-                    <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">🏢 Información General</h3>
+        <div class="history-summary mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+                <p class="text-gray-400 text-xs">Funciones</p>
+                <p class="text-2xl font-bold text-white"><?= count($history_showtimes) ?></p>
+            </div>
+            <div>
+                <p class="text-gray-400 text-xs">Boletos vendidos</p>
+                <p class="text-2xl font-bold text-green-400"><?= number_format($history_total_tickets) ?></p>
+            </div>
+            <div>
+                <p class="text-gray-400 text-xs">Ingresos totales</p>
+                <p class="text-2xl font-bold text-yellow-400"><?= formatCurrency($history_total_revenue, $siteConfig) ?></p>
+            </div>
+            <div>
+                <p class="text-gray-400 text-xs">Promedio por función</p>
+                <p class="text-2xl font-bold text-blue-400">
+                    <?= count($history_showtimes) > 0 ? formatCurrency($history_total_revenue / count($history_showtimes), $siteConfig) : formatCurrency(0, $siteConfig) ?>
+                </p>
+            </div>
+        </div>
+        <div class="overflow-x-auto">
+            <?php if(empty($history_showtimes)): ?>
+                <div class="text-center py-8 text-gray-400">
+                    <p class="text-4xl mb-2">📭</p>
+                    <p>No hay funciones registradas<?= (!empty($history_start_date) || !empty($history_end_date)) ? ' en el período seleccionado' : '' ?>.</p>
                 </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Nombre del Sitio</label>
-                    <input type="text" name="site_name" value="<?= htmlspecialchars($config['site_name'] ?? 'Cinema Pro') ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Subir Logo del Header</label>
-                    <input type="file" name="site_logo" accept="image/*" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
-                    
-                    <?php if(!empty($config['site_logo']) && file_exists($config['site_logo'])): ?>
-                        <div class="mt-3 flex items-center gap-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
-                            <img src="<?= htmlspecialchars($config['site_logo']) . '?v=' . time() ?>" alt="Logo actual" class="logo-preview bg-gray-900 p-1 rounded">
-                            <div class="flex-1">
-                                <p class="text-xs text-gray-400">Logo actual del Header</p>
-                                <p class="text-xs text-gray-500 truncate"><?= htmlspecialchars(basename($config['site_logo'])) ?></p>
-                                <button type="submit" name="remove_logo" value="1" 
-                                        class="text-xs text-red-400 hover:text-red-300 transition-colors mt-1"
-                                        onclick="return confirm('¿Eliminar el logo actual?')">
-                                    <i class="fas fa-trash mr-1"></i> Eliminar logo
-                                </button>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                </div>
+            <?php else: ?>
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-gray-700 text-gray-400 text-sm">
+                        <th class="pb-3 font-semibold">Película</th>
+                        <th class="pb-3 font-semibold">Sala</th>
+                        <th class="pb-3 font-semibold">Fecha</th>
+                        <th class="pb-3 font-semibold">Hora</th>
+                        <th class="pb-3 font-semibold text-center">Boletos</th>
+                        <th class="pb-3 font-semibold text-right">Precio</th>
+                        <th class="pb-3 font-semibold text-right">Total</th>
+                        <th class="pb-3 font-semibold">Idioma</th>
+                        <th class="pb-3 font-semibold">Promociones</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700/50 text-sm">
+                    <?php foreach($history_showtimes as $h):
+                        $promotions = $h['promotions'] ? explode(',', $h['promotions']) : [];
+                        $promo_labels = [];
+                        if(in_array('lunes_mitad', $promotions)) $promo_labels[] = '🌙 ½ Precio';
+                        if(in_array('preventa', $promotions)) $promo_labels[] = '🎫 Preventa';
+                        $display_price = $h['half_price_monday'] ? $h['original_price'] / 2 : $h['original_price'];
+                        $has_tickets = $h['tickets_sold'] > 0;
+                        $is_deleted = $h['movie_title'] == 'Película eliminada';
+                        $language = $h['language'] ?? 'español';
+                        $lang_label = $language == 'español' ? '🎬 Español' : '📝 Subtítulos';
+                        $lang_class = $language == 'español' ? 'espanol' : 'subtitulos';
+                    ?>
+                    <tr class="hover:bg-gray-700/30 transition-colors <?= $h['is_active'] == 0 ? 'showtime-inactive' : '' ?>">
+                        <td class="py-3 font-medium <?= $is_deleted ? 'movie-deleted' : 'text-gray-200' ?>">
+                            <?= htmlspecialchars($h['movie_title']) ?>
+                            <?php if($h['is_active'] == 0): ?><span class="text-xs text-gray-500 ml-1">(Inactiva)</span><?php endif; ?>
+                            <?php if($is_deleted): ?><span class="text-xs text-gray-500 ml-1">(Eliminada)</span><?php endif; ?>
+                        </td>
+                        <td class="py-3 text-gray-400"><?= htmlspecialchars($h['room_name']) ?></td>
+                        <td class="py-3 text-gray-400"><?= formatDateShort($h['show_date']) ?></td>
+                        <td class="py-3 text-indigo-300 font-semibold time-display"><?= formatTimeVenezuela($h['show_time']) ?></td>
+                        <td class="py-3 text-center">
+                            <span class="tickets-sold-badge <?= $has_tickets ? 'sold' : 'none' ?>">
+                                <?= number_format($h['tickets_sold']) ?>
+                            </span>
+                        </td>
+                        <td class="py-3 text-right text-gray-400"><?= formatCurrency($display_price, $siteConfig) ?></td>
+                        <td class="py-3 text-right font-bold <?= $h['total_revenue'] > 0 ? 'text-yellow-400' : 'text-gray-500' ?>">
+                            <?= formatCurrency($h['total_revenue'], $siteConfig) ?>
+                        </td>
+                        <td class="py-3"><span class="language-badge <?= $lang_class ?>"><?= $lang_label ?></span></td>
+                        <td class="py-3">
+                            <?php foreach($promo_labels as $label): ?>
+                                <span class="promotion-tag <?= strpos($label, '½') !== false ? 'lunes' : 'preventa' ?>"><?= $label ?></span>
+                            <?php endforeach; ?>
+                            <?php if(empty($promo_labels)): ?><span class="text-gray-500 text-xs">—</span><?php endif; ?>
+                        </td>
+                    </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <?php endif; ?>
+        </div>
+    </div>
+    <?php endif; ?>
 
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Subir Logo del Footer</label>
-                    <input type="file" name="footer_logo" accept="image/*" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
-                    
-                    <?php if(!empty($config['footer_logo']) && file_exists($config['footer_logo'])): ?>
-                        <div class="mt-3 flex items-center gap-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
-                            <img src="<?= htmlspecialchars($config['footer_logo']) . '?v=' . time() ?>" alt="Logo footer actual" class="logo-preview bg-gray-900 p-1 rounded" style="max-height: 60px; max-width: 277px;">
-                            <div class="flex-1">
-                                <p class="text-xs text-gray-400">Logo actual del Footer</p>
-                                <p class="text-xs text-gray-500 truncate"><?= htmlspecialchars(basename($config['footer_logo'])) ?></p>
-                                <button type="submit" name="remove_footer_logo" value="1" 
-                                        class="text-xs text-red-400 hover:text-red-300 transition-colors mt-1"
-                                        onclick="return confirm('¿Eliminar el logo del footer actual?')">
-                                    <i class="fas fa-trash mr-1"></i> Eliminar logo
-                                </button>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                </div>
-
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Subir Favicon</label>
-                    <input type="file" name="site_favicon" accept="image/png,image/x-icon,image/vnd.microsoft.icon" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
-                    
-                    <?php if(!empty($config['site_favicon']) && file_exists($config['site_favicon'])): ?>
-                        <div class="mt-3 flex items-center gap-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
-                            <img src="<?= htmlspecialchars($config['site_favicon']) . '?v=' . time() ?>" alt="Favicon actual" class="bg-gray-900 p-1 rounded" style="width: 32px; height: 32px; object-fit: contain;">
-                            <div class="flex-1">
-                                <p class="text-xs text-gray-400">Favicon actual</p>
-                                <p class="text-xs text-gray-500 truncate"><?= htmlspecialchars(basename($config['site_favicon'])) ?></p>
-                                <button type="submit" name="remove_favicon" value="1" 
-                                        class="text-xs text-red-400 hover:text-red-300 transition-colors mt-1"
-                                        onclick="return confirm('¿Eliminar el favicon actual?')">
-                                    <i class="fas fa-trash mr-1"></i> Eliminar favicon
-                                </button>
-                            </div>
-                        </div>
-                    <?php endif; ?>
-                </div>
-                
-                <!-- Columna 2: Moneda y Formato -->
-                <div class="md:col-span-2 mt-2">
-                    <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">💰 Moneda y Formato</h3>
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Símbolo de Moneda</label>
-                    <input type="text" name="currency_symbol" value="<?= htmlspecialchars($config['currency_symbol'] ?? '$') ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Posición del Símbolo</label>
-                    <select name="currency_position" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="left" <?= ($config['currency_position'] ?? 'left') === 'left' ? 'selected' : '' ?>>Izquierda (ej: $100)</option>
-                        <option value="right" <?= ($config['currency_position'] ?? 'left') === 'right' ? 'selected' : '' ?>>Derecha (ej: 100 $)</option>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Separador de Miles</label>
-                    <input type="text" name="thousands_separator" value="<?= htmlspecialchars($config['thousands_separator'] ?? '.') ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" maxlength="1">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Separador Decimal</label>
-                    <input type="text" name="decimal_separator" value="<?= htmlspecialchars($config['decimal_separator'] ?? ',') ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" maxlength="1">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Número de Decimales</label>
-                    <select name="decimal_places" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="0" <?= ($config['decimal_places'] ?? '2') == '0' ? 'selected' : '' ?>>0</option>
-                        <option value="1" <?= ($config['decimal_places'] ?? '2') == '1' ? 'selected' : '' ?>>1</option>
-                        <option value="2" <?= ($config['decimal_places'] ?? '2') == '2' ? 'selected' : '' ?>>2</option>
-                        <option value="3" <?= ($config['decimal_places'] ?? '2') == '3' ? 'selected' : '' ?>>3</option>
-                    </select>
-                </div>
-                
-                <!-- IVA -->
-                <div class="md:col-span-2 mt-2">
-                    <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">🧾 Impuestos</h3>
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Nombre del Impuesto</label>
-                    <input type="text" name="tax_name" value="<?= htmlspecialchars($taxConfig['tax_name'] ?? 'IVA') ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" readonly>
-                    <p class="text-xs text-gray-500 mt-1">El nombre del impuesto se muestra en los recibos</p>
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Porcentaje de IVA (%)</label>
-                    <input type="number" name="tax_rate" step="0.01" min="0" max="100" 
-                           value="<?= htmlspecialchars($taxRate) ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" 
-                           placeholder="16">
-                    <p class="text-xs text-gray-500 mt-1">Ejemplo: 16 para 16%</p>
-                </div>
-                
-                <div class="md:col-span-2 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
-                    <p class="text-sm text-gray-400">📝 <strong>Vista previa del formato con IVA:</strong></p>
-                    <div class="grid grid-cols-2 gap-4 mt-2 text-sm">
-                        <div>
-                            <span class="text-gray-500">Subtotal:</span>
-                            <span class="text-white font-bold"><?= formatCurrency(100, $config) ?></span>
-                        </div>
-                        <div>
-                            <span class="text-gray-500">IVA (<?= $taxRate ?>%):</span>
-                            <span class="text-yellow-400 font-bold"><?= formatCurrency(100 * ($taxRate / 100), $config) ?></span>
-                        </div>
-                        <div class="col-span-2 border-t border-gray-700 pt-1">
-                            <span class="text-gray-500">Total:</span>
-                            <span class="text-green-400 font-bold text-lg"><?= formatCurrency(100 * (1 + $taxRate / 100), $config) ?></span>
-                        </div>
+    <!-- ============================================ -->
+    <!-- TAB: CONFIGURACIÓN                           -->
+    <!-- ============================================ -->
+    <?php if($activeTab === 'config'):
+        $config = getSiteConfig($pdo);
+    ?>
+    <div class="bg-gray-800 p-6 rounded-lg shadow-lg border border-gray-700">
+        <h2 class="text-lg font-bold mb-4 text-indigo-300">⚙️ Configuración del Sitio</h2>
+        <p class="text-sm text-gray-400 mb-4">Configura los parámetros globales que afectan a todo el sitio web.</p>
+        <form action="" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
+            <input type="hidden" name="save_config" value="1">
+            <div class="md:col-span-2">
+                <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">🏢 Información General</h3>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Nombre del Sitio</label>
+                <input type="text" name="site_name" value="<?= htmlspecialchars($config['site_name'] ?? 'Cinema Pro') ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Subir Logo del Header</label>
+                <input type="file" name="site_logo" accept="image/*"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
+                <?php if(!empty($config['site_logo']) && file_exists($config['site_logo'])): ?>
+                <div class="mt-3 flex items-center gap-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+                    <img src="<?= htmlspecialchars($config['site_logo']) . '?v=' . time() ?>" alt="Logo actual" class="logo-preview bg-gray-900 p-1 rounded">
+                    <div class="flex-1">
+                        <p class="text-xs text-gray-400">Logo actual del Header</p>
+                        <button type="submit" name="remove_logo" value="1"
+                                class="text-xs text-red-400 hover:text-red-300 transition-colors mt-1"
+                                onclick="return confirm('¿Eliminar el logo actual?')">
+                            <i class="fas fa-trash mr-1"></i> Eliminar logo
+                        </button>
                     </div>
                 </div>
-                
-                <!-- Contacto -->
-                <div class="md:col-span-2 mt-2">
-                    <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">📞 Información de Contacto</h3>
-                    <p class="text-xs text-gray-500 mb-2">Si dejas un campo vacío, no se mostrará en el footer.</p>
+                <?php endif; ?>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Subir Logo del Footer</label>
+                <input type="file" name="footer_logo" accept="image/*"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
+                <?php if(!empty($config['footer_logo']) && file_exists($config['footer_logo'])): ?>
+                <div class="mt-3 flex items-center gap-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+                    <img src="<?= htmlspecialchars($config['footer_logo']) . '?v=' . time() ?>" alt="Logo footer actual" class="logo-preview bg-gray-900 p-1 rounded" style="max-height: 60px; max-width: 277px;">
+                    <div class="flex-1">
+                        <p class="text-xs text-gray-400">Logo actual del Footer</p>
+                        <button type="submit" name="remove_footer_logo" value="1"
+                                class="text-xs text-red-400 hover:text-red-300 transition-colors mt-1"
+                                onclick="return confirm('¿Eliminar el logo del footer actual?')">
+                            <i class="fas fa-trash mr-1"></i> Eliminar logo
+                        </button>
+                    </div>
                 </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Dirección</label>
-                    <input type="text" name="address" value="<?= htmlspecialchars($config['address'] ?? '') ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <?php endif; ?>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Subir Favicon</label>
+                <input type="file" name="site_favicon" accept="image/png,image/x-icon,image/vnd.microsoft.icon"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
+                <?php if(!empty($config['site_favicon']) && file_exists($config['site_favicon'])): ?>
+                <div class="mt-3 flex items-center gap-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+                    <img src="<?= htmlspecialchars($config['site_favicon']) . '?v=' . time() ?>" alt="Favicon actual" class="bg-gray-900 p-1 rounded" style="width: 32px; height: 32px; object-fit: contain;">
+                    <div class="flex-1">
+                        <p class="text-xs text-gray-400">Favicon actual</p>
+                        <button type="submit" name="remove_favicon" value="1"
+                                class="text-xs text-red-400 hover:text-red-300 transition-colors mt-1"
+                                onclick="return confirm('¿Eliminar el favicon actual?')">
+                            <i class="fas fa-trash mr-1"></i> Eliminar favicon
+                        </button>
+                    </div>
                 </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Teléfono</label>
-                    <input type="text" name="phone" value="<?= htmlspecialchars($config['phone'] ?? '') ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <?php endif; ?>
+            </div>
+            <div class="md:col-span-2 mt-2">
+                <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">💰 Moneda y Formato</h3>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Símbolo de Moneda</label>
+                <input type="text" name="currency_symbol" value="<?= htmlspecialchars($config['currency_symbol'] ?? '$') ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Posición del Símbolo</label>
+                <select name="currency_position" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="left" <?= ($config['currency_position'] ?? 'left') === 'left' ? 'selected' : '' ?>>Izquierda (ej: $100)</option>
+                    <option value="right" <?= ($config['currency_position'] ?? 'left') === 'right' ? 'selected' : '' ?>>Derecha (ej: 100 $)</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Separador de Miles</label>
+                <input type="text" name="thousands_separator" value="<?= htmlspecialchars($config['thousands_separator'] ?? '.') ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" maxlength="1">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Separador Decimal</label>
+                <input type="text" name="decimal_separator" value="<?= htmlspecialchars($config['decimal_separator'] ?? ',') ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" maxlength="1">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Número de Decimales</label>
+                <select name="decimal_places" class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <option value="0" <?= ($config['decimal_places'] ?? '2') == '0' ? 'selected' : '' ?>>0</option>
+                    <option value="1" <?= ($config['decimal_places'] ?? '2') == '1' ? 'selected' : '' ?>>1</option>
+                    <option value="2" <?= ($config['decimal_places'] ?? '2') == '2' ? 'selected' : '' ?>>2</option>
+                    <option value="3" <?= ($config['decimal_places'] ?? '2') == '3' ? 'selected' : '' ?>>3</option>
+                </select>
+            </div>
+            <div class="md:col-span-2 mt-2">
+                <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">🧾 Impuestos</h3>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Nombre del Impuesto</label>
+                <input type="text" name="tax_name" value="<?= htmlspecialchars($taxConfig['tax_name'] ?? 'IVA') ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500" readonly>
+                <p class="text-xs text-gray-500 mt-1">El nombre del impuesto se muestra en los recibos</p>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Porcentaje de IVA (%)</label>
+                <input type="number" name="tax_rate" step="0.01" min="0" max="100"
+                       value="<?= htmlspecialchars($taxRate) ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                       placeholder="16">
+                <p class="text-xs text-gray-500 mt-1">Ejemplo: 16 para 16%</p>
+            </div>
+            <div class="md:col-span-2 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
+                <p class="text-sm text-gray-400">📝 <strong>Vista previa del formato con IVA:</strong></p>
+                <div class="grid grid-cols-2 gap-4 mt-2 text-sm">
+                    <div>
+                        <span class="text-gray-500">Subtotal:</span>
+                        <span class="text-white font-bold"><?= formatCurrency(100, $config) ?></span>
+                    </div>
+                    <div>
+                        <span class="text-gray-500">IVA (<?= $taxRate ?>%):</span>
+                        <span class="text-yellow-400 font-bold"><?= formatCurrency(100 * ($taxRate / 100), $config) ?></span>
+                    </div>
+                    <div class="col-span-2 border-t border-gray-700 pt-1">
+                        <span class="text-gray-500">Total:</span>
+                        <span class="text-green-400 font-bold text-lg"><?= formatCurrency(100 * (1 + $taxRate / 100), $config) ?></span>
+                    </div>
                 </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Email</label>
-                    <input type="email" name="email" value="<?= htmlspecialchars($config['email'] ?? '') ?>" 
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                
-                <!-- Redes Sociales -->
-                <div class="md:col-span-2 mt-2">
-                    <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">📱 Redes Sociales</h3>
-                    <p class="text-xs text-gray-500 mb-2">Si dejas un campo vacío, no se mostrará en el footer.</p>
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1"><i class="fab fa-instagram text-pink-400"></i> Instagram</label>
-                    <input type="url" name="instagram" value="<?= htmlspecialchars($config['instagram'] ?? '') ?>" 
-                           placeholder="https://instagram.com/tuusuario"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1"><i class="fab fa-facebook text-blue-400"></i> Facebook</label>
-                    <input type="url" name="facebook" value="<?= htmlspecialchars($config['facebook'] ?? '') ?>" 
-                           placeholder="https://facebook.com/tupagina"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1"><i class="fa-brands fa-x-twitter text-white"></i> X (Twitter)</label>
-                    <input type="url" name="twitter" value="<?= htmlspecialchars($config['twitter'] ?? '') ?>" 
-                           placeholder="https://x.com/tuusuario"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1"><i class="fab fa-telegram text-blue-400"></i> Telegram</label>
-                    <input type="url" name="telegram" value="<?= htmlspecialchars($config['telegram'] ?? '') ?>" 
-                           placeholder="https://t.me/tucanal"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1"><i class="fab fa-whatsapp text-green-400"></i> WhatsApp</label>
-                    <input type="url" name="whatsapp" value="<?= htmlspecialchars($config['whatsapp'] ?? '') ?>" 
-                           placeholder="https://wa.me/1234567890"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
-                
-                <button type="submit" class="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors mt-4 shadow-md">
-                    💾 Guardar Configuración
-                </button>
-                <a href="?tab=config&csrf_token=<?= htmlspecialchars($csrf_token) ?>" class="md:col-span-2 text-center text-gray-400 hover:text-white text-sm">Volver</a>
-            </form>
-        </div>
-        <?php endif; ?>
-
+            </div>
+            <div class="md:col-span-2 mt-2">
+                <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">📞 Información de Contacto</h3>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Dirección</label>
+                <input type="text" name="address" value="<?= htmlspecialchars($config['address'] ?? '') ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Teléfono</label>
+                <input type="text" name="phone" value="<?= htmlspecialchars($config['phone'] ?? '') ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1">Email</label>
+                <input type="email" name="email" value="<?= htmlspecialchars($config['email'] ?? '') ?>"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="md:col-span-2 mt-2">
+                <h3 class="text-md font-semibold text-white mb-3 border-b border-gray-700 pb-2">📱 Redes Sociales</h3>
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1"><i class="fab fa-instagram text-pink-400"></i> Instagram</label>
+                <input type="url" name="instagram" value="<?= htmlspecialchars($config['instagram'] ?? '') ?>"
+                       placeholder="https://instagram.com/tuusuario"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1"><i class="fab fa-facebook text-blue-400"></i> Facebook</label>
+                <input type="url" name="facebook" value="<?= htmlspecialchars($config['facebook'] ?? '') ?>"
+                       placeholder="https://facebook.com/tupagina"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1"><i class="fa-brands fa-x-twitter text-white"></i> X (Twitter)</label>
+                <input type="url" name="twitter" value="<?= htmlspecialchars($config['twitter'] ?? '') ?>"
+                       placeholder="https://x.com/tuusuario"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1"><i class="fab fa-telegram text-blue-400"></i> Telegram</label>
+                <input type="url" name="telegram" value="<?= htmlspecialchars($config['telegram'] ?? '') ?>"
+                       placeholder="https://t.me/tucanal"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div>
+                <label class="block text-sm text-gray-400 mb-1"><i class="fab fa-whatsapp text-green-400"></i> WhatsApp</label>
+                <input type="url" name="whatsapp" value="<?= htmlspecialchars($config['whatsapp'] ?? '') ?>"
+                       placeholder="https://wa.me/1234567890"
+                       class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <button type="submit" class="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors mt-4 shadow-md">
+                💾 Guardar Configuración
+            </button>
+            <a href="?tab=config" class="md:col-span-2 text-center text-gray-400 hover:text-white text-sm">Volver</a>
+        </form>
     </div>
+    <?php endif; ?>
+</div>
 
-    <!-- Modal de Actualización -->
-    <div class="modal-overlay" id="updateModal">
-        <div class="modal-box">
-            <span class="modal-icon">✅</span>
-            <h2 class="modal-title">Película Actualizada</h2>
-            <p class="modal-message" id="updateModalMessage">La película fue actualizada correctamente desde TMDb.</p>
-            <button class="modal-btn" onclick="closeUpdateModal()">Entendido</button>
-        </div>
+<!-- Modal de Actualización -->
+<div class="modal-overlay" id="updateModal">
+    <div class="modal-box">
+        <span class="modal-icon">✅</span>
+        <h2 class="modal-title">Película Actualizada</h2>
+        <p class="modal-message" id="updateModalMessage">La película fue actualizada correctamente desde TMDb.</p>
+        <button class="modal-btn" onclick="closeUpdateModal()">Entendido</button>
     </div>
+</div>
 
-    <script>
-    function togglePasswordVisibility(inputId, btn) {
-        const input = document.getElementById(inputId);
-        const icon = btn.querySelector('i');
-        if (input.type === 'password') {
-            input.type = 'text';
+<script>
+// ============================================
+// ✅ JAVASCRIPT CONSOLIDADO (SIN DUPLICADOS)
+// ============================================
+
+// --------------------------------------------
+// Toggle de visibilidad de contraseña
+// --------------------------------------------
+function togglePasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input || !btn) return;
+    const icon = btn.querySelector('i');
+    if (input.type === 'password') {
+        input.type = 'text';
+        if (icon) {
             icon.classList.remove('fa-eye');
             icon.classList.add('fa-eye-slash');
-        } else {
-            input.type = 'password';
+        }
+    } else {
+        input.type = 'password';
+        if (icon) {
             icon.classList.remove('fa-eye-slash');
             icon.classList.add('fa-eye');
         }
     }
+}
 
-    function togglePriceInput(checkbox, inputId) {
-        const input = document.getElementById(inputId);
-        if (!input) return;
-        
-        if (checkbox.checked) {
-            input.disabled = false;
-            input.classList.remove('price-input-disabled');
-        } else {
-            input.disabled = true;
-            input.classList.add('price-input-disabled');
-        }
+// --------------------------------------------
+// Toggle de inputs de precio (niño/tercera edad)
+// --------------------------------------------
+function togglePriceInput(checkbox, inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (checkbox.checked) {
+        input.disabled = false;
+        input.classList.remove('price-input-disabled');
+    } else {
+        input.disabled = true;
+        input.classList.add('price-input-disabled');
+    }
+}
+
+// --------------------------------------------
+// ✅ VERIFICADOR DE CONFLICTOS (CORREGIDO)
+// Verifica que los elementos existan antes de usarlos
+// --------------------------------------------
+document.addEventListener('DOMContentLoaded', function() {
+    const movieSelect = document.getElementById('movieSelect');
+    const roomSelect = document.getElementById('roomSelect');
+    const dateInput = document.getElementById('dateInput');
+    const timeInput = document.getElementById('timeInput');
+    const conflictStatus = document.getElementById('conflictStatus');
+    const conflictChecker = document.getElementById('conflictChecker');
+    const submitBtn = document.getElementById('submitBtn');
+    const showtimeIdInput = document.getElementById('showtimeIdInput');
+
+    // ✅ SALIR TEMPRANO si no estamos en la pestaña de horarios
+    if (!movieSelect || !roomSelect || !dateInput || !timeInput) {
+        return;
     }
 
-    document.addEventListener('DOMContentLoaded', function() {
-        const childCheckbox = document.getElementById('enable_child_price');
-        const childInput = document.getElementById('price_child');
-        if (childCheckbox && childInput) {
-            if (!childCheckbox.checked) {
-                childInput.disabled = true;
-                childInput.classList.add('price-input-disabled');
-            } else {
-                childInput.disabled = false;
-                childInput.classList.remove('price-input-disabled');
-            }
-        }
-        
-        const seniorCheckbox = document.getElementById('enable_senior_price');
-        const seniorInput = document.getElementById('price_senior');
-        if (seniorCheckbox && seniorInput) {
-            if (!seniorCheckbox.checked) {
-                seniorInput.disabled = true;
-                seniorInput.classList.add('price-input-disabled');
-            } else {
-                seniorInput.disabled = false;
-                seniorInput.classList.remove('price-input-disabled');
-            }
-        }
-    });
-        
-    // VERIFICADOR DE CONFLICTOS
-    document.addEventListener('DOMContentLoaded', function() {
-        const movieSelect = document.getElementById('movieSelect');
-        const roomSelect = document.getElementById('roomSelect');
-        const dateInput = document.getElementById('dateInput');
-        const timeInput = document.getElementById('timeInput');
-        const conflictStatus = document.getElementById('conflictStatus');
-        const conflictChecker = document.getElementById('conflictChecker');
-        const submitBtn = document.getElementById('submitBtn');
-        const showtimeIdInput = document.getElementById('showtimeIdInput');
-        
-        function checkConflicts() {
-            const movieId = movieSelect.value;
-            const roomId = roomSelect.value;
-            const date = dateInput.value;
-            const time = timeInput.value;
-            
-            if (!movieId || !roomId || !date || !time) {
-                conflictStatus.textContent = 'Selecciona película, sala, fecha y hora para verificar automáticamente si hay conflictos.';
-                conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-checking';
+    function checkConflicts() {
+        const movieId = movieSelect.value;
+        const roomId = roomSelect.value;
+        const date = dateInput.value;
+        const time = timeInput.value;
+
+        if (!movieId || !roomId || !date || !time) {
+            if (conflictStatus) conflictStatus.textContent = 'Selecciona película, sala, fecha y hora para verificar automáticamente si hay conflictos.';
+            if (conflictChecker) conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-checking';
+            if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('btn-disabled');
-                return;
             }
-            
-            const selectedOption = movieSelect.options[movieSelect.selectedIndex];
-            const duration = selectedOption ? parseInt(selectedOption.dataset.duration) || 0 : 0;
-            
-            if (duration === 0) {
-                conflictStatus.textContent = '⚠️ La película seleccionada no tiene duración definida.';
-                conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
+            return;
+        }
+
+        const selectedOption = movieSelect.options[movieSelect.selectedIndex];
+        const duration = selectedOption ? parseInt(selectedOption.dataset.duration) || 0 : 0;
+
+        if (duration === 0) {
+            if (conflictStatus) conflictStatus.textContent = '⚠️ La película seleccionada no tiene duración definida.';
+            if (conflictChecker) conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
+            if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('btn-disabled');
-                return;
             }
-            
-            conflictStatus.textContent = '⏳ Verificando conflictos...';
-            conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-checking';
+            return;
+        }
+
+        if (conflictStatus) conflictStatus.textContent = '⏳ Verificando conflictos...';
+        if (conflictChecker) conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-checking';
+        if (submitBtn) {
             submitBtn.disabled = true;
             submitBtn.classList.add('btn-disabled');
-            
-            const formData = new FormData();
-            formData.append('action', 'check_conflict');
-            formData.append('room_id', roomId);
-            formData.append('show_date', date);
-            formData.append('show_time', time);
-            formData.append('duration', duration);
-            
-            const excludeId = showtimeIdInput ? showtimeIdInput.value : '0';
-            if (excludeId && parseInt(excludeId) > 0) {
-                formData.append('exclude_id', excludeId);
-            }
-            
-            fetch('check_conflict.php', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    conflictStatus.textContent = '⚠️ Error: ' + data.error;
-                    conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
+        }
+
+        const formData = new FormData();
+        formData.append('action', 'check_conflict');
+        formData.append('room_id', roomId);
+        formData.append('show_date', date);
+        formData.append('show_time', time);
+        formData.append('duration', duration);
+
+        const excludeId = showtimeIdInput ? showtimeIdInput.value : '0';
+        if (excludeId && parseInt(excludeId) > 0) {
+            formData.append('exclude_id', excludeId);
+        }
+
+        fetch('check_conflict.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                if (conflictStatus) conflictStatus.textContent = '⚠️ Error: ' + data.error;
+                if (conflictChecker) conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
+                if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.classList.remove('btn-disabled');
-                    return;
                 }
-                
-                if (data.conflict) {
-                    let message = data.message || 'Conflicto detectado';
-                    message = message.replace(/Sala\s+Sala/g, 'Sala');
-                    message = message.replace(/sala\s+sala/g, 'sala');
-                    
-                    conflictStatus.textContent = '❌ ' + message;
-                    conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
+                return;
+            }
+
+            if (data.conflict) {
+                let message = data.message || 'Conflicto detectado';
+                message = message.replace(/Sala\s+Sala/g, 'Sala');
+                message = message.replace(/sala\s+sala/g, 'sala');
+                if (conflictStatus) conflictStatus.textContent = '❌ ' + message;
+                if (conflictChecker) conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
+                if (submitBtn) {
                     submitBtn.disabled = true;
                     submitBtn.classList.add('btn-disabled');
-                } else {
-                    let message = data.message || '✅ No hay conflictos. La sala está disponible en el horario seleccionado.';
-                    conflictStatus.textContent = message;
-                    conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-safe';
+                }
+            } else {
+                let message = data.message || '✅ No hay conflictos. La sala está disponible en el horario seleccionado.';
+                if (conflictStatus) conflictStatus.textContent = message;
+                if (conflictChecker) conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-safe';
+                if (submitBtn) {
                     submitBtn.disabled = false;
                     submitBtn.classList.remove('btn-disabled');
                 }
-            })
-            .catch(error => {
-                console.error('Error verificando conflictos:', error);
-                conflictStatus.textContent = '⚠️ Error al verificar conflictos. Intenta nuevamente.';
-                conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
+            }
+        })
+        .catch(error => {
+            console.error('Error verificando conflictos:', error);
+            if (conflictStatus) conflictStatus.textContent = '⚠️ Error al verificar conflictos. Intenta nuevamente.';
+            if (conflictChecker) conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
+            if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('btn-disabled');
-            });
-        }
-        
-        movieSelect.addEventListener('change', checkConflicts);
-        roomSelect.addEventListener('change', checkConflicts);
-        dateInput.addEventListener('change', checkConflicts);
-        timeInput.addEventListener('change', checkConflicts);
-        
-        if (movieSelect.value && roomSelect.value && dateInput.value && timeInput.value) {
-            setTimeout(checkConflicts, 300);
-        }
-    });
-
-    // FUNCIONES DEL BUSCADOR POR NOMBRE
-    function applyFilters() {
-        const title = document.getElementById('searchTitle').value.trim();
-        let url = '?tab=movies';
-        if (title) url += '&search_title=' + encodeURIComponent(title);
-        url += '&csrf_token=' + encodeURIComponent('<?= htmlspecialchars($csrf_token) ?>');
-        window.location.href = url;
-    }
-
-    function clearFilters() {
-        window.location.href = '?tab=movies&csrf_token=' + encodeURIComponent('<?= htmlspecialchars($csrf_token) ?>');
-    }
-
-    // FUNCIONES DEL MODAL DE ACTUALIZACIÓN
-    function showUpdateModal(message) {
-        document.getElementById('updateModalMessage').textContent = message;
-        document.getElementById('updateModal').classList.add('active');
-        document.body.style.overflow = 'hidden';
-    }
-
-    function closeUpdateModal() {
-        document.getElementById('updateModal').classList.remove('active');
-        document.body.style.overflow = '';
-    }
-
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            const modal = document.getElementById('updateModal');
-            if (modal.classList.contains('active')) {
-                closeUpdateModal();
             }
-        }
-    });
+        });
+    }
 
-    document.addEventListener('click', function(e) {
+    // ✅ Ahora es seguro agregar los listeners porque verificamos que existen
+    movieSelect.addEventListener('change', checkConflicts);
+    roomSelect.addEventListener('change', checkConflicts);
+    dateInput.addEventListener('change', checkConflicts);
+    timeInput.addEventListener('change', checkConflicts);
+
+    if (movieSelect.value && roomSelect.value && dateInput.value && timeInput.value) {
+        setTimeout(checkConflicts, 300);
+    }
+
+    // --------------------------------------------
+    // ✅ Inicialización de toggles de precio
+    // --------------------------------------------
+    const childCheckbox = document.getElementById('enable_child_price');
+    const childInput = document.getElementById('price_child');
+    if (childCheckbox && childInput) {
+        if (!childCheckbox.checked) {
+            childInput.disabled = true;
+            childInput.classList.add('price-input-disabled');
+        } else {
+            childInput.disabled = false;
+            childInput.classList.remove('price-input-disabled');
+        }
+    }
+
+    const seniorCheckbox = document.getElementById('enable_senior_price');
+    const seniorInput = document.getElementById('price_senior');
+    if (seniorCheckbox && seniorInput) {
+        if (!seniorCheckbox.checked) {
+            seniorInput.disabled = true;
+            seniorInput.classList.add('price-input-disabled');
+        } else {
+            seniorInput.disabled = false;
+            seniorInput.classList.remove('price-input-disabled');
+        }
+    }
+
+    // --------------------------------------------
+    // ✅ Enter para buscar (con verificación)
+    // --------------------------------------------
+    const searchInput = document.getElementById('searchTitle');
+    if (searchInput) {
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applyFilters();
+            }
+        });
+    }
+});
+
+// --------------------------------------------
+// Funciones del buscador por nombre
+// --------------------------------------------
+function applyFilters() {
+    const title = document.getElementById('searchTitle');
+    if (!title) return;
+    const searchValue = title.value.trim();
+    let url = '?tab=movies';
+    if (searchValue) url += '&search_title=' + encodeURIComponent(searchValue);
+    url += '&csrf_token=' + encodeURIComponent('<?= htmlspecialchars($csrf_token) ?>');
+    window.location.href = url;
+}
+
+function clearFilters() {
+    window.location.href = '?tab=movies&csrf_token=' + encodeURIComponent('<?= htmlspecialchars($csrf_token) ?>');
+}
+
+// --------------------------------------------
+// Funciones del modal de actualización
+// --------------------------------------------
+function showUpdateModal(message) {
+    const modal = document.getElementById('updateModal');
+    const modalMessage = document.getElementById('updateModalMessage');
+    if (!modal || !modalMessage) return;
+    modalMessage.textContent = message;
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeUpdateModal() {
+    const modal = document.getElementById('updateModal');
+    if (!modal) return;
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+// Cierre con ESC
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
         const modal = document.getElementById('updateModal');
-        if (e.target === modal) {
+        if (modal && modal.classList.contains('active')) {
             closeUpdateModal();
         }
-    });
+    }
+});
 
-    // VERIFICAR SI HAY MENSAJE DE ACTUALIZACIÓN
-    <?php if($msg && strpos($msg, 'fue actualizada') !== false): ?>
-    document.addEventListener('DOMContentLoaded', function() {
-        showUpdateModal('<?= addslashes($msg) ?>');
-    });
-    <?php endif; ?>
-    
-    // ENTER PARA BUSCAR
-    document.addEventListener('DOMContentLoaded', function() {
-        const searchInput = document.getElementById('searchTitle');
-        if (searchInput) {
-            searchInput.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    applyFilters();
-                }
-            });
-        }
-    });
-    </script>
+// Cierre con click fuera
+document.addEventListener('click', function(e) {
+    const modal = document.getElementById('updateModal');
+    if (modal && e.target === modal) {
+        closeUpdateModal();
+    }
+});
+
+// --------------------------------------------
+// ✅ Mostrar modal si hay mensaje de actualización
+// --------------------------------------------
+<?php if($msg && strpos($msg, 'fue actualizada') !== false): ?>
+document.addEventListener('DOMContentLoaded', function() {
+    showUpdateModal('<?= addslashes($msg) ?>');
+});
+<?php endif; ?>
+</script>
 </body>
 </html>

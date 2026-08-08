@@ -2,6 +2,20 @@
 require_once 'config.php';
 
 // ============================================
+// ✅ DETECTAR LOGOUT RECIENTE
+// ============================================
+$showLogoutMessage = false;
+if (isset($_GET['logout']) && $_GET['logout'] == 1) {
+    $showLogoutMessage = true;
+    
+    // Limpiar la bandera de sesión después de mostrarla una vez
+    if (isset($_SESSION['just_logged_out'])) {
+        unset($_SESSION['just_logged_out']);
+        unset($_SESSION['logout_time']);
+    }
+}
+
+// ============================================
 // LIMPIAR SESSIONSTORAGE AL CERRAR SESIÓN O TIMEOUT
 // ============================================
 $shouldClearStorage = isset($_GET['logout']) || isset($_GET['timeout']) || isset($_GET['nocache']);

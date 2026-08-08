@@ -37,11 +37,13 @@ $foodValidKey = 'food_valid_' . $showtimeId;
 $hasFoodSession = isset($_SESSION[$foodValidKey]) && $_SESSION[$foodValidKey] === true;
 
 if (empty($purchaseToken) || !verifyPurchaseTokenWithTimeout($purchaseToken, $showtimeId)) {
-    if (!$hasFoodSession) {
+    if (!$hasFoodSession && !$fromFood) {
         header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
         exit;
     }
-    $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
+    if ($fromFood) {
+        $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
+    }
 }
 
 // ============================================
@@ -56,7 +58,6 @@ $stmt->execute([$_SESSION['user_id'], $showtimeId]);
 $purchase = $stmt->fetch();
 
 // Si hay una compra pendiente (sin completar), limpiarla para permitir nueva compra
-// ✅ PERO NO SI VIENE DE FOOD_MENU.PHP
 if ($purchase && $purchase['status'] === 'pending' && !$fromFood) {
     $stmt = $pdo->prepare("DELETE FROM purchases WHERE id = ?");
     $stmt->execute([$purchase['id']]);
@@ -101,6 +102,9 @@ $taxAmount = isset($_SESSION['tax_amount_' . $showtimeId])
 $totalAmount = isset($_SESSION['total_amount_' . $showtimeId]) 
     ? floatval($_SESSION['total_amount_' . $showtimeId]) 
     : 0;
+$taxRate = isset($_SESSION['tax_rate_' . $showtimeId]) 
+    ? floatval($_SESSION['tax_rate_' . $showtimeId]) 
+    : 16;
 
 // ============================================
 // ✅ RECUPERAR DATOS DESDE SESIÓN DE COMIDA SI ES NECESARIO
@@ -133,9 +137,9 @@ if (!$ticketsData || $totalSeats <= 0) {
                 
                 $stmtTax = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
                 $taxTemp = $stmtTax->fetch();
-                $taxRateTemp = $taxTemp ? floatval($taxTemp['tax_rate']) : 16;
+                $taxRate = $taxTemp ? floatval($taxTemp['tax_rate']) : 16;
                 
-                $taxAmount = $subtotal * ($taxRateTemp / 100);
+                $taxAmount = $subtotal * ($taxRate / 100);
                 $totalAmount = $subtotal + $taxAmount;
                 $totalSeats = $totalSeatsFromFood;
                 
@@ -144,62 +148,20 @@ if (!$ticketsData || $totalSeats <= 0) {
                 $_SESSION['subtotal_' . $showtimeId] = $subtotal;
                 $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
                 $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
-                
-                error_log("✅ Datos de tickets recuperados desde sesión de comida para showtime $showtimeId");
+                $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
             }
         }
     }
 }
 
-// Si aún no hay datos y no hay sesión de comida válida, redirigir a price_selection
+// Si aún no hay datos, redirigir a price_selection
 if (!$ticketsData || $totalSeats <= 0) {
-    if ($fromFood && $hasFoodSession && isset($_SESSION[$foodSeatsKey]) && !empty($_SESSION[$foodSeatsKey])) {
-        $foodSeats = $_SESSION[$foodSeatsKey];
-        $seatsArrayTemp = array_filter(array_map('trim', explode(',', $foodSeats)));
-        $totalSeatsFromFood = count($seatsArrayTemp);
-        
-        if ($totalSeatsFromFood > 0) {
-            $stmtTemp = $pdo->prepare("
-                SELECT s.*, m.title, m.poster_url, m.description, m.duration,
-                       r.name as room_name, r.capacity, r.seat_layout, r.seat_image, r.aisle_config
-                FROM showtimes s
-                JOIN movies m ON s.movie_id = m.id
-                JOIN rooms r ON s.room_id = r.id
-                WHERE s.id = ? AND s.is_active = 1
-            ");
-            $stmtTemp->execute([$showtimeId]);
-            $showtimeTemp = $stmtTemp->fetch();
-            
-            if ($showtimeTemp) {
-                $ticketsData = ['adult' => $totalSeatsFromFood, 'child' => 0, 'senior' => 0];
-                $priceTemp = getShowtimePrice($showtimeTemp);
-                $subtotal = $totalSeatsFromFood * $priceTemp;
-                
-                $stmtTax = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
-                $taxTemp = $stmtTax->fetch();
-                $taxRateTemp = $taxTemp ? floatval($taxTemp['tax_rate']) : 16;
-                
-                $taxAmount = $subtotal * ($taxRateTemp / 100);
-                $totalAmount = $subtotal + $taxAmount;
-                $totalSeats = $totalSeatsFromFood;
-                
-                $_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
-                $_SESSION['total_seats_' . $showtimeId] = $totalSeats;
-                $_SESSION['subtotal_' . $showtimeId] = $subtotal;
-                $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
-                $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
-                
-                error_log("✅ Datos reconstruidos desde sesión de comida al regresar a seats.php");
-            }
-        }
+    if ($hasFoodSession) {
+        unset($_SESSION[$foodValidKey]);
+        unset($_SESSION[$foodSeatsKey]);
+        unset($_SESSION[$foodTimeoutKey]);
     }
-    
-    if (!$ticketsData || $totalSeats <= 0) {
-        if ($hasFoodSession) {
-            unset($_SESSION[$foodValidKey]);
-            unset($_SESSION[$foodSeatsKey]);
-            unset($_SESSION[$foodTimeoutKey]);
-        }
+    if (!$fromFood) {
         header('Location: price_selection.php?showtime_id=' . $showtimeId);
         exit;
     }
@@ -226,10 +188,38 @@ if (!$showtime) {
 
 $finalPrice = getShowtimePrice($showtime);
 
-// Obtener asientos ocupados
-$stmtSeats = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ?");
-$stmtSeats->execute([$showtimeId]);
+// ============================================
+// ✅ OBTENER ASIENTOS OCUPADOS (EXCLUYENDO LOS DEL USUARIO ACTUAL)
+// ============================================
+$stmtSeats = $pdo->prepare("
+    SELECT t.seat_code 
+    FROM tickets t
+    LEFT JOIN purchases p ON t.user_id = p.user_id AND t.showtime_id = p.showtime_id
+    WHERE t.showtime_id = ? 
+    AND (
+        p.status = 'completed' 
+        OR (p.status = 'pending' AND t.user_id != ?)
+        OR p.status IS NULL
+    )
+    GROUP BY t.seat_code
+");
+$stmtSeats->execute([$showtimeId, $_SESSION['user_id']]);
 $occupiedSeats = $stmtSeats->fetchAll(PDO::FETCH_COLUMN);
+
+// ============================================
+// ✅ OBTENER ASIENTOS SELECCIONADOS POR EL USUARIO ACTUAL
+// ============================================
+$stmtUserSeats = $pdo->prepare("
+    SELECT t.seat_code 
+    FROM tickets t
+    JOIN purchases p ON t.user_id = p.user_id AND t.showtime_id = p.showtime_id
+    WHERE t.showtime_id = ? 
+    AND t.user_id = ? 
+    AND p.status = 'pending'
+    AND p.expires_at > NOW()
+");
+$stmtUserSeats->execute([$showtimeId, $_SESSION['user_id']]);
+$userPendingSeats = $stmtUserSeats->fetchAll(PDO::FETCH_COLUMN);
 
 // Decodificar layout
 $seatLayout = null;
@@ -260,9 +250,14 @@ $availableSeatsCount = $totalSeatsRoom - count($blockedSeats);
 $occupiedCount = count($occupiedSeats);
 $realAvailable = $availableSeatsCount - $occupiedCount;
 
+// ✅ Para el usuario actual, los asientos pendientes NO cuentan como ocupados
 if ($realAvailable < $totalSeats) {
-    header('Location: index.php?error=No+hay+suficientes+asientos+disponibles');
-    exit;
+    $userPendingCount = count($userPendingSeats);
+    $availableForUser = $realAvailable + $userPendingCount;
+    if ($availableForUser < $totalSeats) {
+        header('Location: index.php?error=No+hay+suficientes+asientos+disponibles');
+        exit;
+    }
 }
 
 $csrf_token = generateCSRFToken();
@@ -277,7 +272,6 @@ $hasPresale = in_array('preventa', $promotions);
 $language = $showtime['language'] ?? 'español';
 $lang_label = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 
-// ✅ OBTENER FORMATO Y SU CLASE CSS
 $format = $showtime['format'] ?? '2D';
 $formatClass = 'format-' . strtolower(str_replace([' ', '/'], '-', $format));
 
@@ -292,10 +286,16 @@ if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
 }
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
 
+// ✅ Inicializar selectedSeats con los asientos pendientes del usuario
+$selectedSeats = $userPendingSeats;
+
 require_once 'header.php';
 ?>
 
 <style>
+/* ============================================
+   ESTILOS UNIFICADOS - Fondo blanco y texto oscuro
+   ============================================ */
 body {
     background-color: #ffffff !important;
     color: #1f2937 !important;
@@ -319,14 +319,9 @@ body {
     width: 100%;
     order: 2;
 }
-
-/* ============================================
-   ✅ VARIABLE CSS PARA CONTROLAR EL ZOOM
-   ============================================ */
 :root {
     --seat-size: clamp(1.2rem, 2.2vw, 1.8rem);
 }
-
 .seat {
     width: var(--seat-size);
     height: var(--seat-size);
@@ -455,10 +450,6 @@ body {
 }
 .seat-grid-wrapper { display: inline-block; min-width: 100%; }
 .seats-container { display: flex; flex-direction: column; align-items: center; width: 100%; }
-
-/* ============================================
-   ✅ CONTENEDOR DE SCROLL - AMBOS EJES
-   ============================================ */
 .seat-grid-scroll-wrapper {
     width: 100%;
     overflow: auto;
@@ -469,7 +460,6 @@ body {
     border-radius: 8px;
     background: #f8fafc;
 }
-
 .seat-grid-container {
     display: grid;
     gap: clamp(2px, 0.4vw, 4px);
@@ -477,14 +467,9 @@ body {
     width: max-content;
     margin: 0 auto;
 }
-
-/* ============================================
-   ✅ CONTROLES DE ZOOM - OCULTOS POR DEFECTO (solo móvil)
-   ============================================ */
 .zoom-controls {
     display: none;
 }
-
 .zoom-btn {
     width: 44px;
     height: 44px;
@@ -501,17 +486,14 @@ body {
     transition: all 0.2s ease;
     touch-action: manipulation;
 }
-
 .zoom-btn:hover {
     background: #6366f1;
     color: #ffffff;
     transform: scale(1.05);
 }
-
 .zoom-btn:active {
     transform: scale(0.95);
 }
-
 .zoom-label {
     min-width: 60px;
     text-align: center;
@@ -523,7 +505,6 @@ body {
     border-radius: 6px;
     border: 1px solid #e2e8f0;
 }
-
 .selected-info { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; min-height: 60px; }
 #subtotal { color: #0f172a !important; }
 
@@ -556,7 +537,6 @@ body {
     font-weight: 800;
     font-size: 1.15rem;
 }
-
 .summary-movie-poster {
     width: 80px;
     height: 120px;
@@ -571,16 +551,6 @@ body {
     font-size: 1.1rem;
     line-height: 1.3;
 }
-.summary-movie-details {
-    font-size: 0.85rem;
-    color: #475569;
-    margin-top: 2px;
-}
-.summary-movie-details strong {
-    color: #0f172a;
-}
-
-/* ✅ PROMOCIONES */
 .promo-tag {
     display: inline-flex;
     align-items: center;
@@ -610,8 +580,6 @@ body {
     border-color: #fde68a;
 }
 .promo-tag.presale .promo-dot { background: #b45309; }
-
-/* FORMATO BADGE */
 .format-badge {
     display: inline-flex;
     align-items: center;
@@ -637,7 +605,6 @@ body {
     border-color: #4f5e71;
     color: #4f5e71;
 }
-
 .btn-continue-food {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: #ffffff !important;
@@ -657,7 +624,6 @@ body {
     box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
 }
 .btn-continue-food:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
-
 .btn-back {
     background: #ffffff;
     border: 1px solid #cbd5e1;
@@ -700,7 +666,6 @@ body {
     max-width: 500px;
     padding: 0 20px;
 }
-
 .notification-container .notification {
     pointer-events: auto;
     padding: 10px 22px;
@@ -716,12 +681,10 @@ body {
     justify-content: center;
     gap: 14px;
 }
-
 .notification-container .notification .notif-icon {
     font-size: 1.8rem;
     flex-shrink: 0;
 }
-
 .notification-container .notification.info {
     background: #4f46e5;
     color: #ffffff;
@@ -741,29 +704,22 @@ body {
     color: #ffffff;
     border: 2px solid #f87171;
 }
-
 @keyframes notifFadeIn {
     from { opacity: 0; transform: scale(0.85); }
     to { opacity: 1; transform: scale(1); }
 }
-
 @keyframes notifPulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.03); }
 }
-
 .notification-container .notification.fade-out {
     animation: notifFadeOut 0.3s ease forwards;
 }
-
 @keyframes notifFadeOut {
     from { opacity: 1; transform: scale(1); }
     to { opacity: 0; transform: scale(0.9); }
 }
 
-/* ============================================
-   ✅ VISTA MÓVIL - ZOOM Y SCROLLBARS VISIBLES
-   ============================================ */
 @media (max-width: 768px) {
     .zoom-controls {
         display: flex;
@@ -781,14 +737,12 @@ body {
         top: 0;
         z-index: 10;
     }
-    
     .seat-grid-scroll-wrapper {
         max-height: 50vh;
         padding: 6px;
         overflow-y: auto !important;
         overflow-x: auto !important;
     }
-    
     .seat-grid-scroll-wrapper::-webkit-scrollbar { 
         width: 12px; 
         height: 12px; 
@@ -808,23 +762,19 @@ body {
     .seat-grid-scroll-wrapper::-webkit-scrollbar-corner {
         background: #e2e8f0;
     }
-    
     .seat-grid-scroll-wrapper {
         scrollbar-width: thin;
         scrollbar-color: #6366f1 #e2e8f0;
     }
-    
     .zoom-btn {
         width: 48px;
         height: 48px;
         font-size: 22px;
     }
-    
     .zoom-label {
         font-size: 16px;
         padding: 10px 16px;
     }
-    
     .card-summary { 
         padding: 16px; 
         position: relative; 
@@ -837,7 +787,6 @@ body {
     .summary-movie-title { 
         font-size: 0.95rem; 
     }
-    
     .notification-container .notification {
         padding: 16px 20px;
         font-size: 1rem;
@@ -847,7 +796,6 @@ body {
         font-size: 1.4rem;
     }
 }
-
 @media (max-width: 640px) {
     .seat-label { 
         font-size: calc(var(--seat-size) * 0.35);
@@ -869,19 +817,16 @@ body {
         padding: 8px; 
         font-size: 0.6rem; 
     }
-    
     .zoom-controls {
         gap: 8px;
         padding: 8px;
     }
-    
     .zoom-btn {
         width: 44px;
         height: 44px;
         font-size: 20px;
     }
 }
-
 @media (max-width: 480px) {
     .row-label { 
         width: 16px; 
@@ -901,12 +846,10 @@ body {
         font-size: 0.5rem; 
         letter-spacing: 2px; 
     }
-    
     .seat-grid-scroll-wrapper { 
         max-height: 45vh;
         padding: 4px;
     }
-    
     .seat-grid-scroll-wrapper::-webkit-scrollbar { 
         width: 14px; 
         height: 14px; 
@@ -931,11 +874,11 @@ body {
                     </p>
                 </div>
                 <span class="text-xs text-gray-500 bg-[#1a1a2e] px-3 py-1 rounded-full border border-[#2a2a3e]">
-                    <?= $realAvailable ?> asientos disponibles
+                    <?= $realAvailable + count($userPendingSeats) ?> asientos disponibles
                 </span>
             </div>
 
-            <!-- ✅ CONTROLES DE ZOOM (solo visibles en móvil) -->
+            <!-- CONTROLES DE ZOOM (solo visibles en móvil) -->
             <div class="zoom-controls">
                 <button type="button" class="zoom-btn" id="btn-zoom-out" title="Alejar">−</button>
                 <span class="zoom-label" id="btn-zoom-reset">100%</span>
@@ -961,22 +904,28 @@ body {
                                     $isOccupied = in_array($seatId, $occupiedSeats);
                                     $isBlocked = in_array($seatId, $blockedSeats);
                                     $isAccessible = in_array($seatId, $accessibleSeats);
+                                    $isUserPending = in_array($seatId, $userPendingSeats);
                                     
                                     $seatClass = 'seat-available';
                                     if ($isBlocked) {
                                         $seatClass = 'seat-blocked';
-                                    } elseif ($isOccupied) {
+                                    } elseif ($isOccupied && !$isUserPending) {
                                         $seatClass = 'seat-occupied';
+                                    } elseif ($isUserPending) {
+                                        $seatClass = 'seat-selected';
                                     } elseif ($isAccessible) {
                                         $seatClass = 'seat-accessible';
                                     }
                                     
-                                    $seatTitle = $isBlocked ? 'Pasillo' : ($isOccupied ? 'Ocupado' : ($isAccessible ? "Asiento $seatId (Discapacidad ♿)" : "Asiento $seatId"));
+                                    $seatTitle = $isBlocked ? 'Pasillo' : 
+                                                ($isOccupied && !$isUserPending ? 'Ocupado' : 
+                                                ($isUserPending ? "Asiento $seatId (Seleccionado)" : 
+                                                ($isAccessible ? "Asiento $seatId (Discapacidad ♿)" : "Asiento $seatId")));
                                 ?>
                                 <button 
                                     data-seat="<?= $seatId ?>" 
                                     class="seat <?= $seatClass ?>"
-                                    <?= ($isOccupied || $isBlocked) ? 'disabled' : '' ?>
+                                    <?= ($isOccupied && !$isUserPending || $isBlocked) ? 'disabled' : '' ?>
                                     title="<?= htmlspecialchars($seatTitle) ?>"
                                 >
                                     <?php if(!$isBlocked): ?>
@@ -1000,11 +949,8 @@ body {
             </div>
         </div>
 
-        <!-- ============================================
-             ✅ CARD SUMMARY CON INFORMACIÓN DE LA PELÍCULA
-             ============================================ -->
+        <!-- CARD SUMMARY -->
         <div class="w-full xl:w-96 card-summary">
-            
             <!-- SECCIÓN DE PELÍCULA -->
             <div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
                 <?php 
@@ -1065,7 +1011,7 @@ body {
                 <span id="subtotalAmount"><?= formatCurrency($subtotal, $siteConfig) ?></span>
             </div>
             <div class="summary-plain-row">
-                <span>IVA (<?= $taxRate ?? 16 ?>%)</span>
+                <span>IVA (<?= $taxRate ?>%)</span>
                 <span id="taxAmount"><?= formatCurrency($taxAmount, $siteConfig) ?></span>
             </div>
 
@@ -1106,11 +1052,14 @@ const pricePerTicket = <?= $finalPrice ?>;
 const totalAmount = <?= $totalAmount ?>;
 const subtotal = <?= $subtotal ?>;
 const taxAmount = <?= $taxAmount ?>;
-const taxRate = <?= $taxRate ?? 16 ?>;
+const taxRate = <?= $taxRate ?>;
 const occupiedSeats = <?= json_encode($occupiedSeats) ?>;
 const blockedSeats = <?= json_encode($blockedSeats) ?>;
 const accessibleSeats = <?= json_encode($accessibleSeats) ?>;
+const userPendingSeats = <?= json_encode($userPendingSeats) ?>;
 const purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
+const fromFood = <?= $fromFood ? 'true' : 'false' ?>;
+
 const currencyConfig = {
     symbol: '<?= $siteConfig['currency_symbol'] ?? '$' ?>',
     position: '<?= $siteConfig['currency_position'] ?? 'left' ?>',
@@ -1118,27 +1067,17 @@ const currencyConfig = {
     decimal: '<?= $siteConfig['decimal_separator'] ?? ',' ?>',
     decimals: <?= intval($siteConfig['decimal_places'] ?? 2) ?>
 };
-let selectedSeats = [];
+
+// ✅ Inicializar selectedSeats con los asientos pendientes del usuario
+let selectedSeats = [...userPendingSeats];
 const maxSeats = totalSeatsNeeded;
 
-// ============================================
-// ✅ FUNCIÓN PARA FORMATEAR MONEDA
-// ============================================
-function formatCurrency(amount) {
-    if (typeof amount !== 'number' || isNaN(amount)) {
-        amount = 0;
-    }
-    
-    const formatted = amount.toFixed(currencyConfig.decimals)
-        .replace('.', ',')
-        .replace(/\B(?=(\d{3})+(?!\d))/g, currencyConfig.thousands);
-    
-    if (currencyConfig.position === 'left') {
-        return currencyConfig.symbol + formatted;
-    } else {
-        return formatted + currencyConfig.symbol;
-    }
-}
+console.log('🚀 Inicializando seats.php');
+console.log('📊 maxSeats:', maxSeats);
+console.log('📊 occupiedSeats:', occupiedSeats);
+console.log('📊 userPendingSeats:', userPendingSeats);
+console.log('📊 selectedSeats inicial:', selectedSeats);
+console.log('📊 fromFood:', fromFood);
 
 // ============================================
 // FUNCIONES DE ALMACENAMIENTO
@@ -1167,11 +1106,21 @@ function loadSeatsFromStorage() {
     return false;
 }
 
-function clearSeatsStorage() {
-    try {
-        sessionStorage.removeItem('selected_seats_' + showtimeId);
-        sessionStorage.removeItem('selected_seats_count_' + showtimeId);
-    } catch (e) { console.warn('Error limpiando sessionStorage:', e); }
+// ============================================
+// FUNCIONES DE FORMATO
+// ============================================
+function formatCurrency(amount) {
+    if (typeof amount !== 'number' || isNaN(amount)) {
+        amount = 0;
+    }
+    const formatted = amount.toFixed(currencyConfig.decimals)
+        .replace('.', ',')
+        .replace(/\B(?=(\d{3})+(?!\d))/g, currencyConfig.thousands);
+    if (currencyConfig.position === 'left') {
+        return currencyConfig.symbol + formatted;
+    } else {
+        return formatted + currencyConfig.symbol;
+    }
 }
 
 // ============================================
@@ -1180,26 +1129,20 @@ function clearSeatsStorage() {
 function showNotification(message, type = 'info', duration = 3000) {
     const container = document.getElementById('notificationContainer');
     if (!container) return;
-
     container.innerHTML = '';
-
     const notif = document.createElement('div');
     notif.className = 'notification ' + type;
-
     const icons = {
         info: 'fa-info-circle',
         success: 'fa-check-circle',
         warning: 'fa-exclamation-triangle',
         error: 'fa-times-circle'
     };
-
     notif.innerHTML = `
         <span class="notif-icon"><i class="fas ${icons[type] || icons.info}"></i></span>
         <span>${message}</span>
     `;
-
     container.appendChild(notif);
-
     setTimeout(() => {
         notif.classList.add('fade-out');
         setTimeout(() => {
@@ -1264,7 +1207,7 @@ function validateSeats() {
         showNotification(`⚠️ Debes seleccionar ${maxSeats} asientos. Has seleccionado ${selectedSeats.length}.`, 'warning');
         return false;
     }
-    const stillOccupied = selectedSeats.filter(seat => occupiedSeats.includes(seat));
+    const stillOccupied = selectedSeats.filter(seat => occupiedSeats.includes(seat) && !userPendingSeats.includes(seat));
     if (stillOccupied.length > 0) {
         showNotification(`❌ Asientos no disponibles: ${stillOccupied.join(', ')}`, 'error');
         return false;
@@ -1273,80 +1216,88 @@ function validateSeats() {
 }
 
 // ============================================
-// MANEJAR ENVÍO DEL FORMULARIO
+// ✅ MANEJAR ENVÍO DEL FORMULARIO (CORREGIDO CON AJAX)
 // ============================================
 window.handleFormSubmit = function(event) {
     event.preventDefault();
-    if (!validateSeats()) return false;
+    
+    // Validar asientos
+    if (!validateSeats()) {
+        return false;
+    }
 
     const form = document.getElementById('foodForm');
     const formData = new FormData(form);
+    
+    // ✅ Verificar que los asientos estén seleccionados
+    const seatsInput = document.getElementById('seats-input');
+    if (!seatsInput || !seatsInput.value) {
+        showNotification('⚠️ No hay asientos seleccionados.', 'warning');
+        return false;
+    }
 
     const btnContinue = document.getElementById('btn-continue');
     btnContinue.disabled = true;
     btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
 
+    // ✅ Enviar con fetch (AJAX)
     fetch('create_food_session.php', {
         method: 'POST',
-        body: formData
+        body: formData,
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+        }
     })
-    .then(response => response.json())
+    .then(response => {
+        // ✅ Leer la respuesta como JSON
+        return response.json();
+    })
     .then(data => {
+        console.log('✅ Respuesta de create_food_session:', data);
+        
         if (data.success) {
+            // ✅ Redirigir a food_menu.php
             window.location.href = 'food_menu.php?showtime_id=' + showtimeId;
         } else {
-            showNotification('❌ Error al crear la sesión. Intenta nuevamente.', 'error');
+            // ✅ Mostrar error específico
+            const errorMsg = data.error || 'Error al crear la sesión. Intenta nuevamente.';
+            showNotification('❌ ' + errorMsg, 'error');
             btnContinue.disabled = false;
             btnContinue.innerHTML = '<i class="fas fa-utensils mr-2"></i> Continuar a Comida';
         }
     })
     .catch(error => {
-        console.error('Error:', error);
+        console.error('❌ Error en fetch:', error);
         showNotification('❌ Error de conexión. Intenta nuevamente.', 'error');
         btnContinue.disabled = false;
         btnContinue.innerHTML = '<i class="fas fa-utensils mr-2"></i> Continuar a Comida';
     });
+    
     return false;
 };
 
 // ============================================
-// INICIALIZACIÓN
+// INICIALIZACIÓN DE ASIENTOS
 // ============================================
 document.addEventListener('DOMContentLoaded', function() {
-    console.log('🚀 Inicializando seats.php');
-    console.log('📊 maxSeats:', maxSeats);
-    console.log('📊 occupiedSeats:', occupiedSeats);
-    console.log('📊 blockedSeats:', blockedSeats);
-
-    const seats = document.querySelectorAll('.seat:not(.seat-occupied):not(.seat-blocked)');
+    const seats = document.querySelectorAll('.seat:not(.seat-blocked)');
     console.log('🪑 Total de asientos disponibles:', seats.length);
 
-    // Cargar asientos guardados
-    const hasSavedSeats = loadSeatsFromStorage();
-    if (hasSavedSeats) {
-        console.log('✅ Asientos restaurados desde sessionStorage (' + selectedSeats.length + ' asientos):', selectedSeats);
-    } else {
-        <?php if ($hasFoodSession && isset($_SESSION[$foodSeatsKey]) && !empty($_SESSION[$foodSeatsKey])): ?>
-        const foodSeats = '<?= addslashes($_SESSION[$foodSeatsKey]) ?>';
-        console.log('🔍 Asientos desde sesión de comida:', foodSeats);
-        if (foodSeats) {
-            const seatsFromFood = foodSeats.split(',').filter(s => s.trim());
-            const validSeats = seatsFromFood.filter(seat => !occupiedSeats.includes(seat) && !blockedSeats.includes(seat));
-            if (validSeats.length > 0) {
-                selectedSeats = validSeats;
-                saveSeatsToStorage();
-                console.log('✅ Asientos restaurados desde sesión de comida (' + selectedSeats.length + ' asientos):', selectedSeats);
-            }
+    // Si venimos de food_menu.php, intentar restaurar desde sessionStorage
+    if (fromFood) {
+        const hasSavedSeats = loadSeatsFromStorage();
+        if (hasSavedSeats) {
+            console.log('✅ Asientos restaurados desde sessionStorage:', selectedSeats);
         }
-        <?php endif; ?>
     }
 
     // Marcar visualmente los asientos seleccionados
     seats.forEach(seat => {
         const seatId = seat.getAttribute('data-seat');
         if (selectedSeats.includes(seatId)) {
-            seat.classList.remove('seat-available', 'seat-accessible');
+            seat.classList.remove('seat-available', 'seat-accessible', 'seat-occupied');
             seat.classList.add('seat-selected');
+            seat.disabled = false;
         }
     });
     updateSummary();
@@ -1361,7 +1312,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 showNotification('🚫 Este es un pasillo, no se puede seleccionar', 'warning');
                 return;
             }
-            if (occupiedSeats.includes(seatId)) {
+            // Verificar si está ocupado por otro usuario
+            if (occupiedSeats.includes(seatId) && !userPendingSeats.includes(seatId)) {
                 this.classList.add('seat-occupied');
                 this.disabled = true;
                 showNotification('❌ Este asiento ya ha sido reservado.', 'error');
@@ -1372,16 +1324,23 @@ document.addEventListener('DOMContentLoaded', function() {
             const isAccessible = accessibleSeats.includes(seatId);
 
             if (index > -1) {
+                // Deseleccionar
                 selectedSeats.splice(index, 1);
                 this.classList.remove('seat-selected');
-                this.classList.add(isAccessible ? 'seat-accessible' : 'seat-available');
+                // Si es un asiento pendiente del usuario, debe volver a disponible
+                if (userPendingSeats.includes(seatId)) {
+                    this.classList.add('seat-available');
+                } else {
+                    this.classList.add(isAccessible ? 'seat-accessible' : 'seat-available');
+                }
             } else {
                 if (selectedSeats.length >= maxSeats) {
-                    showNotification(`Ya tienes ${maxSeats} asientos seleccionados.`, 'warning', 4000);
+                    showNotification(`⚠️ Ya tienes ${maxSeats} asientos seleccionados.`, 'warning', 4000);
                     return;
                 }
+                // Seleccionar
                 selectedSeats.push(seatId);
-                this.classList.remove('seat-available', 'seat-accessible');
+                this.classList.remove('seat-available', 'seat-accessible', 'seat-occupied');
                 this.classList.add('seat-selected');
             }
             
@@ -1392,7 +1351,7 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('✅ Event listeners agregados a', seats.length, 'asientos');
 
     // ============================================
-    // ✅ ZOOM POR VARIABLE CSS (funciona con scroll vertical y horizontal)
+    // ✅ ZOOM POR VARIABLE CSS
     // ============================================
     let currentZoom = 1;
     const minZoom = 0.8, maxZoom = 1.8, stepZoom = 0.2;
@@ -1400,36 +1359,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const btnZoomIn = document.getElementById('btn-zoom-in');
     const btnZoomOut = document.getElementById('btn-zoom-out');
     const btnZoomReset = document.getElementById('btn-zoom-reset');
-
-    // Tamaño base en rem (debe coincidir con el valor máximo del clamp en CSS)
     const baseSeatSizeRem = 1.8;
 
     function applyZoom(newZoom) {
         currentZoom = Math.min(Math.max(newZoom, minZoom), maxZoom);
-        
-        // ✅ Cambiar el tamaño REAL de los asientos usando la variable CSS
-        // Esto hace que el navegador recalcule el layout y el scroll funcione
         const newSize = baseSeatSizeRem * currentZoom;
         document.documentElement.style.setProperty('--seat-size', newSize + 'rem');
-        
-        // Actualizar el porcentaje mostrado
         if (btnZoomReset) btnZoomReset.innerText = Math.round(currentZoom * 100) + '%';
-        
         console.log('🔍 Zoom aplicado:', currentZoom, '| Tamaño de asiento:', newSize + 'rem');
-        
-        // ✅ Verificar el estado del scroll después del cambio
-        setTimeout(function() {
-            if (seatGridScrollWrapper) {
-                console.log('📊 Estado del scroll:', {
-                    scrollWidth: seatGridScrollWrapper.scrollWidth,
-                    scrollHeight: seatGridScrollWrapper.scrollHeight,
-                    clientWidth: seatGridScrollWrapper.clientWidth,
-                    clientHeight: seatGridScrollWrapper.clientHeight,
-                    necesitaScrollV: seatGridScrollWrapper.scrollHeight > seatGridScrollWrapper.clientHeight,
-                    necesitaScrollH: seatGridScrollWrapper.scrollWidth > seatGridScrollWrapper.clientWidth
-                });
-            }
-        }, 100);
     }
 
     if (btnZoomIn && btnZoomOut && btnZoomReset) {

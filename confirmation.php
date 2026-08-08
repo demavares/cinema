@@ -16,16 +16,27 @@ if ($purchaseId <= 0 && isset($_SESSION['last_order_id'])) {
 }
 
 if ($purchaseId <= 0) {
-    header('Location: index.php');
+    header('Location: index.php?error=no_purchase_id');
     exit;
 }
 
-$stmt = $pdo->prepare("SELECT showtime_id FROM purchases WHERE id = ? AND user_id = ?");
+// ============================================
+// ✅ VERIFICAR QUE LA COMPRA PERTENECE AL USUARIO
+// ============================================
+$stmt = $pdo->prepare("SELECT showtime_id, status FROM purchases WHERE id = ? AND user_id = ?");
 $stmt->execute([$purchaseId, $_SESSION['user_id']]);
 $purchaseData = $stmt->fetch();
 
 if (!$purchaseData) {
-    header('Location: index.php');
+    error_log("Intento de acceso a purchase #$purchaseId por user_id " . $_SESSION['user_id'] . " (no autorizado)");
+    header('Location: index.php?error=unauthorized');
+    exit;
+}
+
+// ✅ Verificar que la compra esté completada
+if ($purchaseData['status'] !== 'completed') {
+    error_log("Intento de ver purchase #$purchaseId con status: " . $purchaseData['status']);
+    header('Location: index.php?error=purchase_not_completed');
     exit;
 }
 
@@ -39,17 +50,23 @@ clearPurchaseSession($showtimeId);
 // ============================================
 // OBTENER DATOS DE LA COMPRA
 // ============================================
-$stmt = $pdo->prepare("SELECT * FROM purchases WHERE id = ? AND user_id = ? AND status = 'completed'");
+$stmt = $pdo->prepare("
+    SELECT * FROM purchases 
+    WHERE id = ? AND user_id = ? AND status = 'completed'
+");
 $stmt->execute([$purchaseId, $_SESSION['user_id']]);
 $purchase = $stmt->fetch();
 
 if (!$purchase) {
-    header('Location: index.php');
+    header('Location: index.php?error=purchase_not_found');
     exit;
 }
 
+// ============================================
+// OBTENER DATOS DEL SHOWTIME
+// ============================================
 $stmt = $pdo->prepare("
-    SELECT s.*, m.title, m.poster_url, m.duration, r.name as room_name
+    SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.duration, r.name as room_name
     FROM showtimes s
     JOIN movies m ON s.movie_id = m.id
     JOIN rooms r ON s.room_id = r.id
@@ -59,7 +76,8 @@ $stmt->execute([$showtimeId]);
 $showtime = $stmt->fetch();
 
 if (!$showtime) {
-    header('Location: index.php');
+    error_log("Showtime #$showtimeId no encontrado para purchase #$purchaseId");
+    header('Location: index.php?error=showtime_not_found');
     exit;
 }
 
@@ -71,21 +89,34 @@ $stmt = $pdo->prepare("
     FROM purchase_tickets pt
     JOIN ticket_types tt ON pt.ticket_type_id = tt.id
     WHERE pt.purchase_id = ?
+    ORDER BY pt.id ASC
 ");
 $stmt->execute([$purchaseId]);
 $purchaseTickets = $stmt->fetchAll();
 
-$seatsFromDB = $purchase['seats'];
-$seatsArray = explode(',', $seatsFromDB);
+// ============================================
+// ✅ PROCESAR ASIENTOS Y DETECTAR ACCESIBLES
+// ============================================
+$seatsFromDB = $purchase['seats'] ?? '';
+$seatsArray = !empty($seatsFromDB) ? explode(',', $seatsFromDB) : [];
 
 $accessibleSeats = [];
+$cleanSeatsArray = [];
+
 foreach ($seatsArray as $seat) {
+    $seat = trim($seat);
+    if (empty($seat)) continue;
+    
     if (strpos($seat, '♿') !== false) {
-        $accessibleSeats[] = str_replace('♿', '', $seat);
+        $cleanSeat = str_replace('♿', '', $seat);
+        $accessibleSeats[] = $cleanSeat;
+        $cleanSeatsArray[] = $cleanSeat;
+    } else {
+        $cleanSeatsArray[] = $seat;
     }
 }
 
-$ticketCount = count($seatsArray);
+$ticketCount = count($cleanSeatsArray);
 
 // ============================================
 // ✅ OBTENER PEDIDOS DE COMIDA FILTRADOS POR purchase_id
@@ -98,26 +129,26 @@ $stmt = $pdo->prepare("
     FROM food_orders fo
     JOIN food_items fi ON fo.food_item_id = fi.id
     WHERE fo.purchase_id = ? AND fo.status = 'completed'
+    ORDER BY fo.id ASC
 ");
 $stmt->execute([$purchaseId]);
 $foodOrders = $stmt->fetchAll();
 
 foreach ($foodOrders as $food) {
-    $totalFood += $food['total_price'];
+    $totalFood += floatval($food['total_price']);
 }
 
 // ============================================
-// ✅ USAR LOS TOTALES GUARDADOS EN LA COMPRA (NO RECALCULAR)
+// ✅ OBTENER TASA DE IVA DESDE LA COMPRA
 // ============================================
-$subtotal = floatval($purchase['subtotal'] ?? 0);
-$taxAmount = floatval($purchase['tax_amount'] ?? 0);
-$totalAmount = floatval($purchase['total_amount'] ?? 0);
 $taxRate = floatval($purchase['tax_rate'] ?? 16);
-$totalTickets = intval($purchase['total_tickets'] ?? 0);
 
+// ============================================
 // ✅ CALCULAR DESGLOSE DE BOLETOS POR TIPO
+// ============================================
 $ticketTypes = [];
 $ticketTotal = 0;
+
 foreach ($purchaseTickets as $pt) {
     $code = $pt['ticket_type_code'] ?? 'adult';
     $name = $pt['ticket_type_name'] ?? ucfirst($code);
@@ -136,46 +167,152 @@ foreach ($purchaseTickets as $pt) {
     $ticketTotal += $price;
 }
 
-// ✅ CALCULAR DESGLOSE DE COMIDA AGRUPADA
+// ============================================
+// ✅ CALCULAR DESGLOSE DE COMIDA AGRUPADA (solo si hay comida)
+// ============================================
 $groupedFood = [];
 $foodTotal = 0;
-foreach ($foodOrders as $food) {
-    $key = $food['food_name'];
-    if (!isset($groupedFood[$key])) {
-        $groupedFood[$key] = [
-            'name' => $food['food_name'],
-            'quantity' => 0,
-            'total' => 0,
-            'unit_price' => $food['unit_price']
-        ];
+$hasFood = !empty($foodOrders);
+
+if ($hasFood) {
+    foreach ($foodOrders as $food) {
+        $key = $food['food_name'];
+        if (!isset($groupedFood[$key])) {
+            $groupedFood[$key] = [
+                'name' => $food['food_name'],
+                'quantity' => 0,
+                'total' => 0,
+                'unit_price' => floatval($food['unit_price'])
+            ];
+        }
+        $groupedFood[$key]['quantity'] += intval($food['quantity']);
+        $groupedFood[$key]['total'] += floatval($food['total_price']);
+        $foodTotal += floatval($food['total_price']);
     }
-    $groupedFood[$key]['quantity'] += $food['quantity'];
-    $groupedFood[$key]['total'] += $food['total_price'];
-    $foodTotal += $food['total_price'];
 }
 
 // ============================================
-// ✅ VALIDAR QUE LOS TOTALES COINCIDAN
+// ✅ CALCULAR SUBTOTAL SIN IVA Y TOTAL CON IVA (FUENTE DE VERDAD)
 // ============================================
 $calculatedSubtotal = $ticketTotal + $foodTotal;
-$calculatedTax = $calculatedSubtotal * ($taxRate / 100);
-$calculatedTotal = $calculatedSubtotal + $calculatedTax;
+$calculatedTaxAmount = $calculatedSubtotal * ($taxRate / 100);
+$calculatedTotalAmount = $calculatedSubtotal + $calculatedTaxAmount;
 
-// Si hay diferencia, usar los valores calculados (más precisos)
-if (abs($calculatedSubtotal - $subtotal) > 0.01) {
-    $subtotal = $calculatedSubtotal;
-    $taxAmount = $calculatedTax;
-    $totalAmount = $calculatedTotal;
+// ============================================
+// ✅ OBTENER VALORES GUARDADOS EN BD PARA VALIDACIÓN
+// ============================================
+$savedSubtotal = floatval($purchase['subtotal'] ?? 0);
+$savedTaxAmount = floatval($purchase['tax_amount'] ?? 0);
+$savedTotalAmount = floatval($purchase['total_amount'] ?? 0);
+$savedDataHash = $purchase['data_hash'] ?? null;
+
+// ============================================
+// ✅ VALIDAR INTEGRIDAD CON HASH
+// ============================================
+$dataString = $calculatedSubtotal . '|' . $calculatedTaxAmount . '|' . $calculatedTotalAmount . '|' . $seatsFromDB . '|' . $ticketCount . '|' . $foodTotal;
+$currentHash = hash('sha256', $dataString);
+
+$dataIntegrity = true;
+$integrityIssues = [];
+
+// 1. Validar hash de integridad (si existe)
+if ($savedDataHash !== null && $savedDataHash !== $currentHash) {
+    $dataIntegrity = false;
+    $integrityIssues[] = "Hash de integridad no coincide";
+    error_log(sprintf(
+        "🚨 INTEGRIDAD COMPROMETIDA en purchase #%d: Hash guardado=%s, Hash calculado=%s",
+        $purchaseId,
+        $savedDataHash,
+        $currentHash
+    ));
 }
 
+// 2. Validar consistencia de totales (solo logging, NO sobrescribir)
+$subtotalDiff = abs($calculatedSubtotal - $savedSubtotal);
+$taxDiff = abs($calculatedTaxAmount - $savedTaxAmount);
+$totalDiff = abs($calculatedTotalAmount - $savedTotalAmount);
+
+if ($subtotalDiff > 0.01) {
+    $dataIntegrity = false;
+    $integrityIssues[] = "Subtotal no coincide (dif: " . number_format($subtotalDiff, 2) . ")";
+    error_log(sprintf(
+        "⚠️ DISCREPANCIA en purchase #%d: Subtotal guardado=%.2f, Calculado=%.2f (Dif=%.2f)",
+        $purchaseId,
+        $savedSubtotal,
+        $calculatedSubtotal,
+        $subtotalDiff
+    ));
+}
+
+if ($taxDiff > 0.01) {
+    $dataIntegrity = false;
+    $integrityIssues[] = "IVA no coincide (dif: " . number_format($taxDiff, 2) . ")";
+    error_log(sprintf(
+        "⚠️ DISCREPANCIA en purchase #%d: IVA guardado=%.2f, Calculado=%.2f (Dif=%.2f)",
+        $purchaseId,
+        $savedTaxAmount,
+        $calculatedTaxAmount,
+        $taxDiff
+    ));
+}
+
+if ($totalDiff > 0.01) {
+    $dataIntegrity = false;
+    $integrityIssues[] = "Total no coincide (dif: " . number_format($totalDiff, 2) . ")";
+    error_log(sprintf(
+        "⚠️ DISCREPANCIA en purchase #%d: Total guardado=%.2f, Calculado=%.2f (Dif=%.2f)",
+        $purchaseId,
+        $savedTotalAmount,
+        $calculatedTotalAmount,
+        $totalDiff
+    ));
+}
+
+// ============================================
+// ✅ DECISIÓN: USAR VALORES CALCULADOS (FUENTE DE VERDAD)
+// ============================================
+$displaySubtotal = $calculatedSubtotal;
+$displayTaxAmount = $calculatedTaxAmount;
+$displayTotalAmount = $calculatedTotalAmount;
+
+// Si hay problemas de integridad, loggear y marcar en BD
+if (!$dataIntegrity) {
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE purchases 
+            SET data_integrity_check = 0, 
+                integrity_issues = ? 
+            WHERE id = ?
+        ");
+        $issuesJson = json_encode($integrityIssues);
+        $stmt->execute([$issuesJson, $purchaseId]);
+        error_log("🔴 Purchase #$purchaseId marcada con problemas de integridad: " . implode(', ', $integrityIssues));
+    } catch (Exception $e) {
+        error_log("Error al actualizar flag de integridad: " . $e->getMessage());
+    }
+} else {
+    try {
+        $stmt = $pdo->prepare("
+            UPDATE purchases 
+            SET data_integrity_check = 1 
+            WHERE id = ? AND (data_integrity_check = 0 OR data_integrity_check IS NULL)
+        ");
+        $stmt->execute([$purchaseId]);
+    } catch (Exception $e) {
+        error_log("Error al actualizar flag de integridad: " . $e->getMessage());
+    }
+}
+
+// ============================================
+// CONFIGURACIÓN DEL SITIO Y DATOS ADICIONALES
+// ============================================
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "¡Compra Exitosa! - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
 
-$tmdb_data = getMovieFromTMDB($showtime['title'], date('Y', strtotime($showtime['show_date'] ?? '')));
-$poster_url = $tmdb_data['poster_path'] ?? null;
-$display_poster = $poster_url ? 'https://image.tmdb.org/t/p/w300' . $poster_url : ($showtime['poster_url'] ?? '');
+// ✅ USAR POSTER DESDE LA BD (NO TMDb)
+$display_poster = !empty($showtime['poster_url']) ? $showtime['poster_url'] : '';
 
-$promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
+$promotions = !empty($showtime['promotions']) ? explode(',', $showtime['promotions']) : [];
 $hasMondayPromo = in_array('lunes_mitad', $promotions);
 $hasPresale = in_array('preventa', $promotions);
 
@@ -183,20 +320,39 @@ $language = $showtime['language'] ?? 'español';
 $languageLabel = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 
 $paymentMethod = $purchase['payment_method'] ?? 'movil';
-$paymentLabels = ['movil' => 'Pago Móvil', 'tarjeta' => 'Tarjeta de Crédito/Débito'];
-$paymentLabel = $paymentLabels[$paymentMethod] ?? $paymentMethod;
+$paymentLabels = [
+    'movil' => 'Pago Móvil',
+    'tarjeta' => 'Tarjeta de Crédito/Débito'
+];
+$paymentLabel = $paymentLabels[$paymentMethod] ?? ucfirst($paymentMethod);
 
 $paymentReference = 'N/A';
+$paymentDate = $purchase['purchase_date'] ?? date('Y-m-d H:i:s');
+
 if (!empty($purchase['payment_data'])) {
     $paymentData = json_decode($purchase['payment_data'], true);
-    $paymentReference = is_array($paymentData) && isset($paymentData['reference']) ? $paymentData['reference'] : 'N/A';
+    if (is_array($paymentData)) {
+        $paymentReference = $paymentData['reference'] ?? 'N/A';
+        $paymentDate = $paymentData['date'] ?? $paymentDate;
+    }
 }
 
-$currency_symbol = $siteConfig['currency_symbol'] ?? '$';
-$currency_position = $siteConfig['currency_position'] ?? 'left';
-$thousands_separator = $siteConfig['thousands_separator'] ?? '.';
-$decimal_separator = $siteConfig['decimal_separator'] ?? ',';
-$decimal_places = intval($siteConfig['decimal_places'] ?? 2);
+// ============================================
+// ✅ FORMATO Y PROMOCIONES PARA CARD-SUMMARY
+// ============================================
+$movieFormat = $showtime['format'] ?? '2D';
+$formatClass = 'format-2d';
+if (!empty($movieFormat)) {
+    $formatLower = strtolower($movieFormat);
+    $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
+}
+
+// ============================================
+// ✅ VARIABLES PARA LA VISTA
+// ============================================
+$totalTickets = intval($purchase['total_tickets'] ?? 0);
+$showIntegrityWarning = !$dataIntegrity;
+$integrityMessage = $showIntegrityWarning ? implode(', ', $integrityIssues) : '';
 
 require_once 'header.php';
 ?>
@@ -255,220 +411,160 @@ body {
     margin-bottom: 24px;
 }
 
-.movie-summary {
-    background: #f8fafc;
-    border-radius: 12px;
-    padding: 16px;
-    border: 1px solid #e2e8f0;
+/* ============================================
+   CARD SUMMARY - MISMO ESTILO QUE PRICE_SELECTION
+   ============================================ */
+.card-summary {
+    background: #ffffff !important;
+    border: 1px solid #cbd5e1 !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important;
+    border-radius: 12px !important;
+    padding: 24px;
     margin-bottom: 20px;
 }
 
-.movie-summary .movie-title {
-    font-size: 1.1rem;
-    font-weight: 700;
-    color: #0f172a;
+.summary-dotted-line {
+    border-top: 2px dashed #94a3b8;
+    margin: 14px 0;
 }
-
-.movie-summary .movie-details {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px 16px;
-    margin-top: 4px;
-    font-size: 0.9rem;
-    color: #475569;
+.summary-solid-line {
+    border-top: 2px solid #6366f1;
+    margin: 14px 0;
 }
-
-.movie-summary .movie-details span {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.movie-summary .movie-details .separator {
-    color: #cbd5e1;
-}
-
-.movie-summary .movie-details .language-text {
-    font-weight: 400;
-    color: #475569;
-}
-
-.movie-summary .promo-badge {
-    display: inline-block;
-    padding: 2px 12px;
-    border-radius: 12px;
-    font-size: 0.7rem;
-    font-weight: 600;
-    margin-top: 6px;
-}
-
-.movie-summary .promo-badge.lunes {
-    background: #dcfce7;
-    color: #15803d;
-    border: 1px solid #86efac;
-}
-
-.movie-summary .promo-badge.preventa {
-    background: #fef3c7;
-    color: #b45309;
-    border: 1px solid #fde68a;
-}
-
-.movie-summary .promo-badge.none {
-    background: #f1f5f9;
-    color: #64748b;
-    border: 1px solid #e2e8f0;
-}
-
-.detail-section {
-    background: #f8fafc;
-    border-radius: 12px;
-    padding: 16px;
-    border: 1px solid #e2e8f0;
-}
-
-.detail-section .detail-title {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: #64748b;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 10px;
-}
-
-/* ============================================
-   ✅ ESTILOS PARA BOLETOS Y COMIDA
-   ============================================ */
-.ticket-row {
+.summary-plain-row {
     display: flex;
     justify-content: space-between;
-    padding: 4px 0;
-    font-size: 0.95rem;
-    border-bottom: 1px solid #f1f5f9;
+    font-size: 1rem;
+    color: #1f2937;
+    margin-bottom: 8px;
 }
-
-.ticket-row:last-child {
-    border-bottom: none;
-}
-
-.ticket-row .ticket-label {
-    color: #475569;
-}
-
-.ticket-row .ticket-price {
-    color: #0f172a;
-    font-weight: 600;
-}
-
-.ticket-type-badge {
-    display: inline-block;
-    padding: 1px 10px;
-    border-radius: 10px;
-    font-size: 0.65rem;
-    font-weight: 600;
-    margin-left: 4px;
-}
-
-.ticket-type-badge.adult {
-    background: #eef2ff;
-    color: #4f46e5;
-    border: 1px solid #c7d2fe;
-}
-
-.ticket-type-badge.child {
-    background: #dcfce7;
-    color: #15803d;
-    border: 1px solid #86efac;
-}
-
-.ticket-type-badge.senior {
-    background: #fef3c7;
-    color: #b45309;
-    border: 1px solid #fde68a;
-}
-
-.food-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 4px 0 4px 0;
-    font-size: 0.9rem;
-    color: #475569;
-    border-bottom: 1px solid #f1f5f9;
-}
-
-.food-item:last-child {
-    border-bottom: none;
-}
-
-.food-item .food-name {
-    color: #0f172a;
-}
-
-.food-item .food-total {
-    color: #0f172a;
-    font-weight: 500;
-}
-
-/* ============================================
-   ✅ ESTILOS PARA TOTALES
-   ============================================ */
-.totals-section {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 2px solid #e2e8f0;
-}
-
-.total-row {
-    display: flex;
-    justify-content: space-between;
-    padding: 4px 0;
-    font-size: 0.95rem;
-}
-
-.total-row .total-label {
-    color: #475569;
-}
-
-.total-row .total-value {
-    color: #0f172a;
-    font-weight: 600;
-}
-
-.total-row.tax-row .total-value {
-    color: #b45309;
-    font-weight: 600;
-}
-
-.total-row.grand-total {
-    border-top: 2px solid #4f46e5;
-    padding-top: 12px;
-    margin-top: 4px;
+.summary-plain-row.bold-row {
+    font-weight: 800;
     font-size: 1.15rem;
 }
 
-.total-row.grand-total .total-label {
+.summary-movie-poster {
+    width: 80px;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+.summary-movie-title {
+    font-weight: 700;
     color: #0f172a;
-    font-weight: 700;
+    font-size: 1.1rem;
+    line-height: 1.3;
 }
 
-.total-row.grand-total .total-value {
-    color: #16a34a;
-    font-weight: 700;
-}
-
-/* ============================================
-   FIN ESTILOS
-   ============================================ */
-.seat-accessible-badge {
-    display: inline-block;
-    background: #dbeafe;
-    color: #1d4ed8;
-    border: 1px solid #bfdbfe;
-    padding: 0px 8px;
-    border-radius: 12px;
-    font-size: 0.65rem;
+/* ✅ PROMOCIONES - BADGES BORDER AND DOT */
+.promo-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 14px;
+    border-radius: 20px;
+    font-size: 0.75rem;
     font-weight: 600;
-    margin-left: 4px;
+    border: 1px solid;
+}
+.promo-tag .promo-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+.promo-tag.monday {
+    background: #dcfce7;
+    color: #15803d;
+    border-color: #bbf7d0;
+}
+.promo-tag.monday .promo-dot {
+    background: #15803d;
+}
+.promo-tag.presale {
+    background: #fef3c7;
+    color: #b45309;
+    border-color: #fde68a;
+}
+.promo-tag.presale .promo-dot {
+    background: #b45309;
+}
+
+/* FORMATO BADGE */
+.format-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 10px;
+    border-radius: 5px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1.4;
+    background: transparent !important;
+    border: 1px solid #4f5e71;
+    color: #4f5e71;
+}
+.format-badge.format-2d,
+.format-badge.format-3d,
+.format-badge.format-imax,
+.format-badge.format-imax-3d,
+.format-badge.format-4dx,
+.format-badge.format-screenx,
+.format-badge.format-d-box {
+    border-color: #4f5e71;
+    color: #4f5e71;
+}
+
+/* Ticket summary items - COLOR OSCURO */
+.ticket-summary-item {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.9rem;
+    color: #1f2937;
+    padding: 2px 0;
+}
+.ticket-summary-item .ticket-type {
+    font-weight: 500;
+    color: #1f2937;
+}
+.ticket-summary-item .ticket-total {
+    font-weight: 600;
+    color: #16a34a;
+}
+
+.cart-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid #e2e8f0;
+    font-size: 0.95rem;
+}
+.cart-item:last-child {
+    border-bottom: none;
+}
+.cart-item .item-name {
+    color: #1f2937;
+    flex: 1;
+    word-break: break-word;
+    font-weight: 500;
+}
+.cart-item .item-price {
+    color: #16a34a;
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.seats-display {
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #1f2937;
+    word-break: break-word;
 }
 
 .seat-list {
@@ -477,7 +573,6 @@ body {
     gap: 6px 12px;
     margin-top: 4px;
 }
-
 .seat-item {
     display: inline-flex;
     align-items: center;
@@ -490,17 +585,14 @@ body {
     border: 1px solid #e2e8f0;
     font-size: 0.85rem;
 }
-
 .seat-item.accessible {
     color: #1d4ed8;
     border-color: #bfdbfe;
     background: #dbeafe;
 }
-
 .seat-item .accessible-icon {
     font-size: 0.8rem;
 }
-
 .seat-item .seat-label {
     font-weight: 700;
 }
@@ -512,7 +604,6 @@ body {
     border: 1px solid #e2e8f0;
     margin-top: 16px;
 }
-
 .payment-box .payment-header {
     display: flex;
     justify-content: space-between;
@@ -520,38 +611,34 @@ body {
     padding-bottom: 8px;
     border-bottom: 1px solid #e2e8f0;
 }
-
 .payment-box .payment-header .payment-label {
-    color: #475569;
+    color: #1f2937;
     font-size: 0.9rem;
+    font-weight: 600;
 }
-
 .payment-box .payment-header .payment-value {
     color: #0f172a;
-    font-weight: 600;
+    font-weight: 700;
     font-size: 0.95rem;
 }
-
 .payment-box .payment-detail {
     display: flex;
     justify-content: space-between;
     padding: 6px 0;
     font-size: 0.85rem;
-    color: #475569;
+    color: #1f2937;
     border-bottom: 1px solid #f1f5f9;
 }
-
 .payment-box .payment-detail:last-child {
     border-bottom: none;
 }
-
 .payment-box .payment-detail .detail-label {
-    color: #94a3b8;
+    color: #4b5563;
+    font-weight: 500;
 }
-
 .payment-box .payment-detail .detail-value {
     color: #0f172a;
-    font-weight: 500;
+    font-weight: 600;
 }
 
 .btn-actions {
@@ -560,7 +647,6 @@ body {
     gap: 10px;
     margin-top: 24px;
 }
-
 .btn-actions .btn-primary {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: #ffffff !important;
@@ -575,12 +661,10 @@ body {
     text-decoration: none;
     display: block;
 }
-
 .btn-actions .btn-primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
 }
-
 .btn-actions .btn-secondary {
     background: #ffffff;
     border: 1px solid #cbd5e1;
@@ -594,21 +678,10 @@ body {
     text-decoration: none;
     display: block;
 }
-
 .btn-actions .btn-secondary:hover {
     border-color: #6366f1;
     color: #4f46e5 !important;
     background: #eef2ff;
-}
-
-.confirmation-poster {
-    width: 80px;
-    height: 120px;
-    object-fit: cover;
-    border-radius: 8px;
-    background: #f1f5f9;
-    flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .purchase-id {
@@ -622,24 +695,6 @@ body {
     border: 1px solid #e2e8f0;
 }
 
-.info-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-top: 6px;
-    font-size: 0.85rem;
-    color: #475569;
-}
-
-.info-tags .tag-item {
-    color: #475569;
-}
-
-.info-tags .tag-item strong {
-    color: #0f172a;
-    font-weight: 600;
-}
-
 .info-box {
     padding: 12px 16px;
     background: #eef2ff;
@@ -648,13 +703,67 @@ body {
     font-size: 0.8rem;
     color: #3730a3;
 }
-
 .info-box strong {
     color: #1e1b4b;
 }
-
 .info-box .text-sky-400 {
     color: #0369a1;
+}
+
+.print-btn {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155 !important;
+    padding: 11px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+.print-btn:hover {
+    border-color: #6366f1;
+    color: #4f46e5 !important;
+    background: #eef2ff;
+}
+
+/* ✅ TÍTULOS DE SECCIÓN CON COLOR MÁS OSCURO */
+.section-label {
+    color: #1f2937 !important;
+    font-weight: 700 !important;
+    font-size: 0.8rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* ✅ ADVERTENCIA DE INTEGRIDAD */
+.integrity-warning {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+    padding: 12px 16px;
+    color: #92400e;
+    font-size: 0.85rem;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+.integrity-warning .warning-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+}
+.integrity-warning .warning-text {
+    flex: 1;
+}
+.integrity-warning .warning-text strong {
+    color: #78350f;
 }
 
 @media (max-width: 640px) {
@@ -663,187 +772,92 @@ body {
         margin: 0 8px;
         border-radius: 12px;
     }
-
     .success-icon {
         width: 56px;
         height: 56px;
         font-size: 24px;
         margin-bottom: 14px;
     }
-
     .confirmation-title {
         font-size: 1.3rem;
     }
-
     .confirmation-subtitle {
         font-size: 0.85rem;
         margin-bottom: 18px;
     }
-
-    .movie-summary .flex {
-        flex-direction: column;
-        align-items: center;
-        gap: 10px;
+    .card-summary {
+        padding: 16px;
     }
-
-    .movie-summary .flex .flex-1 {
-        width: 100%;
-        text-align: center;
+    .summary-movie-poster {
+        width: 60px;
+        height: 90px;
     }
-
-    .confirmation-poster {
-        width: 70px;
-        height: 105px;
-    }
-
-    .movie-summary .movie-title {
+    .summary-movie-title {
         font-size: 0.95rem;
-        text-align: center;
     }
-
-    .movie-summary .movie-details {
-        font-size: 0.8rem;
-        gap: 2px 8px;
-        justify-content: center;
-    }
-
-    .ticket-row {
-        font-size: 0.85rem;
-        padding: 4px 0;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 2px;
-    }
-
-    .ticket-row .ticket-price {
-        width: 100%;
-    }
-
-    .food-item {
-        font-size: 0.8rem;
-        padding: 3px 0;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 2px;
-    }
-
-    .food-item .food-total {
-        width: 100%;
-    }
-
-    .total-row {
-        font-size: 0.85rem;
-        padding: 3px 0;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 2px;
-    }
-
-    .total-row .total-value {
-        width: 100%;
-    }
-
-    .total-row.grand-total {
-        font-size: 1rem;
-        padding-top: 10px;
-        flex-direction: row;
-        align-items: center;
-    }
-
     .payment-box {
         padding: 12px;
         margin-top: 12px;
     }
-
-    .payment-box .payment-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 4px;
-        padding-bottom: 6px;
-    }
-
-    .payment-box .payment-header .payment-label {
-        font-size: 0.8rem;
-    }
-
-    .payment-box .payment-header .payment-value {
-        font-size: 0.85rem;
-    }
-
-    .payment-box .payment-detail {
-        font-size: 0.75rem;
-        padding: 4px 0;
-    }
-
     .btn-actions {
         gap: 8px;
         margin-top: 18px;
     }
-
     .btn-actions .btn-primary,
-    .btn-actions .btn-secondary {
+    .btn-actions .btn-secondary,
+    .print-btn {
         padding: 10px;
         font-size: 0.85rem;
     }
-
-    .info-box {
-        padding: 10px 14px;
-        font-size: 0.7rem;
-    }
-
     .seat-list {
         gap: 4px 8px;
     }
-
     .seat-item {
         padding: 1px 8px 1px 6px;
         font-size: 0.75rem;
     }
-
-    .ticket-type-badge {
-        font-size: 0.55rem;
-        padding: 0px 6px;
-    }
-
-    .purchase-id {
+    .ticket-summary-item {
         font-size: 0.8rem;
-        padding: 3px 10px;
+    }
+    .payment-box .payment-detail {
+        font-size: 0.75rem;
+    }
+    .integrity-warning {
+        font-size: 0.75rem;
+        padding: 10px 12px;
     }
 }
 
-@media (max-width: 400px) {
+/* ============================================
+   ✅ ESTILOS DE IMPRESIÓN
+   ============================================ */
+@media print {
+    body {
+        background: white !important;
+    }
+    .btn-actions,
+    .print-btn,
+    header,
+    footer {
+        display: none !important;
+    }
     .confirmation-card {
-        padding: 14px;
-        margin: 0 4px;
+        box-shadow: none !important;
+        border: 1px solid #000 !important;
+        max-width: 100% !important;
     }
-
-    .confirmation-poster {
-        width: 60px;
-        height: 90px;
+    .card-summary {
+        box-shadow: none !important;
+        border: 1px solid #ccc !important;
     }
-
-    .movie-summary .movie-title {
-        font-size: 0.85rem;
-    }
-
-    .movie-summary .movie-details {
-        font-size: 0.7rem;
-    }
-
-    .total-row.grand-total {
-        font-size: 0.9rem;
-        padding-top: 8px;
-    }
-
-    .ticket-type-badge {
-        font-size: 0.5rem;
-        padding: 0px 5px;
+    .integrity-warning {
+        display: none !important;
     }
 }
 </style>
 
 <div class="container mx-auto px-4 py-6 sm:py-10 max-w-4xl">
-    <div class="confirmation-card">
+    <div class="confirmation-card" id="confirmationCard">
         <!-- Icono de éxito -->
         <div class="success-icon">
             <i class="fas fa-check"></i>
@@ -860,140 +874,159 @@ body {
             <div class="purchase-id inline-block mt-1">#<?= str_pad($purchase['id'], 8, '0', STR_PAD_LEFT) ?></div>
         </div>
 
-        <!-- Resumen de la Película -->
-        <div class="movie-summary">
-            <div class="flex gap-4">
-                <?php if ($display_poster): ?>
+        <!-- ✅ ADVERTENCIA DE INTEGRIDAD (si hay problemas) -->
+        <?php if ($showIntegrityWarning): ?>
+        <div class="integrity-warning">
+            <span class="warning-icon">⚠️</span>
+            <div class="warning-text">
+                <strong>Advertencia de integridad:</strong> 
+                Se detectaron discrepancias en los datos de esta compra. 
+                Por favor, contacta con soporte si tienes dudas.
+                <?php if (!empty($integrityMessage)): ?>
+                <br><small>Detalles: <?= htmlspecialchars($integrityMessage) ?></small>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <!-- ============================================
+             ✅ CARD SUMMARY - MISMO ESTILO QUE PRICE_SELECTION
+             ============================================ -->
+        <div class="card-summary">
+            <!-- SECCIÓN DE PELÍCULA -->
+            <div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
+                <?php if (!empty($display_poster)): ?>
                     <img src="<?= htmlspecialchars($display_poster) ?>"
                          alt="<?= htmlspecialchars($showtime['title']) ?>"
-                         class="confirmation-poster">
+                         class="summary-movie-poster"
+                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="summary-movie-poster flex items-center justify-center text-4xl bg-gray-100 text-gray-400" style="display:none;">
+                        🎬
+                    </div>
                 <?php else: ?>
-                    <div class="confirmation-poster flex items-center justify-center text-4xl bg-gray-100 text-gray-400">
+                    <div class="summary-movie-poster flex items-center justify-center text-4xl bg-gray-100 text-gray-400">
                         🎬
                     </div>
                 <?php endif; ?>
 
-                <div class="flex-1 min-w-0">
-                    <div class="movie-title"><?= htmlspecialchars($showtime['title']) ?></div>
-
-                    <div class="movie-details">
-                        <span>Idioma: <span class="language-text"><?= htmlspecialchars($languageLabel) ?></span></span>
+                <div class="flex flex-col justify-start text-left text-gray-900 flex-1 min-w-0">
+                    <div class="font-extrabold text-lg leading-tight text-gray-900 summary-movie-title">
+                        <?= htmlspecialchars($showtime['title']) ?>
                     </div>
 
-                    <div class="movie-details">
-                        <span><?= htmlspecialchars($showtime['room_name']) ?></span>
-                        <span class="separator">·</span>
-                        <span><?= formatDateShort($showtime['show_date']) ?></span>
-                        <span class="separator">·</span>
-                        <span><?= formatTimeVenezuela($showtime['show_time']) ?></span>
+                    <!-- Idioma - texto plano -->
+                    <div class="text-sm text-gray-700 font-medium mt-1.5">
+                        Idioma: <?= htmlspecialchars($languageLabel) ?>
                     </div>
 
-                    <div class="movie-details">
+                    <!-- Sala · Fecha · Hora -->
+                    <div class="text-sm text-gray-700 font-medium mt-1 whitespace-nowrap">
+                        <?= htmlspecialchars($showtime['room_name']) ?> · 
+                        <?= formatDateShort($showtime['show_date']) ?> · 
+                        <?= formatTimeVenezuela($showtime['show_time']) ?>
+                    </div>
+
+                    <!-- FORMATO -->
+                    <div class="mt-1.5">
+                        <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
+                    </div>
+
+                    <!-- PROMOCIONES - BADGES BORDER AND DOT -->
+                    <div class="flex flex-col gap-2 mt-3 items-start">
                         <?php if ($hasMondayPromo): ?>
-                            <span class="promo-badge lunes">🌙 Lunes ½ Precio</span>
+                            <span class="promo-tag monday">
+                                <span class="promo-dot"></span>
+                                Lunes a mitad de precio
+                            </span>
                         <?php endif; ?>
                         <?php if ($hasPresale): ?>
-                            <span class="promo-badge preventa">🎫 Preventa</span>
-                        <?php endif; ?>
-                        <?php if (!$hasMondayPromo && !$hasPresale): ?>
-                            <span class="promo-badge none">Sin promociones</span>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="info-tags">
-                        <span class="tag-item"><strong><?= $totalTickets ?></strong> boleto<?= $totalTickets > 1 ? 's' : '' ?></span>
-                        <?php if (!empty($foodOrders)): ?>
-                            <span class="tag-item"><strong><?= count($groupedFood) ?></strong> producto<?= count($groupedFood) > 1 ? 's' : '' ?> de comida</span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- ============================================ -->
-        <!-- ✅ DETALLE DE TU COMPRA                     -->
-        <!-- ============================================ -->
-        <div class="detail-section">
-            <p class="detail-title">📋 Detalle de tu compra</p>
-
-            <!-- ✅ BOLETOS POR TIPO -->
-            <?php if (!empty($ticketTypes)): ?>
-                <div class="mb-2">
-                    <?php foreach ($ticketTypes as $code => $info): 
-                        $badgeClass = $code == 'adult' ? 'adult' : ($code == 'child' ? 'child' : 'senior');
-                        $icon = $code == 'adult' ? '👤' : ($code == 'child' ? '🧒' : '👴');
-                    ?>
-                        <div class="ticket-row">
-                            <span class="ticket-label">
-                                <?= htmlspecialchars($info['name']) ?> x<?= $info['count'] ?>
-                                <span class="ticket-type-badge <?= $badgeClass ?>"><?= $icon ?></span>
+                            <span class="promo-tag presale">
+                                <span class="promo-dot"></span>
+                                Preventa
                             </span>
-                            <span class="ticket-price"><?= formatCurrency($info['total'], $siteConfig) ?></span>
-                        </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-
-            <!-- ✅ ASIENTOS -->
-            <div class="mt-3 pt-3 border-t border-[#e2e8f0]">
-                <p class="text-sm font-semibold text-gray-700 mb-1">🎫 Asientos</p>
-                <div class="seat-list">
-                    <?php 
-                    // Limpiar los asientos (remover ♿ para mostrar)
-                    $cleanSeatsArray = array_map(function($seat) {
-                        return str_replace('♿', '', $seat);
-                    }, $seatsArray);
-                    
-                    // Mostrar los asientos con su estado de accesibilidad
-                    foreach ($cleanSeatsArray as $index => $seat):
-                        $isAccessible = in_array($seat, $accessibleSeats);
-                    ?>
-                        <span class="seat-item <?= $isAccessible ? 'accessible' : '' ?>">
-                            <span class="seat-label"><?= htmlspecialchars($seat) ?></span>
-                            <?php if ($isAccessible): ?>
-                                <span class="accessible-icon">♿</span>
-                                <span class="seat-accessible-badge">Accesible</span>
-                            <?php endif; ?>
-                        </span>
-                    <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
 
-            <!-- Separador -->
-            <div class="my-3 border-t border-[#e2e8f0]"></div>
-
-            <!-- ✅ COMIDA - DESGLOSADA -->
-            <?php if (!empty($groupedFood)): ?>
-                <div class="mt-2">
-                    <p class="text-sm font-semibold text-gray-700 mb-1">🍿 Comida</p>
-                    <?php foreach ($groupedFood as $item): ?>
-                        <div class="food-item">
-                            <span class="food-name"><?= $item['quantity'] ?> x <?= htmlspecialchars($item['name']) ?></span>
-                            <span class="food-total"><?= formatCurrency($item['total'], $siteConfig) ?></span>
+            <!-- RESUMEN DE BOLETOS POR TIPO (SIN ICONOS) -->
+            <div class="mb-3">
+                <p class="section-label">🎫 Boletos</p>
+                <?php if (!empty($ticketTypes)): ?>
+                    <?php foreach ($ticketTypes as $code => $info): ?>
+                        <div class="ticket-summary-item">
+                            <span class="ticket-type"><?= $info['count'] ?> x <?= htmlspecialchars($info['name']) ?></span>
+                            <span class="ticket-total"><?= formatCurrency($info['total'], $siteConfig) ?></span>
                         </div>
                     <?php endforeach; ?>
+                <?php else: ?>
+                    <p class="text-sm text-gray-500">No hay boletos registrados</p>
+                <?php endif; ?>
+            </div>
+
+            <!-- ASIENTOS -->
+            <div class="mb-3">
+                <p class="section-label">Asientos</p>
+                <div class="seats-display">
+                    <div class="seat-list">
+                        <?php foreach ($cleanSeatsArray as $seat):
+                            $isAccessible = in_array($seat, $accessibleSeats);
+                        ?>
+                            <span class="seat-item <?= $isAccessible ? 'accessible' : '' ?>">
+                                <span class="seat-label"><?= htmlspecialchars($seat) ?></span>
+                                <?php if ($isAccessible): ?>
+                                    <span class="accessible-icon">♿</span>
+                                <?php endif; ?>
+                            </span>
+                        <?php endforeach; ?>
+                    </div>
                 </div>
+            </div>
+
+            <!-- COMIDA SELECCIONADA (SOLO SI HAY) -->
+            <?php if ($hasFood && !empty($groupedFood)): ?>
+            <div class="mb-3">
+                <p class="section-label">🍿 Comida</p>
+                <?php foreach ($groupedFood as $item): ?>
+                <div class="cart-item">
+                    <span class="item-name"><?= $item['quantity'] ?> x <?= htmlspecialchars($item['name']) ?></span>
+                    <span class="item-price"><?= formatCurrency($item['total'], $siteConfig) ?></span>
+                </div>
+                <?php endforeach; ?>
+            </div>
             <?php endif; ?>
 
-            <!-- ✅ SUBTOTAL, IVA Y TOTAL -->
-            <div class="totals-section">
-                <!-- Subtotal -->
-                <div class="total-row">
-                    <span class="total-label">Subtotal</span>
-                    <span class="total-value"><?= formatCurrency($subtotal, $siteConfig) ?></span>
-                </div>
+            <!-- LÍNEA PUNTEADA -->
+            <div class="summary-dotted-line"></div>
 
-                <!-- IVA -->
-                <div class="total-row tax-row">
-                    <span class="total-label">IVA (<?= number_format($taxRate, 2) ?>%)</span>
-                    <span class="total-value"><?= formatCurrency($taxAmount, $siteConfig) ?></span>
-                </div>
+            <!-- ✅ CÁLCULOS CORRECTOS: Subtotal (sin IVA) + IVA = Total -->
+            <div class="summary-plain-row">
+                <span>Subtotal</span>
+                <span><?= formatCurrency($displaySubtotal, $siteConfig) ?></span>
+            </div>
+            <div class="summary-plain-row">
+                <span>IVA (<?= number_format($taxRate, 2) ?>%)</span>
+                <span><?= formatCurrency($displayTaxAmount, $siteConfig) ?></span>
+            </div>
 
-                <!-- Total Pagado -->
-                <div class="total-row grand-total">
-                    <span class="total-label">💰 Total Pagado</span>
-                    <span class="total-value"><?= formatCurrency($totalAmount, $siteConfig) ?></span>
-                </div>
+            <!-- LÍNEA SOLIDA MORADA -->
+            <div class="summary-solid-line"></div>
+
+            <!-- TOTAL -->
+            <div class="summary-plain-row bold-row">
+                <span>💰 Total Pagado</span>
+                <span><?= formatCurrency($displayTotalAmount, $siteConfig) ?></span>
+            </div>
+            
+            <!-- ✅ INDICADOR DE VERIFICACIÓN DE INTEGRIDAD -->
+            <div class="mt-3 text-xs text-gray-400 text-right">
+                <?php if ($dataIntegrity): ?>
+                    <span class="text-green-600">✓ Datos verificados</span>
+                <?php else: ?>
+                    <span class="text-red-500">⚠️ Datos no verificados</span>
+                <?php endif; ?>
+                <span class="mx-1">·</span>
+                <span>ID: #<?= str_pad($purchase['id'], 8, '0', STR_PAD_LEFT) ?></span>
             </div>
         </div>
 
@@ -1029,13 +1062,13 @@ body {
                 </div>
                 <div class="payment-detail">
                     <span class="detail-label">Titular</span>
-                    <span class="detail-value">Cliente Prueba</span>
+                    <span class="detail-value"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Cliente') ?></span>
                 </div>
             <?php endif; ?>
 
             <div class="payment-detail">
                 <span class="detail-label">Fecha de Pago</span>
-                <span class="detail-value"><?= date('d/m/Y H:i:s') ?></span>
+                <span class="detail-value"><?= htmlspecialchars(date('d/m/Y H:i:s', strtotime($paymentDate))) ?></span>
             </div>
         </div>
 
@@ -1052,16 +1085,19 @@ body {
             <?php if (!empty($accessibleSeats)): ?>
                 <p class="flex items-center gap-2 mt-1 text-sky-600">
                     <i class="fas fa-wheelchair"></i>
-                    <span>Asientos de accesibilidad: <strong><?= implode(', ', $accessibleSeats) ?></strong></span>
+                    <span>Asientos de accesibilidad: <strong><?= htmlspecialchars(implode(', ', $accessibleSeats)) ?></strong></span>
                 </p>
             <?php endif; ?>
         </div>
 
         <div class="btn-actions">
+            <button type="button" class="print-btn" onclick="window.print()">
+                <i class="fas fa-print"></i> Imprimir comprobante
+            </button>
             <a href="index.php" class="btn-primary">
                 <i class="fas fa-home mr-2"></i> Volver al Inicio
             </a>
-            <a href="movie_detail.php?id=<?= $showtime['movie_id'] ?>" class="btn-secondary">
+            <a href="movie_detail.php?id=<?= intval($showtime['movie_id']) ?>" class="btn-secondary">
                 <i class="fas fa-film mr-2"></i> Ver más funciones de esta película
             </a>
         </div>
@@ -1075,7 +1111,7 @@ body {
 // ✅ LIMPIAR SESSIONSTORAGE AL CARGAR CONFIRMACIÓN
 // ============================================
 document.addEventListener('DOMContentLoaded', function() {
-    const showtimeId = <?= $showtimeId ?>;
+    const showtimeId = <?= intval($showtimeId) ?>;
 
     console.log('🗑️ Limpiando sessionStorage para showtime:', showtimeId);
 
@@ -1089,7 +1125,8 @@ document.addEventListener('DOMContentLoaded', function() {
             key.startsWith('food_timeout_' + showtimeId) ||
             key.startsWith('food_seats_' + showtimeId) ||
             key.startsWith('ticket_selection_' + showtimeId) ||
-            key.startsWith('food_order_' + showtimeId)
+            key.startsWith('food_order_' + showtimeId) ||
+            key.startsWith('purchase_token_' + showtimeId)
         )) {
             keysToRemove.push(key);
         }
@@ -1106,14 +1143,13 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ SessionStorage limpiado correctamente (' + keysToRemove.length + ' claves)');
     }
 
-    // ✅ Limpiar también el parámetro de la URL si existe
+    // ✅ Limpiar también el parámetro de la URL si existe (seguridad: evitar reutilización del ID)
     if (window.history && window.history.replaceState) {
         const url = new URL(window.location.href);
         if (url.searchParams.has('purchase_id')) {
-            const purchaseId = url.searchParams.get('purchase_id');
-            url.search = '?purchase_id=' + purchaseId;
+            url.searchParams.delete('purchase_id');
             window.history.replaceState({}, document.title, url.toString());
-            console.log('🧹 URL limpiada');
+            console.log('🧹 URL limpiada (purchase_id removido)');
         }
     }
 });
