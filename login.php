@@ -114,16 +114,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['login_time'] = time();
                         
                         // ✅ Limpiar cualquier sesión de compra/comida residual
-                        // ✅ Limpiar cualquier sesión de compra/comida residual
-$sessionPrefixes = ['food_', 'purchase_', 'ticket_', 'total_', 'subtotal_', 'tax_', 'payment_'];
-foreach ($_SESSION as $key => $value) {
-    foreach ($sessionPrefixes as $prefix) {
-        if (strpos($key, $prefix) === 0) {
-            unset($_SESSION[$key]);
-            break;
-        }
-    }
-}
+                        $sessionPrefixes = ['food_', 'purchase_', 'ticket_', 'total_', 'subtotal_', 'tax_', 'payment_'];
+                        foreach ($_SESSION as $key => $value) {
+                            foreach ($sessionPrefixes as $prefix) {
+                                if (strpos($key, $prefix) === 0) {
+                                    unset($_SESSION[$key]);
+                                    break;
+                                }
+                            }
+                        }
                         
                         // Actualizar último acceso
                         try {
@@ -206,13 +205,18 @@ foreach ($_SESSION as $key => $value) {
 // Generar nuevo token CSRF para el formulario
 $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
+
+// ✅ Obtener logo del sitio
+$siteLogo = $siteConfig['site_logo'] ?? '';
+$hasLogo = !empty($siteLogo) && file_exists($siteLogo);
+$siteName = $siteConfig['site_name'] ?? 'Cinema Pro';
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar Sesión - <?= htmlspecialchars($siteConfig['site_name'] ?? 'Cinema Pro') ?></title>
+    <title>Iniciar Sesión - <?= htmlspecialchars($siteName) ?></title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -267,13 +271,41 @@ $siteConfig = getSiteConfig($pdo);
             cursor: not-allowed;
             pointer-events: none;
         }
+
+        /* ✅ Estilo para el logo */
+        .login-logo {
+            max-height: 80px;
+            max-width: 100%;
+            object-fit: contain;
+            margin-bottom: 8px;
+        }
+
+        .login-title {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex items-center justify-center min-h-screen p-4">
     <div class="bg-gray-800 p-8 rounded-lg shadow-xl w-full max-w-sm border border-gray-700">
-        <h2 class="text-2xl font-bold mb-6 text-center text-indigo-500">
-            <i class="fas fa-film mr-2"></i>Iniciar Sesión
-        </h2>
+        
+        <!-- ✅ LOGO + TÍTULO -->
+        <div class="login-title">
+            <?php if ($hasLogo): ?>
+                <img src="<?= htmlspecialchars($siteLogo) . '?v=' . filemtime($siteLogo) ?>" 
+                     alt="<?= htmlspecialchars($siteName) ?>"
+                     title="<?= htmlspecialchars($siteName) ?>"
+                     class="login-logo">
+            <?php endif; ?>
+            <h2 class="text-2xl font-bold text-center text-indigo-500 <?= $hasLogo ? 'mt-1' : '' ?>">
+                Iniciar Sesión
+            </h2>
+            <?php if (!$hasLogo): ?>
+                <p class="text-sm text-gray-400 text-center"><?= htmlspecialchars($siteName) ?></p>
+            <?php endif; ?>
+        </div>
         
         <?php if (isset($_GET['registered'])): ?>
             <div class="bg-green-600/20 border border-green-500/30 text-green-400 p-3 rounded text-sm mb-4 text-center font-semibold">
@@ -350,7 +382,7 @@ $siteConfig = getSiteConfig($pdo);
                         autocomplete="current-password"
                         maxlength="255"
                         class="w-full p-2.5 bg-gray-700 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                        placeholder="••••••••"
+                        placeholder="Contraseña"
                     >
                     <button type="button" class="password-toggle" onclick="togglePasswordVisibility('loginPassword', this)" aria-label="Mostrar contraseña">
                         <i class="fas fa-eye"></i>

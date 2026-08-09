@@ -12,7 +12,7 @@ $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
-        $error = "Error de seguridad: Token inválido.";
+        $error = "Error de seguridad: Token inválido. Por favor, recarga la página.";
     } else {
         $name = trim($_POST['name'] ?? '');
         $email = trim($_POST['email'] ?? '');
@@ -25,6 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $phone_number = trim($_POST['phone_number'] ?? '');
         $birth_date = !empty($_POST['birth_date']) ? $_POST['birth_date'] : null;
 
+        // ✅ Validaciones mejoradas
         if (empty($name) || empty($email) || empty($password) || empty($confirm_password) || empty($cedula_number) || empty($phone_number) || empty($birth_date)) {
             $error = "Todos los campos son obligatorios.";
         } elseif ($password !== $confirm_password) {
@@ -42,33 +43,96 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif (strlen($phone_number) < 7) {
             $error = "El número de teléfono debe tener al menos 7 dígitos.";
         } else {
-            // 1. Verificar si la cédula ya se encuentra registrada (ÚNICA restricción de duplicados)
-            $stmt_check_cedula = $pdo->prepare("SELECT id FROM users WHERE cedula_type = ? AND cedula_number = ?");
-            $stmt_check_cedula->execute([$cedula_type, $cedula_number]);
-            if ($stmt_check_cedula->rowCount() > 0) {
-                $error = "El usuario con numero de cedula " . $cedula_type .'-'. $cedula_number . " ya se encuentra registrado.";
-            }
-
-            // Si pasa las validaciones, procede al registro
-            if (empty($error)) {
-                $passwordHash = password_hash($password, PASSWORD_BCRYPT);
-                try {
-                    $stmt = $pdo->prepare("INSERT INTO users (name, email, cedula_type, cedula_number, phone_prefix, phone_number, birth_date, password, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'user')");
-                    $stmt->execute([$name, $email, $cedula_type, $cedula_number, $phone_prefix, $phone_number, $birth_date, $passwordHash]);
-
-                    $_SESSION['user_id'] = $pdo->lastInsertId();
-                    $_SESSION['user_name'] = $name;
-                    $_SESSION['user_role'] = 'user';
-
-                    header('Location: index.php?msg=' . urlencode("¡Registro exitoso! Bienvenido."));
-                    exit;
-                } catch (PDOException $e) {
-                    if ($e->errorInfo[1] == 1062) {
-                        $error = "El usuario con numero de cedula " . $cedula_type . $cedula_number . " ya se encuentra registrado.";
-                    } else {
-                        $error = "Error al registrar el usuario: " . $e->getMessage();
+            try {
+                // ✅ Verificar si la cédula ya se encuentra registrada
+                $stmt_check_cedula = $pdo->prepare("SELECT id FROM users WHERE cedula_type = ? AND cedula_number = ?");
+                $stmt_check_cedula->execute([$cedula_type, $cedula_number]);
+                if ($stmt_check_cedula->rowCount() > 0) {
+                    $error = "El usuario con número de cédula " . $cedula_type . '-' . $cedula_number . " ya se encuentra registrado.";
+                }
+                
+                // ✅ Verificar si el email ya está registrado
+                if (empty($error)) {
+                    $stmt_check_email = $pdo->prepare("SELECT id FROM users WHERE email = ?");
+                    $stmt_check_email->execute([$email]);
+                    if ($stmt_check_email->rowCount() > 0) {
+                        $error = "El correo electrónico " . htmlspecialchars($email) . " ya está registrado. Por favor, usa otro email.";
                     }
                 }
+
+                // Si pasa las validaciones, procede al registro
+                if (empty($error)) {
+                    $passwordHash = password_hash($password, PASSWORD_BCRYPT);
+                    
+                    // ✅ Iniciar transacción
+                    $pdo->beginTransaction();
+                    
+                    try {
+                        $stmt = $pdo->prepare("INSERT INTO users (name, email, cedula_type, cedula_number, phone_prefix, phone_number, birth_date, password, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'user')");
+                        $stmt->execute([$name, $email, $cedula_type, $cedula_number, $phone_prefix, $phone_number, $birth_date, $passwordHash]);
+                        
+                        $userId = $pdo->lastInsertId();
+                        
+                        // ✅ Confirmar transacción
+                        $pdo->commit();
+                        
+                        // ✅ REGENERAR ID DE SESIÓN PARA PREVENIR SESSION FIXATION
+                        session_regenerate_id(true);
+                        
+                        $_SESSION['user_id'] = $userId;
+                        $_SESSION['user_name'] = $name;
+                        $_SESSION['user_role'] = 'user';
+                        $_SESSION['user_email'] = $email;
+                        $_SESSION['login_time'] = time();
+                        
+                        // ✅ Limpiar cualquier sesión residual
+                        $sessionPrefixes = ['food_', 'purchase_', 'ticket_', 'total_', 'subtotal_', 'tax_', 'payment_'];
+                        foreach ($_SESSION as $key => $value) {
+                            foreach ($sessionPrefixes as $prefix) {
+                                if (strpos($key, $prefix) === 0) {
+                                    unset($_SESSION[$key]);
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // ✅ Log de registro exitoso
+                        error_log(sprintf(
+                            "✅ Registro exitoso: user_id=%d, email=%s, IP=%s",
+                            $userId,
+                            $email,
+                            $_SERVER['REMOTE_ADDR']
+                        ));
+                        
+                        header('Location: index.php?msg=' . urlencode("¡Registro exitoso! Bienvenido " . htmlspecialchars($name) . "."));
+                        exit;
+                        
+                    } catch (PDOException $e) {
+                        // ✅ Rollback en caso de error
+                        $pdo->rollBack();
+                        error_log("Error en registro: " . $e->getMessage() . " - Data: " . print_r($_POST, true));
+                        
+                        if ($e->errorInfo[1] == 1062) {
+                            // Duplicado - verificar qué campo causa el duplicado
+                            if (strpos($e->getMessage(), 'email') !== false) {
+                                $error = "El correo electrónico ya está registrado. Por favor, usa otro.";
+                            } elseif (strpos($e->getMessage(), 'cedula') !== false) {
+                                $error = "El número de cédula ya está registrado. Por favor, verifica tus datos.";
+                            } else {
+                                $error = "Ya existe un usuario registrado con esos datos. Por favor, intenta con otros.";
+                            }
+                        } else {
+                            $error = "Error al registrar el usuario: " . $e->getMessage();
+                        }
+                    }
+                }
+                
+            } catch (PDOException $e) {
+                error_log("Error en registro (PDO): " . $e->getMessage());
+                $error = "Ocurrió un error al procesar tu solicitud. Por favor, intenta nuevamente.";
+            } catch (Exception $e) {
+                error_log("Error en registro (General): " . $e->getMessage());
+                $error = "Ocurrió un error inesperado. Por favor, intenta nuevamente.";
             }
         }
     }
@@ -77,6 +141,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "Registro de Usuario - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
+
+// ✅ Obtener logo del sitio
+$siteLogo = $siteConfig['site_logo'] ?? '';
+$hasLogo = !empty($siteLogo) && file_exists($siteLogo);
+$siteName = $siteConfig['site_name'] ?? 'Cinema Pro';
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -89,110 +158,215 @@ $pageTitle = "Registro de Usuario - " . ($siteConfig['site_name'] ?? 'Cinema Pro
     <style>
         .password-wrapper { position: relative; }
         .password-toggle {
-            position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-            color: #6b7280; cursor: pointer; background: none; border: none;
+            position: absolute; 
+            right: 12px; 
+            top: 50%; 
+            transform: translateY(-50%);
+            color: #6b7280; 
+            cursor: pointer; 
+            background: none; 
+            border: none;
+            padding: 4px;
         }
-        .password-toggle:hover { color: #e5e7eb; }
-        .form-group-inline { display: flex; gap: 8px; align-items: center; }
-        .form-group-inline select { flex: 0 0 80px; }
-        .form-group-inline input { flex: 1; }
-        .phone-group-inline { display: flex; gap: 8px; align-items: center; }
-        .phone-group-inline select { flex: 0 0 90px; }
-        .phone-group-inline input { flex: 1; }
+        .password-toggle:hover { 
+            color: #e5e7eb; 
+        }
+        .form-group-inline { 
+            display: flex; 
+            gap: 8px; 
+            align-items: center; 
+        }
+        .form-group-inline select { 
+            flex: 0 0 80px; 
+        }
+        .form-group-inline input { 
+            flex: 1; 
+        }
+        .phone-group-inline { 
+            display: flex; 
+            gap: 8px; 
+            align-items: center; 
+        }
+        .phone-group-inline select { 
+            flex: 0 0 90px; 
+        }
+        .phone-group-inline input { 
+            flex: 1; 
+        }
+        
+        /* ✅ Logo */
+        .register-logo {
+            max-height: 60px;
+            max-width: 100%;
+            object-fit: contain;
+            margin-bottom: 8px;
+        }
+        
+        /* ✅ Animación de error */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .error-shake {
+            animation: shake 0.5s ease-in-out;
+        }
+        
+        /* ✅ Validación visual */
+        .input-error {
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important;
+        }
+        .input-success {
+            border-color: #22c55e !important;
+            box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2) !important;
+        }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex items-center justify-center p-4">
     <div class="max-w-md w-full bg-gray-800 rounded-lg shadow-xl p-8 border border-gray-700 my-8">
+        
+        <!-- ✅ LOGO + TÍTULO -->
         <div class="text-center mb-6">
-            <?php if(!empty($siteConfig['site_logo']) && file_exists($siteConfig['site_logo'])): ?>
-                <img src="<?= htmlspecialchars($siteConfig['site_logo']) ?>" alt="Logo" class="h-16 mx-auto mb-3 object-contain">
+            <?php if ($hasLogo): ?>
+                <img src="<?= htmlspecialchars($siteLogo) . '?v=' . filemtime($siteLogo) ?>" 
+                     alt="<?= htmlspecialchars($siteName) ?>"
+                     title="<?= htmlspecialchars($siteName) ?>"
+                     class="register-logo mx-auto">
             <?php endif; ?>
-            <h1 class="text-2xl font-bold text-indigo-400">Crear Cuenta</h1>
-            <p class="text-sm text-gray-400 mt-1">Registrate para comprar tus entradas</p>
+            <h1 class="text-2xl font-bold text-indigo-400">
+                Crear Cuenta
+            </h1>
+            <p class="text-sm text-gray-400 mt-1">Regístrate para comprar tus entradas</p>
         </div>
 
         <?php if ($error): ?>
-            <div class="bg-red-600/20 text-red-400 p-3 rounded-lg mb-6 text-sm border border-red-500/30">
+            <div class="bg-red-600/20 text-red-400 p-3 rounded-lg mb-6 text-sm border border-red-500/30 error-shake" id="errorBox">
+                <i class="fas fa-exclamation-triangle mr-1"></i>
                 <?= htmlspecialchars($error) ?>
             </div>
         <?php endif; ?>
 
-        <form action="" method="POST" class="space-y-4">
+        <form action="" method="POST" class="space-y-4" id="registerForm">
             <input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
 
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Nombres Y Appelidos *</label>
-                <input type="text" name="name" required value="<?= htmlspecialchars($_POST['name'] ?? '') ?>"
+                <label class="block text-sm text-gray-400 mb-1">
+                    <i class="fas fa-user mr-1"></i>Nombres y Apellidos *
+                </label>
+                <input type="text" name="name" id="name" required 
+                       value="<?= htmlspecialchars($_POST['name'] ?? '') ?>"
+                       maxlength="100"
+                       placeholder="Ej: Juan Pérez"
                        class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
 
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Cédula de Identidad *</label>
+                <label class="block text-sm text-gray-400 mb-1">
+                    <i class="fas fa-id-card mr-1"></i>Cédula de Identidad *
+                </label>
                 <div class="form-group-inline">
                     <select name="cedula_type" class="bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="V" <?= (($_POST['cedula_type'] ?? '') == 'V') ? 'selected' : '' ?>>V</option>
                         <option value="E" <?= (($_POST['cedula_type'] ?? '') == 'E') ? 'selected' : '' ?>>E</option>
                         <option value="P" <?= (($_POST['cedula_type'] ?? '') == 'P') ? 'selected' : '' ?>>P</option>
+						<option value="J" <?= (($_POST['cedula_type'] ?? '') == 'J') ? 'selected' : '' ?>>J</option>
                     </select>
-                    <input type="text" name="cedula_number" required value="<?= htmlspecialchars($_POST['cedula_number'] ?? '') ?>" 
-                           placeholder="Ej: 1451113" pattern="[0-9]{7,}" minlength="7" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                    <input type="text" name="cedula_number" id="cedula_number" required 
+                           value="<?= htmlspecialchars($_POST['cedula_number'] ?? '') ?>" 
+                           placeholder="Ej: 1234567" 
+                           pattern="[0-9]{7,}" 
+                           minlength="7" 
+                           maxlength="20"
+                           inputmode="numeric" 
+                           oninput="this.value = this.value.replace(/[^0-9]/g, '')"
                            title="Debe ingresar al menos 7 números"
                            class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
             </div>
 
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Teléfono Móvil *</label>
+                <label class="block text-sm text-gray-400 mb-1">
+                    <i class="fas fa-phone mr-1"></i>Teléfono Móvil *
+                </label>
                 <div class="phone-group-inline">
                     <select name="phone_prefix" class="bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                         <option value="412" <?= (($_POST['phone_prefix'] ?? '') == '412') ? 'selected' : '' ?>>0412</option>
                         <option value="414" <?= (($_POST['phone_prefix'] ?? '') == '414') ? 'selected' : '' ?>>0414</option>
+                        <option value="416" <?= (($_POST['phone_prefix'] ?? '') == '416') ? 'selected' : '' ?>>0416</option>
                         <option value="424" <?= (($_POST['phone_prefix'] ?? '') == '424') ? 'selected' : '' ?>>0424</option>
                         <option value="426" <?= (($_POST['phone_prefix'] ?? '') == '426') ? 'selected' : '' ?>>0426</option>
-                        <option value="4016" <?= (($_POST['phone_prefix'] ?? '') == '4016') ? 'selected' : '' ?>>04016</option>
+                        <option value="422" <?= (($_POST['phone_prefix'] ?? '') == '422') ? 'selected' : '' ?>>0422</option>
                     </select>
-                    <input type="text" name="phone_number" required value="<?= htmlspecialchars($_POST['phone_number'] ?? '') ?>" 
-                           placeholder="Ej: 1234567" pattern="[0-9]{7,}" minlength="7" inputmode="numeric" oninput="this.value = this.value.replace(/[^0-9]/g, '')"
+                    <input type="text" name="phone_number" id="phone_number" required 
+                           value="<?= htmlspecialchars($_POST['phone_number'] ?? '') ?>" 
+                           placeholder="Ej: 123456" 
+                           pattern="[0-9]{7,}" 
+                           minlength="7" 
+                           maxlength="20"
+                           inputmode="numeric" 
+                           oninput="this.value = this.value.replace(/[^0-9]/g, '')"
                            title="Debe ingresar al menos 7 números"
                            class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 </div>
             </div>
 
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Fecha de Nacimiento *</label>
-                <input type="date" name="birth_date" required value="<?= htmlspecialchars($_POST['birth_date'] ?? '') ?>"
+                <label class="block text-sm text-gray-400 mb-1">
+                    <i class="fas fa-calendar-alt mr-1"></i>Fecha de Nacimiento *
+                </label>
+                <input type="date" name="birth_date" id="birth_date" required 
+                       value="<?= htmlspecialchars($_POST['birth_date'] ?? '') ?>"
+                       max="<?= date('Y-m-d', strtotime('-12 years')) ?>"
                        class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
 
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Correo Electrónico *</label>
-                <input type="email" name="email" required value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
+                <label class="block text-sm text-gray-400 mb-1">
+                    <i class="fas fa-envelope mr-1"></i>Correo Electrónico *
+                </label>
+                <input type="email" name="email" id="email" required 
+                       value="<?= htmlspecialchars($_POST['email'] ?? '') ?>"
+                       maxlength="100"
+                       placeholder="ejemplo@email.com"
                        class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
             </div>
 
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Contraseña *</label>
+                <label class="block text-sm text-gray-400 mb-1">
+                    <i class="fas fa-lock mr-1"></i>Contraseña *
+                </label>
                 <div class="password-wrapper">
-                    <input type="password" name="password" id="regPassword" required placeholder="Mínimo 8 caracteres"
+                    <input type="password" name="password" id="regPassword" required 
+                           placeholder="Mínimo 8 caracteres"
+                           minlength="8"
+                           maxlength="255"
                            class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 pr-10">
-                    <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regPassword', this)">
+                    <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regPassword', this)" aria-label="Mostrar contraseña">
                         <i class="fas fa-eye"></i>
                     </button>
                 </div>
             </div>
 
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Confirmar Contraseña *</label>
+                <label class="block text-sm text-gray-400 mb-1">
+                    <i class="fas fa-check-circle mr-1"></i>Confirmar Contraseña *
+                </label>
                 <div class="password-wrapper">
-                    <input type="password" name="confirm_password" id="regConfirmPassword" required placeholder="Repite tu contraseña"
+                    <input type="password" name="confirm_password" id="regConfirmPassword" required 
+                           placeholder="Repite tu contraseña"
+                           minlength="8"
+                           maxlength="255"
                            class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 pr-10">
-                    <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regConfirmPassword', this)">
+                    <button type="button" class="password-toggle" onclick="togglePasswordVisibility('regConfirmPassword', this)" aria-label="Mostrar contraseña">
                         <i class="fas fa-eye"></i>
                     </button>
                 </div>
             </div>
 
-            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors shadow-md mt-2">
+            <button type="submit" id="submitBtn" 
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors shadow-md mt-2 flex items-center justify-center gap-2">
+                <i class="fas fa-user-plus"></i>
                 Registrarse
             </button>
         </form>
@@ -204,6 +378,9 @@ $pageTitle = "Registro de Usuario - " . ($siteConfig['site_name'] ?? 'Cinema Pro
     </div>
 
     <script>
+        // ============================================
+        // TOGGLE PASSWORD VISIBILITY
+        // ============================================
         function togglePasswordVisibility(inputId, btn) {
             const input = document.getElementById(inputId);
             const icon = btn.querySelector('i');
@@ -211,11 +388,74 @@ $pageTitle = "Registro de Usuario - " . ($siteConfig['site_name'] ?? 'Cinema Pro
                 input.type = 'text';
                 icon.classList.remove('fa-eye');
                 icon.classList.add('fa-eye-slash');
+                btn.setAttribute('aria-label', 'Ocultar contraseña');
             } else {
                 input.type = 'password';
                 icon.classList.remove('fa-eye-slash');
                 icon.classList.add('fa-eye');
+                btn.setAttribute('aria-label', 'Mostrar contraseña');
             }
+        }
+
+        // ============================================
+        // VALIDACIÓN EN TIEMPO REAL DE CONTRASEÑAS
+        // ============================================
+        document.addEventListener('DOMContentLoaded', function() {
+            const password = document.getElementById('regPassword');
+            const confirmPassword = document.getElementById('regConfirmPassword');
+            const submitBtn = document.getElementById('submitBtn');
+            const form = document.getElementById('registerForm');
+
+            // ✅ Validar que las contraseñas coincidan en tiempo real
+            function validatePasswords() {
+                if (password.value.length > 0 && confirmPassword.value.length > 0) {
+                    if (password.value === confirmPassword.value) {
+                        confirmPassword.classList.remove('input-error');
+                        confirmPassword.classList.add('input-success');
+                    } else {
+                        confirmPassword.classList.remove('input-success');
+                        confirmPassword.classList.add('input-error');
+                    }
+                } else {
+                    confirmPassword.classList.remove('input-error', 'input-success');
+                }
+            }
+
+            password.addEventListener('input', validatePasswords);
+            confirmPassword.addEventListener('input', validatePasswords);
+
+            // ✅ Prevenir envío doble
+            form.addEventListener('submit', function(e) {
+                // Verificar que las contraseñas coincidan antes de enviar
+                if (password.value !== confirmPassword.value) {
+                    e.preventDefault();
+                    alert('Las contraseñas no coinciden. Por favor, verifica.');
+                    return false;
+                }
+                
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registrando...';
+            });
+
+            // ✅ Autofocus en el primer campo
+            const nameInput = document.getElementById('name');
+            if (!nameInput.value) {
+                nameInput.focus();
+            }
+        });
+
+        // ============================================
+        // REMOVER ERROR DESPUÉS DE 5 SEGUNDOS
+        // ============================================
+        const errorBox = document.getElementById('errorBox');
+        if (errorBox) {
+            setTimeout(function() {
+                errorBox.style.opacity = '0';
+                errorBox.style.transition = 'opacity 0.5s ease';
+                setTimeout(function() {
+                    errorBox.style.display = 'none';
+                }, 500);
+            }, 5000);
         }
     </script>
 </body>

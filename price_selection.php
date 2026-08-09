@@ -1,6 +1,33 @@
 <?php
 require_once 'config.php';
 
+// ============================================
+// ✅ RATE LIMITING PARA GENERACIÓN DE TOKENS
+// ============================================
+function canGenerateToken($showtimeId) {
+    if (!isset($_SESSION['user_id'])) return false;
+    
+    $key = 'token_generations_' . $_SESSION['user_id'] . '_' . $showtimeId;
+    $now = time();
+    
+    if (!isset($_SESSION[$key])) {
+        $_SESSION[$key] = ['count' => 0, 'window_start' => $now];
+    }
+    
+    // Resetear ventana cada 5 minutos
+    if ($now - $_SESSION[$key]['window_start'] > 300) {
+        $_SESSION[$key] = ['count' => 0, 'window_start' => $now];
+    }
+    
+    // Máximo 10 generaciones por ventana de 5 minutos
+    if ($_SESSION[$key]['count'] >= 10) {
+        return false;
+    }
+    
+    $_SESSION[$key]['count']++;
+    return true;
+}
+
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
@@ -20,8 +47,14 @@ if (isPurchaseTokenExpired($showtimeId)) {
 }
 
 // ============================================
-// ✅ GENERAR NUEVO TOKEN DE COMPRA CON TIMEOUT
+// ✅ VERIFICAR RATE LIMITING ANTES DE GENERAR TOKEN
 // ============================================
+if (!canGenerateToken($showtimeId)) {
+    header('Location: index.php?error=Demasiadas+solicitudes.+Espera+unos+minutos.');
+    exit;
+}
+
+// ✅ GENERAR NUEVO TOKEN DE COMPRA CON TIMEOUT
 $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
 
 // ============================================

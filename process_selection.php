@@ -30,9 +30,40 @@ if ($showtimeId <= 0 || empty($ticketsJson)) {
     exit;
 }
 
+// ✅ VALIDACIÓN COMPLETA DEL JSON
 $ticketsData = json_decode($ticketsJson, true);
-if (!$ticketsData || !is_array($ticketsData)) {
-    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+invalidos');
+
+// Verificar errores de JSON
+if (json_last_error() !== JSON_ERROR_NONE) {
+    error_log("JSON inválido en process_selection.php: " . json_last_error_msg());
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+inválidos');
+    exit;
+}
+
+if (!is_array($ticketsData)) {
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Estructura+inválida');
+    exit;
+}
+
+// ✅ Validar estructura esperada
+$requiredKeys = ['adult', 'child', 'senior'];
+foreach ($requiredKeys as $key) {
+    if (!isset($ticketsData[$key]) || !is_numeric($ticketsData[$key])) {
+        $ticketsData[$key] = 0;
+    }
+    // Limitar a valores razonables (0-100 por tipo)
+    $ticketsData[$key] = max(0, min(100, intval($ticketsData[$key])));
+}
+
+// ✅ Validar total de asientos
+$totalSeats = array_sum($ticketsData);
+if ($totalSeats <= 0) {
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Debes+seleccionar+al+menos+un+boleto');
+    exit;
+}
+
+if ($totalSeats > 20) {
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Máximo+20+boletos+por+compra');
     exit;
 }
 
