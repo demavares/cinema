@@ -23,7 +23,7 @@ $config = getSiteConfig($pdo);
                             <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/Star_wars2.svg" alt="Star Wars" class="studio-logo" title="Star Wars" loading="lazy">
                             <img src="https://upload.wikimedia.org/wikipedia/commons/b/b7/A24_logo.svg" alt="A24" class="studio-logo" title="A24" loading="lazy">
                             <img src="https://upload.wikimedia.org/wikipedia/commons/d/da/Marvel_Studios_2025.svg" alt="Marvel Studios" class="studio-logo" title="Marvel Studios" loading="lazy">
-                            <img src="img/DC_Studios_logo.svg" alt="DC" class="studio-logo" title="DC" loading="lazy">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/DC_Studios_logo.svg?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=original" alt="DC" class="studio-logo" title="DC" loading="lazy">
                         </div>
                         <!-- Segunda vuelta de logos (duplicado para efecto infinito) -->
                         <div class="marquee-content">
@@ -37,7 +37,7 @@ $config = getSiteConfig($pdo);
                             <img src="https://upload.wikimedia.org/wikipedia/commons/c/ce/Star_wars2.svg" alt="Star Wars" class="studio-logo" title="Star Wars" loading="lazy">
                             <img src="https://upload.wikimedia.org/wikipedia/commons/b/b7/A24_logo.svg" alt="A24" class="studio-logo" title="A24" loading="lazy">
                             <img src="https://upload.wikimedia.org/wikipedia/commons/d/da/Marvel_Studios_2025.svg" alt="Marvel Studios" class="studio-logo" title="Marvel Studios" loading="lazy">
-                            <img src="img/DC_Studios_logo.svg" alt="DC" class="studio-logo" title="DC" loading="lazy">
+                            <img src="https://upload.wikimedia.org/wikipedia/commons/3/36/DC_Studios_logo.svg?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=original" alt="DC" class="studio-logo" title="DC" loading="lazy">
                         </div>
                     </div>
                 </div>

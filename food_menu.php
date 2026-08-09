@@ -684,8 +684,9 @@ body {
                         <i class="fas fa-credit-card mr-2"></i> Ir a Pagar
                     </button>
                 </form>
-                <a href="<?= $backUrl ?>&from=food" class="btn-back">
-                    <i class="fas fa-arrow-left mr-2"></i> Volver a Asientos
+                <!-- ✅ CORREGIDO: Ahora va a price_selection.php en lugar de seats.php -->
+                <a href="price_selection.php?showtime_id=<?= $showtimeId ?>" class="btn-back">
+                    <i class="fas fa-arrow-left mr-2"></i> Volver a Boletos
                 </a>
             </div>
         </div>
@@ -925,7 +926,7 @@ document.querySelectorAll('.food-card').forEach(card => {
 });
 
 // ============================================
-// MANEJAR ENVÍO DEL FORMULARIO (CORREGIDO)
+// MANEJAR ENVÍO DEL FORMULARIO
 // ============================================
 document.getElementById('foodForm').addEventListener('submit', function(e) {
     e.preventDefault();

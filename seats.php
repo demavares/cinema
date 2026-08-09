@@ -1,6 +1,5 @@
 <?php
 require_once 'config.php';
-
 // ============================================
 // VERIFICAR QUE EL USUARIO TENGA SESIÓN
 // ============================================
@@ -58,7 +57,6 @@ $stmt = $pdo->prepare("
 $stmt->execute([$_SESSION['user_id'], $showtimeId]);
 $purchase = $stmt->fetch();
 
-// Si hay una compra pendiente, actualizarla (no eliminarla)
 if ($purchase && $purchase['status'] === 'pending' && !$fromFood) {
     error_log("📌 Compra pendiente encontrada en seats.php: " . $purchase['id']);
 }
@@ -66,24 +64,12 @@ if ($purchase && $purchase['status'] === 'pending' && !$fromFood) {
 // ============================================
 // LEER DATOS DE SESIÓN
 // ============================================
-$ticketsData = isset($_SESSION['ticket_quantities_' . $showtimeId]) 
-    ? $_SESSION['ticket_quantities_' . $showtimeId] 
-    : null;
-$totalSeats = isset($_SESSION['total_seats_' . $showtimeId]) 
-    ? intval($_SESSION['total_seats_' . $showtimeId]) 
-    : 0;
-$subtotal = isset($_SESSION['subtotal_' . $showtimeId]) 
-    ? floatval($_SESSION['subtotal_' . $showtimeId]) 
-    : 0;
-$taxAmount = isset($_SESSION['tax_amount_' . $showtimeId]) 
-    ? floatval($_SESSION['tax_amount_' . $showtimeId]) 
-    : 0;
-$totalAmount = isset($_SESSION['total_amount_' . $showtimeId]) 
-    ? floatval($_SESSION['total_amount_' . $showtimeId]) 
-    : 0;
-$taxRate = isset($_SESSION['tax_rate_' . $showtimeId]) 
-    ? floatval($_SESSION['tax_rate_' . $showtimeId]) 
-    : 16;
+$ticketsData = isset($_SESSION['ticket_quantities_' . $showtimeId]) ? $_SESSION['ticket_quantities_' . $showtimeId] : null;
+$totalSeats = isset($_SESSION['total_seats_' . $showtimeId]) ? intval($_SESSION['total_seats_' . $showtimeId]) : 0;
+$subtotal = isset($_SESSION['subtotal_' . $showtimeId]) ? floatval($_SESSION['subtotal_' . $showtimeId]) : 0;
+$taxAmount = isset($_SESSION['tax_amount_' . $showtimeId]) ? floatval($_SESSION['tax_amount_' . $showtimeId]) : 0;
+$totalAmount = isset($_SESSION['total_amount_' . $showtimeId]) ? floatval($_SESSION['total_amount_' . $showtimeId]) : 0;
+$taxRate = isset($_SESSION['tax_rate_' . $showtimeId]) ? floatval($_SESSION['tax_rate_' . $showtimeId]) : 16;
 
 // ============================================
 // RECUPERAR DATOS DESDE SESIÓN DE COMIDA SI ES NECESARIO
@@ -100,7 +86,7 @@ if (!$ticketsData || $totalSeats <= 0) {
         if ($totalSeatsFromFood > 0) {
             $stmtTemp = $pdo->prepare("
                 SELECT s.*, m.title, m.poster_url, m.description, m.duration,
-                       r.name as room_name, r.capacity, r.seat_layout, r.aisle_config
+                r.name as room_name, r.capacity, r.seat_layout, r.aisle_config
                 FROM showtimes s
                 JOIN movies m ON s.movie_id = m.id
                 JOIN rooms r ON s.room_id = r.id
@@ -117,7 +103,6 @@ if (!$ticketsData || $totalSeats <= 0) {
                 $stmtTax = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
                 $taxTemp = $stmtTax->fetch();
                 $taxRate = $taxTemp ? floatval($taxTemp['tax_rate']) : 16;
-                
                 $taxAmount = $subtotal * ($taxRate / 100);
                 $totalAmount = $subtotal + $taxAmount;
                 $totalSeats = $totalSeatsFromFood;
@@ -133,7 +118,6 @@ if (!$ticketsData || $totalSeats <= 0) {
     }
 }
 
-// Si aún no hay datos, redirigir a price_selection
 if (!$ticketsData || $totalSeats <= 0) {
     if ($hasFoodSession) {
         unset($_SESSION[$foodValidKey]);
@@ -151,7 +135,7 @@ if (!$ticketsData || $totalSeats <= 0) {
 // ============================================
 $stmt = $pdo->prepare("
     SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.description, m.duration,
-           r.name as room_name, r.capacity, r.seat_layout, r.aisle_config
+    r.name as room_name, r.capacity, r.seat_layout, r.aisle_config
     FROM showtimes s
     JOIN movies m ON s.movie_id = m.id
     JOIN rooms r ON s.room_id = r.id
@@ -170,13 +154,11 @@ $finalPrice = getShowtimePrice($showtime);
 // ============================================
 // OBTENER ASIENTOS OCUPADOS (CORREGIDO - INCLUYE ASIENTOS DEL USUARIO CON COMPRAS COMPLETADAS)
 // ============================================
-
-// 1. Obtener asientos de compras completadas (tickets definitivos) - TODOS los usuarios
 $stmtCompleted = $pdo->prepare("
     SELECT t.seat_code, p.user_id, p.status
     FROM tickets t
     JOIN purchases p ON t.user_id = p.user_id AND t.showtime_id = p.showtime_id
-    WHERE t.showtime_id = ? 
+    WHERE t.showtime_id = ?
     AND p.status = 'completed'
     GROUP BY t.seat_code
 ");
@@ -192,20 +174,17 @@ foreach ($completedSeatsData as $row) {
     }
 }
 
-// 2. Obtener asientos de compras pendientes de OTROS usuarios
 $stmtPending = $pdo->prepare("
-    SELECT seats 
-    FROM purchases 
-    WHERE showtime_id = ? 
-    AND status = 'pending' 
+    SELECT seats
+    FROM purchases
+    WHERE showtime_id = ?
+    AND status = 'pending'
     AND user_id != ?
 ");
 $stmtPending->execute([$showtimeId, $_SESSION['user_id']]);
 $pendingPurchases = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
 
-// Combinar todos los asientos ocupados (incluye los del usuario con compras completadas)
 $occupiedSeats = $completedSeats;
-
 foreach ($pendingPurchases as $seatsString) {
     if (!empty($seatsString)) {
         $seatsArray = array_map('trim', explode(',', $seatsString));
@@ -215,8 +194,6 @@ foreach ($pendingPurchases as $seatsString) {
         $occupiedSeats = array_merge($occupiedSeats, $seatsArray);
     }
 }
-
-// Eliminar duplicados
 $occupiedSeats = array_unique($occupiedSeats);
 
 error_log("🔍 Asientos ocupados encontrados: " . implode(', ', $occupiedSeats));
@@ -237,7 +214,6 @@ $stmtUserSeats = $pdo->prepare("
 $stmtUserSeats->execute([$showtimeId, $_SESSION['user_id']]);
 $userPendingSeats = $stmtUserSeats->fetchAll(PDO::FETCH_COLUMN);
 
-// También verificar asientos en purchases pendientes del usuario
 $stmtUserPendingPurchases = $pdo->prepare("
     SELECT seats 
     FROM purchases 
@@ -259,9 +235,6 @@ foreach ($userPendingPurchases as $seatsString) {
     }
 }
 $userPendingSeats = array_unique($userPendingSeats);
-
-// IMPORTANTE: Los asientos con compras COMPLETADAS NO deben estar en $userPendingSeats
-// porque ya están en $occupiedSeats
 $userPendingSeats = array_diff($userPendingSeats, $userCompletedSeats);
 $userPendingSeats = array_values($userPendingSeats);
 
@@ -285,13 +258,21 @@ if ($fromFood) {
     $recoveredSeats = $stmtRecover->fetchAll(PDO::FETCH_COLUMN);
     
     if (!empty($recoveredSeats)) {
-        // Filtrar asientos que ya están ocupados (completados)
-        $recoveredSeats = array_diff($recoveredSeats, $userCompletedSeats);
-        $userPendingSeats = array_merge($userPendingSeats, $recoveredSeats);
-        $userPendingSeats = array_unique($userPendingSeats);
-        error_log("🔄 Asientos recuperados desde BD en seats.php: " . implode(', ', $userPendingSeats));
+        // 🔧 CORRECCIÓN: Filtrar también los que ya están en userPendingSeats para evitar duplicados
+        $recoveredSeats = array_diff($recoveredSeats, $userCompletedSeats, $userPendingSeats);
+        if (!empty($recoveredSeats)) {
+            $userPendingSeats = array_merge($userPendingSeats, $recoveredSeats);
+            $userPendingSeats = array_unique($userPendingSeats);
+            error_log("🔄 Asientos recuperados desde BD en seats.php: " . implode(', ', $userPendingSeats));
+        }
     }
 }
+
+// 🔧 CORRECCIÓN CRÍTICA: Excluir MIS asientos pendientes de la lista de ocupados
+// Esto previene que el HTML los pinte como rojos/ocupados
+$occupiedSeats = array_diff($occupiedSeats, $userPendingSeats);
+$occupiedSeats = array_values($occupiedSeats);
+error_log("✅ occupiedSeats FINAL (sin mis pendientes): " . implode(', ', $occupiedSeats));
 
 // Decodificar layout
 $seatLayout = null;
@@ -332,41 +313,33 @@ if ($realAvailable < $totalSeats) {
 }
 
 $csrf_token = generateCSRFToken();
-
 $tmdb_data = getMovieFromTMDB($showtime['title']);
 $tmdb_poster = $tmdb_data['poster_path'] ?? null;
-
 $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
 $hasMondayPromo = in_array('lunes_mitad', $promotions);
 $hasPresale = in_array('preventa', $promotions);
-
 $language = $showtime['language'] ?? 'español';
 $lang_label = $language == 'español' ? 'Español' : 'Subtítulos en Español';
-
 $format = $showtime['format'] ?? '2D';
 $formatClass = 'format-' . strtolower(str_replace([' ', '/'], '-', $format));
 
 $pageTitle = "Selección de Asientos - " . $showtime['title'];
 $backUrl = 'price_selection.php?showtime_id=' . $showtimeId;
-
 $siteConfig = getSiteConfig($pdo);
 
-// Asegurar que el token existe en sesión
 if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
     $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseTokenWithTimeout($showtimeId, 900);
 }
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
 
-// Inicializar selectedSeats con los asientos pendientes del usuario
 $selectedSeats = $userPendingSeats;
 
 require_once 'header.php';
 ?>
-
 <style>
 /* ============================================
-   ESTILOS UNIFICADOS - Fondo blanco y texto oscuro
-   ============================================ */
+ESTILOS UNIFICADOS - Fondo blanco y texto oscuro
+============================================ */
 body {
     background-color: #ffffff !important;
     color: #1f2937 !important;
@@ -591,10 +564,6 @@ body {
     font-weight: 700 !important;
 }
 #subtotal { color: #0f172a !important; }
-
-/* ============================================
-   CARD SUMMARY - MISMO ESTILO QUE PRICE_SELECTION
-   ============================================ */
 .card-summary {
     background: #ffffff !important;
     border: 1px solid #cbd5e1 !important;
@@ -643,7 +612,6 @@ body {
 .summary-movie-details strong {
     color: #0f172a;
 }
-
 .promo-tag {
     display: inline-flex;
     align-items: center;
@@ -673,7 +641,6 @@ body {
     border-color: #fde68a;
 }
 .promo-tag.presale .promo-dot { background: #b45309; }
-
 .format-badge {
     display: inline-flex;
     align-items: center;
@@ -699,7 +666,6 @@ body {
     border-color: #4f5e71;
     color: #4f5e71;
 }
-
 .btn-continue-food {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: #ffffff !important;
@@ -719,7 +685,6 @@ body {
     box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
 }
 .btn-continue-food:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
-
 .btn-back {
     background: #ffffff;
     border: 1px solid #cbd5e1;
@@ -736,17 +701,12 @@ body {
     display: block;
 }
 .btn-back:hover { border-color: #6366f1; color: #4f46e5 !important; background: #eef2ff; }
-
 @media (min-width: 1024px) {
     .card-summary {
         position: sticky;
         top: 100px;
     }
 }
-
-/* ============================================
-   NOTIFICACIÓN CENTRAL
-   ============================================ */
 .notification-container {
     position: fixed;
     top: 50%;
@@ -815,7 +775,6 @@ body {
     from { opacity: 1; transform: scale(1); }
     to { opacity: 0; transform: scale(0.9); }
 }
-
 @media (max-width: 768px) {
     .zoom-controls {
         display: flex;
@@ -839,21 +798,21 @@ body {
         overflow-y: auto !important;
         overflow-x: auto !important;
     }
-    .seat-grid-scroll-wrapper::-webkit-scrollbar { 
-        width: 12px; 
-        height: 12px; 
+    .seat-grid-scroll-wrapper::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
     }
-    .seat-grid-scroll-wrapper::-webkit-scrollbar-track { 
-        background: #e2e8f0; 
-        border-radius: 6px; 
+    .seat-grid-scroll-wrapper::-webkit-scrollbar-track {
+        background: #e2e8f0;
+        border-radius: 6px;
     }
-    .seat-grid-scroll-wrapper::-webkit-scrollbar-thumb { 
-        background: #6366f1; 
+    .seat-grid-scroll-wrapper::-webkit-scrollbar-thumb {
+        background: #6366f1;
         border-radius: 6px;
         border: 2px solid #e2e8f0;
     }
-    .seat-grid-scroll-wrapper::-webkit-scrollbar-thumb:hover { 
-        background: #4f46e5; 
+    .seat-grid-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+        background: #4f46e5;
     }
     .seat-grid-scroll-wrapper::-webkit-scrollbar-corner {
         background: #e2e8f0;
@@ -871,17 +830,17 @@ body {
         font-size: 16px;
         padding: 10px 16px;
     }
-    .card-summary { 
-        padding: 16px; 
-        position: relative; 
-        top: auto; 
+    .card-summary {
+        padding: 16px;
+        position: relative;
+        top: auto;
     }
-    .summary-movie-poster { 
-        width: 60px; 
-        height: 90px; 
+    .summary-movie-poster {
+        width: 60px;
+        height: 90px;
     }
-    .summary-movie-title { 
-        font-size: 0.95rem; 
+    .summary-movie-title {
+        font-size: 0.95rem;
     }
     .notification-container .notification {
         padding: 16px 20px;
@@ -893,25 +852,25 @@ body {
     }
 }
 @media (max-width: 640px) {
-    .seat-label { 
+    .seat-label {
         font-size: calc(var(--seat-size) * 0.35);
     }
-    .row-label { 
-        width: 18px; 
-        font-size: 0.55rem; 
-        padding-right: 4px; 
+    .row-label {
+        width: 18px;
+        font-size: 0.55rem;
+        padding-right: 4px;
     }
-    .seat-grid-container { 
-        gap: 3px; 
-        padding: 4px; 
+    .seat-grid-container {
+        gap: 3px;
+        padding: 4px;
     }
-    .seat-row { 
-        gap: 3px; 
+    .seat-row {
+        gap: 3px;
     }
-    .cinema-screen { 
-        margin-top: 20px; 
-        padding: 8px; 
-        font-size: 0.6rem; 
+    .cinema-screen {
+        margin-top: 20px;
+        padding: 8px;
+        font-size: 0.6rem;
     }
     .zoom-controls {
         gap: 8px;
@@ -924,48 +883,44 @@ body {
     }
 }
 @media (max-width: 480px) {
-    .row-label { 
-        width: 16px; 
-        font-size: 0.5rem; 
-        padding-right: 3px; 
+    .row-label {
+        width: 16px;
+        font-size: 0.5rem;
+        padding-right: 3px;
     }
-    .seat-grid-container { 
-        gap: 2.5px; 
-        padding: 3px; 
+    .seat-grid-container {
+        gap: 2.5px;
+        padding: 3px;
     }
-    .seat-row { 
-        gap: 2.5px; 
+    .seat-row {
+        gap: 2.5px;
     }
-    .cinema-screen { 
-        margin-top: 16px; 
-        padding: 6px; 
-        font-size: 0.5rem; 
-        letter-spacing: 2px; 
+    .cinema-screen {
+        margin-top: 16px;
+        padding: 6px;
+        font-size: 0.5rem;
+        letter-spacing: 2px;
     }
-    .seat-grid-scroll-wrapper { 
+    .seat-grid-scroll-wrapper {
         max-height: 45vh;
         padding: 4px;
     }
-    .seat-grid-scroll-wrapper::-webkit-scrollbar { 
-        width: 14px; 
-        height: 14px; 
+    .seat-grid-scroll-wrapper::-webkit-scrollbar {
+        width: 14px;
+        height: 14px;
     }
 }
 </style>
-
 <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl">
-    <!-- Contenedor de Notificaciones Central -->
     <div class="notification-container" id="notificationContainer"></div>
-
     <div class="flex flex-col xl:flex-row gap-4 sm:gap-8 mt-2">
-        <!-- Mapa de Asientos -->
         <div class="flex-1 bg-[#14141e] p-3 sm:p-6 rounded-xl border border-[#1e1e2e]">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
                 <div>
                     <h2 class="text-xl font-bold section-title">🎫 Selecciona tus asientos</h2>
                     <p class="text-sm section-subtitle">
-                        <?= htmlspecialchars($showtime['room_name']) ?> · 
-                        <?= formatDateShort($showtime['show_date']) ?> · 
+                        <?= htmlspecialchars($showtime['room_name']) ?> ·
+                        <?= formatDateShort($showtime['show_date']) ?> ·
                         <?= formatTimeVenezuela($showtime['show_time']) ?>
                     </p>
                 </div>
@@ -974,7 +929,6 @@ body {
                 </span>
             </div>
 
-            <!-- CONTROLES DE ZOOM (solo visibles en móvil) -->
             <div class="zoom-controls">
                 <button type="button" class="zoom-btn" id="btn-zoom-out" title="Alejar">−</button>
                 <span class="zoom-label" id="btn-zoom-reset">100%</span>
@@ -989,50 +943,52 @@ body {
                             $rows = $seatLayout['rows'] ?? [];
                             $seatMap = $seatLayout['seatMap'] ?? [];
                             $reversedRows = array_reverse($rows);
-                            
                             foreach ($reversedRows as $row):
                                 $seatNumbers = $seatMap[$row] ?? range(1, 21);
                             ?>
-                            <div class="seat-row">
-                                <span class="row-label"><?= $row ?></span>
-                                <?php foreach ($seatNumbers as $seatNumber): 
-                                    $seatId = $row . $seatNumber;
-                                    $isOccupied = in_array($seatId, $occupiedSeats);
-                                    $isBlocked = in_array($seatId, $blockedSeats);
-                                    $isAccessible = in_array($seatId, $accessibleSeats);
-                                    $isUserPending = in_array($seatId, $userPendingSeats);
-                                    
-                                    $seatClass = 'seat-available';
-                                    if ($isBlocked) {
-                                        $seatClass = 'seat-blocked';
-                                    } elseif ($isOccupied) {
-                                        // Ocupado incluye compras completadas (del usuario y de otros)
-                                        $seatClass = 'seat-occupied';
-                                    } elseif ($isUserPending) {
-                                        $seatClass = 'seat-selected';
-                                    } elseif ($isAccessible) {
-                                        $seatClass = 'seat-accessible';
-                                    }
-                                    
-                                    $seatTitle = $isBlocked ? 'Pasillo' : 
-                                                ($isOccupied ? 'Ocupado' : 
-                                                ($isUserPending ? "Asiento $seatId (Seleccionado)" : 
-                                                ($isAccessible ? "Asiento $seatId (Discapacidad ♿)" : "Asiento $seatId")));
-                                ?>
-                                <button 
-                                    data-seat="<?= $seatId ?>" 
-                                    class="seat <?= $seatClass ?>"
-                                    <?= ($isOccupied || $isBlocked) ? 'disabled' : '' ?>
-                                    title="<?= htmlspecialchars($seatTitle) ?>"
-                                >
-                                    <?php if(!$isBlocked && !$isOccupied): ?>
-                                    <span class="seat-label"><?= $isAccessible ? '♿' : $seatNumber ?></span>
-                                    <?php elseif($isOccupied): ?>
-                                    <span class="seat-label"><?= $seatNumber ?></span>
-                                    <?php endif; ?>
-                                </button>
-                                <?php endforeach; ?>
-                            </div>
+                                <div class="seat-row">
+                                    <span class="row-label"><?= $row ?></span>
+                                    <?php foreach ($seatNumbers as $seatNumber):
+                                        $seatId = $row . $seatNumber;
+                                        $isOccupied = in_array($seatId, $occupiedSeats);
+                                        $isBlocked = in_array($seatId, $blockedSeats);
+                                        $isAccessible = in_array($seatId, $accessibleSeats);
+                                        $isUserPending = in_array($seatId, $userPendingSeats);
+                                        
+                                        // 🔧 CORRECCIÓN: Prioridad correcta - userPending tiene PRIORIDAD sobre occupied
+                                        $seatClass = 'seat-available';
+                                        if ($isBlocked) {
+                                            $seatClass = 'seat-blocked';
+                                        } elseif ($isUserPending) {
+                                            // MIS asientos pendientes SIEMPRE son selected (no ocupados)
+                                            $seatClass = 'seat-selected';
+                                        } elseif ($isOccupied) {
+                                            $seatClass = 'seat-occupied';
+                                        } elseif ($isAccessible) {
+                                            $seatClass = 'seat-accessible';
+                                        }
+                                        
+                                        $seatTitle = $isBlocked ? 'Pasillo' : 
+                                            ($isUserPending ? "Asiento $seatId (Seleccionado por ti)" :
+                                            ($isOccupied ? 'Ocupado' :
+                                            ($isAccessible ? "Asiento $seatId (Discapacidad ♿)" : "Asiento $seatId")));
+                                    ?>
+                                        <button
+                                            data-seat="<?= $seatId ?>"
+                                            class="seat <?= $seatClass ?>"
+                                            <?= ($isBlocked || ($isOccupied && !$isUserPending)) ? 'disabled' : '' ?>
+                                            title="<?= htmlspecialchars($seatTitle) ?>"
+                                        >
+                                            <?php if(!$isBlocked && !$isOccupied): ?>
+                                                <span class="seat-label"><?= $isAccessible ? '♿' : $seatNumber ?></span>
+                                            <?php elseif($isUserPending): ?>
+                                                <span class="seat-label"><?= $seatNumber ?></span>
+                                            <?php elseif($isOccupied): ?>
+                                                <span class="seat-label"><?= $seatNumber ?></span>
+                                            <?php endif; ?>
+                                        </button>
+                                    <?php endforeach; ?>
+                                </div>
                             <?php endforeach; ?>
                         </div>
                     </div>
@@ -1048,34 +1004,28 @@ body {
             </div>
         </div>
 
-        <!-- CARD SUMMARY -->
         <div class="w-full xl:w-96 card-summary">
-            <!-- SECCIÓN DE PELÍCULA -->
             <div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
-                <?php 
+                <?php
                 $posterUrl = !empty($showtime['poster_url']) ? $showtime['poster_url'] : ($tmdb_poster ? 'https://image.tmdb.org/t/p/w200' . $tmdb_poster : '');
-                if (!empty($posterUrl)): 
+                if (!empty($posterUrl)):
                 ?>
-                    <img src="<?= htmlspecialchars($posterUrl) ?>" 
-                         alt="<?= htmlspecialchars($showtime['title']) ?>" 
-                         title="<?= htmlspecialchars($showtime['title']) ?>" 
+                    <img src="<?= htmlspecialchars($posterUrl) ?>"
+                         alt="<?= htmlspecialchars($showtime['title']) ?>"
+                         title="<?= htmlspecialchars($showtime['title']) ?>"
                          class="summary-movie-poster">
                 <?php endif; ?>
                 <div class="flex flex-col justify-start text-left text-gray-900 flex-1 min-w-0">
                     <div class="summary-movie-title"><?= htmlspecialchars($showtime['title']) ?></div>
-                    
                     <div class="summary-movie-details">
                         <strong>Idioma:</strong> <?= htmlspecialchars($lang_label) ?>
                     </div>
-                    
                     <div class="summary-movie-details">
                         <?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?>
                     </div>
-                    
                     <div class="mt-1.5">
                         <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($format) ?></span>
                     </div>
-
                     <div class="flex flex-col gap-2 mt-3 items-start">
                         <?php if ($hasMondayPromo): ?>
                             <span class="promo-tag monday">
@@ -1093,7 +1043,6 @@ body {
                 </div>
             </div>
 
-            <!-- ASIENTOS ELEGIDOS -->
             <div class="selected-info">
                 <p class="text-sm text-gray-600">
                     Asientos elegidos: <span id="selected-seats-list" class="font-bold text-slate-900">-</span>
@@ -1102,9 +1051,7 @@ body {
                     Cantidad de boletos: <span id="ticket-count" class="font-bold text-slate-900">0 de <?= $totalSeats ?></span>
                 </p>
             </div>
-
             <div class="summary-dotted-line"></div>
-
             <div class="summary-plain-row">
                 <span>Subtotal</span>
                 <span id="subtotalAmount"><?= formatCurrency($subtotal, $siteConfig) ?></span>
@@ -1113,9 +1060,7 @@ body {
                 <span>IVA (<?= $taxRate ?>%)</span>
                 <span id="taxAmount"><?= formatCurrency($taxAmount, $siteConfig) ?></span>
             </div>
-
             <div class="summary-solid-line"></div>
-
             <div class="summary-plain-row bold-row">
                 <span>Total a Pagar</span>
                 <span id="totalAmount"><?= formatCurrency($totalAmount, $siteConfig) ?></span>
@@ -1138,9 +1083,7 @@ body {
         </div>
     </div>
 </div>
-
 <?php require_once 'footer.php'; ?>
-
 <script>
 // ============================================
 // CONFIGURACIÓN DESDE PHP (SEGURO)
@@ -1158,7 +1101,6 @@ const accessibleSeats = <?= json_encode($accessibleSeats) ?>;
 const userPendingSeats = <?= json_encode($userPendingSeats) ?>;
 const purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
 const fromFood = <?= $fromFood ? 'true' : 'false' ?>;
-
 const currencyConfig = {
     symbol: '<?= $siteConfig['currency_symbol'] ?? '$' ?>',
     position: '<?= $siteConfig['currency_position'] ?? 'left' ?>',
@@ -1167,7 +1109,6 @@ const currencyConfig = {
     decimals: <?= intval($siteConfig['decimal_places'] ?? 2) ?>
 };
 
-// Inicializar selectedSeats con los asientos pendientes del usuario
 let selectedSeats = [...userPendingSeats];
 const maxSeats = totalSeatsNeeded;
 
@@ -1190,13 +1131,18 @@ function saveSeatsToStorage() {
     } catch (e) { console.warn('Error guardando en sessionStorage:', e); }
 }
 
+// 🔧 CORRECCIÓN: loadSeatsFromStorage ahora respeta userPendingSeats
 function loadSeatsFromStorage() {
     try {
         const saved = sessionStorage.getItem('selected_seats_' + showtimeId);
         if (saved) {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed) && parsed.length > 0) {
-                const validSeats = parsed.filter(seat => !occupiedSeats.includes(seat) && !blockedSeats.includes(seat));
+                // Permitir asientos que están en userPendingSeats aunque estén en occupiedSeats
+                const validSeats = parsed.filter(seat => 
+                    userPendingSeats.includes(seat) || 
+                    (!occupiedSeats.includes(seat) && !blockedSeats.includes(seat))
+                );
                 if (validSeats.length > 0) {
                     selectedSeats = validSeats;
                     return true;
@@ -1217,6 +1163,7 @@ function formatCurrency(amount) {
     const formatted = amount.toFixed(currencyConfig.decimals)
         .replace('.', ',')
         .replace(/\B(?=(\d{3})+(?!\d))/g, currencyConfig.thousands);
+    
     if (currencyConfig.position === 'left') {
         return currencyConfig.symbol + formatted;
     } else {
@@ -1230,6 +1177,7 @@ function formatCurrency(amount) {
 function showNotification(message, type = 'info', duration = 3000) {
     const container = document.getElementById('notificationContainer');
     if (!container) return;
+    
     container.innerHTML = '';
     const notif = document.createElement('div');
     notif.className = 'notification ' + type;
@@ -1244,6 +1192,7 @@ function showNotification(message, type = 'info', duration = 3000) {
         <span>${message}</span>
     `;
     container.appendChild(notif);
+    
     setTimeout(() => {
         notif.classList.add('fade-out');
         setTimeout(() => {
@@ -1257,13 +1206,12 @@ function showNotification(message, type = 'info', duration = 3000) {
 // ============================================
 function updateSummary() {
     const count = selectedSeats.length;
-    
     const selectedSeatsList = document.getElementById('selected-seats-list');
     const ticketCountEl = document.getElementById('ticket-count');
     const seatsInput = document.getElementById('seats-input');
     const btnContinue = document.getElementById('btn-continue');
     const btnSeatsCount = document.getElementById('btnSeatsCount');
-
+    
     if (selectedSeatsList) {
         selectedSeatsList.innerText = count > 0 ? selectedSeats.join(', ') : '-';
     }
@@ -1273,13 +1221,12 @@ function updateSummary() {
     if (btnSeatsCount) {
         btnSeatsCount.textContent = count;
     }
-
     seatsInput.value = selectedSeats.join(',');
-
+    
     document.getElementById('subtotalAmount').textContent = formatCurrency(subtotal);
     document.getElementById('taxAmount').textContent = formatCurrency(taxAmount);
     document.getElementById('totalAmount').textContent = formatCurrency(totalAmount);
-
+    
     if (btnContinue) {
         if (count === maxSeats) {
             btnContinue.removeAttribute('disabled');
@@ -1292,7 +1239,6 @@ function updateSummary() {
             btnContinue.innerHTML = `<i class="fas fa-chair mr-2"></i> Selecciona ${remaining} asiento${remaining !== 1 ? 's' : ''}`;
         }
     }
-
     saveSeatsToStorage();
 }
 
@@ -1308,6 +1254,7 @@ function validateSeats() {
         showNotification(`⚠️ Debes seleccionar ${maxSeats} asientos. Has seleccionado ${selectedSeats.length}.`, 'warning');
         return false;
     }
+    // 🔧 CORRECCIÓN: excluir userPendingSeats de la validación de ocupados
     const stillOccupied = selectedSeats.filter(seat => occupiedSeats.includes(seat) && !userPendingSeats.includes(seat));
     if (stillOccupied.length > 0) {
         showNotification(`❌ Asientos no disponibles: ${stillOccupied.join(', ')}`, 'error');
@@ -1325,10 +1272,9 @@ window.handleFormSubmit = function(event) {
     if (!validateSeats()) {
         return false;
     }
-
+    
     const form = document.getElementById('foodForm');
     const formData = new FormData(form);
-    
     const tokenInput = document.querySelector('input[name="purchase_token"]');
     if (tokenInput) {
         tokenInput.value = purchaseToken;
@@ -1339,11 +1285,11 @@ window.handleFormSubmit = function(event) {
         showNotification('⚠️ No hay asientos seleccionados.', 'warning');
         return false;
     }
-
+    
     const btnContinue = document.getElementById('btn-continue');
     btnContinue.disabled = true;
     btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Reservando asientos...';
-
+    
     fetch('create_food_session.php', {
         method: 'POST',
         body: formData,
@@ -1354,7 +1300,6 @@ window.handleFormSubmit = function(event) {
     .then(response => response.json())
     .then(data => {
         console.log('✅ Respuesta de create_food_session:', data);
-        
         if (data.success) {
             window.location.href = 'food_menu.php?showtime_id=' + showtimeId;
         } else {
@@ -1380,51 +1325,71 @@ window.handleFormSubmit = function(event) {
 document.addEventListener('DOMContentLoaded', function() {
     const seats = document.querySelectorAll('.seat:not(.seat-blocked)');
     console.log('🪑 Total de asientos disponibles:', seats.length);
-
+    
+    // 🔧 CORRECCIÓN: Si viene de food, priorizar SIEMPRE userPendingSeats sobre sessionStorage
     if (fromFood) {
-        const hasSavedSeats = loadSeatsFromStorage();
-        if (hasSavedSeats) {
-            console.log('✅ Asientos restaurados desde sessionStorage:', selectedSeats);
+        if (userPendingSeats.length > 0) {
+            selectedSeats = [...userPendingSeats];
+            console.log('✅ Asientos restaurados desde BD (userPendingSeats):', selectedSeats);
+        } else {
+            const hasSavedSeats = loadSeatsFromStorage();
+            if (hasSavedSeats) {
+                console.log('✅ Asientos restaurados desde sessionStorage:', selectedSeats);
+            }
         }
     }
-
+    
+    // Aplicar clases visuales con prioridad correcta
     seats.forEach(seat => {
         const seatId = seat.getAttribute('data-seat');
-        if (selectedSeats.includes(seatId)) {
+        
+        // 🔧 CORRECCIÓN: Si es mi asiento pendiente, SIEMPRE es selected y NO disabled
+        if (selectedSeats.includes(seatId) || userPendingSeats.includes(seatId)) {
             seat.classList.remove('seat-available', 'seat-accessible', 'seat-occupied');
             seat.classList.add('seat-selected');
             seat.disabled = false;
+            return; // Saltar el resto de lógica
+        }
+        
+        // Si está ocupado por OTROS, bloquear
+        if (occupiedSeats.includes(seatId)) {
+            seat.classList.remove('seat-available', 'seat-accessible', 'seat-selected');
+            seat.classList.add('seat-occupied');
+            seat.disabled = true;
         }
     });
+    
     updateSummary();
-
+    
     seats.forEach(seat => {
         seat.addEventListener('click', function() {
             const seatId = this.getAttribute('data-seat');
-
+            
             if (blockedSeats.includes(seatId)) {
                 showNotification('🚫 Este es un pasillo, no se puede seleccionar', 'warning');
                 return;
             }
+            
+            // 🔧 CORRECCIÓN: Permitir interactuar si es mi asiento pendiente
             if (occupiedSeats.includes(seatId) && !userPendingSeats.includes(seatId)) {
                 this.classList.add('seat-occupied');
                 this.disabled = true;
                 showNotification('❌ Este asiento ya ha sido reservado.', 'error');
                 return;
             }
-
+            
             const index = selectedSeats.indexOf(seatId);
             const isAccessible = accessibleSeats.includes(seatId);
-
+            
             if (index > -1) {
+                // Deseleccionar
                 selectedSeats.splice(index, 1);
                 this.classList.remove('seat-selected');
-                if (userPendingSeats.includes(seatId)) {
-                    this.classList.add('seat-available');
-                } else {
-                    this.classList.add(isAccessible ? 'seat-accessible' : 'seat-available');
-                }
+                // Si era un asiento pendiente de BD, al deseleccionarlo lo devolvemos a disponible
+                // (el backend debería eliminarlo de purchases pending, pero visualmente lo mostramos disponible)
+                this.classList.add(isAccessible ? 'seat-accessible' : 'seat-available');
             } else {
+                // Seleccionar
                 if (selectedSeats.length >= maxSeats) {
                     showNotification(`⚠️ Ya tienes ${maxSeats} asientos seleccionados.`, 'warning', 4000);
                     return;
@@ -1432,12 +1397,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 selectedSeats.push(seatId);
                 this.classList.remove('seat-available', 'seat-accessible', 'seat-occupied');
                 this.classList.add('seat-selected');
+                this.disabled = false;
             }
-            
             updateSummary();
         });
     });
-
+    
     // Verificar asientos ocupados periódicamente
     setInterval(function() {
         fetch('check_seats.php?showtime_id=' + showtimeId)
@@ -1450,11 +1415,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 
                 if (data.occupied && Array.isArray(data.occupied)) {
                     data.occupied.forEach(seatId => {
+                        // 🔧 CORRECCIÓN: NUNCA bloquear mis propios asientos pendientes
+                        if (userPendingSeats.includes(seatId) || selectedSeats.includes(seatId)) {
+                            return;
+                        }
+                        
                         const seatEl = document.querySelector('[data-seat="' + seatId + '"]');
                         if (seatEl && !seatEl.classList.contains('seat-occupied')) {
                             seatEl.classList.remove('seat-selected', 'seat-available', 'seat-accessible');
                             seatEl.classList.add('seat-occupied');
                             seatEl.disabled = true;
+                            
                             const index = selectedSeats.indexOf(seatId);
                             if (index > -1) {
                                 selectedSeats.splice(index, 1);
