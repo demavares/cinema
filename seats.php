@@ -121,7 +121,7 @@ if (!$ticketsData || $totalSeats <= 0) {
         if ($totalSeatsFromFood > 0) {
             $stmtTemp = $pdo->prepare("
                 SELECT s.*, m.title, m.poster_url, m.description, m.duration,
-                       r.name as room_name, r.capacity, r.seat_layout, r.seat_image, r.aisle_config
+                       r.name as room_name, r.capacity, r.seat_layout, r.aisle_config
                 FROM showtimes s
                 JOIN movies m ON s.movie_id = m.id
                 JOIN rooms r ON s.room_id = r.id
@@ -168,11 +168,11 @@ if (!$ticketsData || $totalSeats <= 0) {
 }
 
 // ============================================
-// OBTENER DATOS DEL SHOWTIME
+// OBTENER DATOS DEL SHOWTIME (CORREGIDO - SIN seat_image)
 // ============================================
 $stmt = $pdo->prepare("
     SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.description, m.duration,
-           r.name as room_name, r.capacity, r.seat_layout, r.seat_image, r.aisle_config
+           r.name as room_name, r.capacity, r.seat_layout, r.aisle_config
     FROM showtimes s
     JOIN movies m ON s.movie_id = m.id
     JOIN rooms r ON s.room_id = r.id
