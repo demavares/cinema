@@ -23,11 +23,12 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ VALIDAR TOKEN DE COMPRA DESDE SESIÓN
+// VALIDAR TOKEN DE COMPRA DESDE SESIÓN
 // ============================================
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
 
 if (empty($purchaseToken) || !verifyPurchaseTokenWithTimeout($purchaseToken, $showtimeId)) {
+    error_log("❌ Token inválido en food_menu.php: " . ($purchaseToken ?? 'NULL'));
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
     exit;
 }
@@ -66,12 +67,11 @@ $seatsArray = explode(',', $seats);
 $ticketCount = count($seatsArray);
 
 // ============================================
-// ✅ NO LIMPIAR EL CARRITO SI VIENE DE PAYMENT.PHP
+// NO LIMPIAR EL CARRITO SI VIENE DE PAYMENT.PHP
 // ============================================
 $sessionFoodKey = 'food_order_' . $showtimeId;
 $fromPayment = isset($_GET['from']) && $_GET['from'] === 'payment';
 
-// Solo limpiar el carrito si NO viene de payment.php
 if (!$fromPayment) {
     if (isset($_SESSION[$sessionFoodKey])) {
         unset($_SESSION[$sessionFoodKey]);
@@ -79,7 +79,7 @@ if (!$fromPayment) {
 }
 
 // ============================================
-// ✅ RECUPERAR CARRITO DE COMIDA DESDE SESIÓN
+// RECUPERAR CARRITO DE COMIDA DESDE SESIÓN
 // ============================================
 $foodOrder = isset($_SESSION[$sessionFoodKey]) ? json_decode($_SESSION[$sessionFoodKey], true) : [];
 $foodCart = [];
@@ -90,7 +90,7 @@ if (!empty($foodOrder)) {
 }
 
 // ============================================
-// OBTENER DATOS DEL SHOWTIME Y PELÍCULA (CON ROOM_NAME)
+// OBTENER DATOS DEL SHOWTIME Y PELÍCULA
 // ============================================
 $stmt = $pdo->prepare("
     SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.duration,
@@ -109,13 +109,15 @@ if (!$showtime) {
 }
 
 // ============================================
-// ✅ OBTENER DATOS DE BOLETOS DESDE LA SESIÓN
+// OBTENER DATOS DE BOLETOS DESDE LA SESIÓN
 // ============================================
 $ticketsData = isset($_SESSION['ticket_quantities_' . $showtimeId]) 
     ? $_SESSION['ticket_quantities_' . $showtimeId] 
     : null;
 
-// ✅ CALCULAR SUBTOTAL DE BOLETOS (SIN COMIDA)
+// ============================================
+// CALCULAR SUBTOTAL DE BOLETOS (SIN COMIDA)
+// ============================================
 $baseSubtotal = 0;
 if ($ticketsData) {
     $priceAdult = floatval($showtime['price_adult'] ?? $showtime['price'] ?? 0);
@@ -134,21 +136,19 @@ if ($ticketsData) {
                     (intval($ticketsData['child'] ?? 0) * $priceChild) +
                     (intval($ticketsData['senior'] ?? 0) * $priceSenior);
 } else {
-    // Fallback: usar el precio base por boleto
     $basePrice = getShowtimePrice($showtime);
     $baseSubtotal = $ticketCount * $basePrice;
 }
 
-// Obtener tasa de IVA
 $stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
 $tax = $stmt->fetch();
 $taxRate = $tax ? floatval($tax['tax_rate']) : 16;
 
-// Guardar el subtotal base en sesión para usarlo en el cálculo
+// Guardar el subtotal base en sesión
 $_SESSION['base_subtotal_' . $showtimeId] = $baseSubtotal;
 $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
 
-// Calcular precios por tipo para mostrar
+// Calcular precios por tipo
 $priceAdult = floatval($showtime['price_adult'] ?? $showtime['price'] ?? 0);
 $priceChild = floatval($showtime['price_child'] ?? 0);
 $priceSenior = floatval($showtime['price_senior'] ?? 0);
@@ -211,7 +211,7 @@ if (!empty($movieFormat)) {
     $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
 }
 
-// ✅ Calcular totales iniciales con el carrito actual
+// Calcular totales iniciales con el carrito actual
 $initialFoodTotal = 0;
 foreach ($foodItems as $item) {
     $qty = isset($foodCart[$item['id']]) ? intval($foodCart[$item['id']]) : 0;
@@ -684,9 +684,9 @@ body {
                         <i class="fas fa-credit-card mr-2"></i> Ir a Pagar
                     </button>
                 </form>
-				<a href="<?= $backUrl ?>&from=food" class="btn-back">
-					<i class="fas fa-arrow-left mr-2"></i> Volver a Asientos
-				</a>
+                <a href="<?= $backUrl ?>&from=food" class="btn-back">
+                    <i class="fas fa-arrow-left mr-2"></i> Volver a Asientos
+                </a>
             </div>
         </div>
     </div>
@@ -725,7 +725,6 @@ const currencyConfig = {
     decimals: <?= $decimal_places ?>
 };
 
-// ✅ SUBTOTAL BASE (SOLO BOLETOS, SIN COMIDA)
 const baseSubtotal = <?= $baseSubtotal ?>;
 const taxRate = <?= $taxRate ?>;
 const showtimeId = <?= $showtimeId ?>;
@@ -773,7 +772,6 @@ function updateCartUI() {
     const taxAmountEl = document.getElementById('taxAmount');
     const items = Object.values(cart);
     
-    // ✅ Calcular total de comida SOLO desde el carrito actual
     totalFoodPrice = 0;
     items.forEach(item => {
         const foodItem = foodItems.find(f => f.id == item.id);
@@ -782,12 +780,10 @@ function updateCartUI() {
         }
     });
     
-    // ✅ Calcular totales: baseSubtotal (boletos) + comida actual
     const subtotal = baseSubtotal + totalFoodPrice;
     const tax = subtotal * (taxRate / 100);
     const total = subtotal + tax;
     
-    // Marcar cards seleccionadas
     document.querySelectorAll('.food-card').forEach(card => {
         const id = card.dataset.foodId;
         if (cart[id] && cart[id].quantity > 0) {
@@ -797,7 +793,6 @@ function updateCartUI() {
         }
     });
     
-    // Actualizar contadores
     document.querySelectorAll('.qty').forEach(el => {
         const id = el.id.replace('qty_', '');
         if (cart[id]) {
@@ -807,7 +802,6 @@ function updateCartUI() {
         }
     });
     
-    // Actualizar lista del carrito
     if (items.length === 0) {
         cartContainer.innerHTML = `
             <div class="cart-empty" id="cartEmpty">
@@ -837,12 +831,10 @@ function updateCartUI() {
         cartContainer.innerHTML = html;
     }
     
-    // ✅ Actualizar totales con los valores recalculados
     subtotalAmountEl.textContent = formatCurrency(subtotal);
     taxAmountEl.textContent = formatCurrency(tax);
     totalAmountEl.textContent = formatCurrency(total);
     
-    // ✅ Actualizar input oculto con el carrito actual
     const foodOrderInput = document.getElementById('foodOrderInput');
     if (foodOrderInput) {
         const orderData = items.map(item => ({
@@ -850,9 +842,9 @@ function updateCartUI() {
             quantity: item.quantity
         }));
         foodOrderInput.value = JSON.stringify(orderData);
+        console.log('📝 foodOrderInput actualizado:', foodOrderInput.value);
     }
     
-    // ✅ Guardar en sessionStorage para persistencia
     try {
         const orderData = items.map(item => ({
             id: parseInt(item.id),
@@ -860,8 +852,6 @@ function updateCartUI() {
         }));
         sessionStorage.setItem('food_order_' + showtimeId, JSON.stringify(orderData));
     } catch(e) {}
-    
-    console.log('🛒 Carrito actualizado - Base Subtotal:', baseSubtotal, 'Comida:', totalFoodPrice, 'Subtotal:', subtotal, 'IVA:', tax, 'Total:', total);
 }
 
 // ============================================
@@ -935,7 +925,7 @@ document.querySelectorAll('.food-card').forEach(card => {
 });
 
 // ============================================
-// MANEJAR ENVÍO DEL FORMULARIO
+// MANEJAR ENVÍO DEL FORMULARIO (CORREGIDO)
 // ============================================
 document.getElementById('foodForm').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -948,7 +938,15 @@ document.getElementById('foodForm').addEventListener('submit', function(e) {
     
     console.log('📤 Enviando pedido a save_food_order.php:', orderData);
     
-    document.getElementById('foodOrderInput').value = JSON.stringify(orderData);
+    const foodOrderInput = document.getElementById('foodOrderInput');
+    if (foodOrderInput) {
+        foodOrderInput.value = JSON.stringify(orderData);
+    }
+    
+    const tokenInput = document.querySelector('input[name="purchase_token"]');
+    if (tokenInput) {
+        tokenInput.value = purchaseToken;
+    }
     
     const btn = document.getElementById('btnCheckout');
     btn.disabled = true;

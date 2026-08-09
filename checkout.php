@@ -37,7 +37,7 @@ if (empty($paymentMethod)) {
 $seatsArray = array_map('trim', explode(',', $seats));
 
 // ============================================
-// ✅ VERIFICAR TIMEOUT DEL TOKEN
+// VERIFICAR TIMEOUT DEL TOKEN
 // ============================================
 if (isPurchaseTokenExpired($showtimeId)) {
     clearPurchaseSession($showtimeId);
@@ -46,15 +46,16 @@ if (isPurchaseTokenExpired($showtimeId)) {
 }
 
 // ============================================
-// ✅ VALIDAR TOKEN DE COMPRA
+// VALIDAR TOKEN DE COMPRA
 // ============================================
 if (empty($token) || !verifyPurchaseTokenWithTimeout($token, $showtimeId)) {
+    error_log("❌ Token inválido en checkout.php: " . ($token ?? 'NULL'));
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
     exit;
 }
 
 // ============================================
-// ✅ OBTENER Y RECALCULAR TODO EN EL SERVIDOR
+// OBTENER Y RECALCULAR TODO EN EL SERVIDOR
 // ============================================
 
 $stmt = $pdo->prepare("
@@ -80,7 +81,7 @@ if (!$ticketQuantities) {
     exit;
 }
 
-// ✅ Obtener precios de boletos (SIN comida)
+// Obtener precios de boletos
 $validation = validateAndRecalculatePrices($pdo, $showtimeId, $ticketQuantities);
 
 if (isset($validation['error'])) {
@@ -101,7 +102,7 @@ if (count($seatsArray) != $totalSeats) {
 }
 
 // ============================================
-// ✅ VERIFICAR QUE LOS TICKETS TEMPORALES EXISTAN
+// VERIFICAR QUE LOS TICKETS TEMPORALES EXISTAN (CON RECUPERACIÓN)
 // ============================================
 $placeholders = implode(',', array_fill(0, count($seatsArray), '?'));
 $stmtCheckTickets = $pdo->prepare("
@@ -111,19 +112,50 @@ $stmtCheckTickets = $pdo->prepare("
 $stmtCheckTickets->execute(array_merge([$showtimeId, $_SESSION['user_id']], $seatsArray));
 $userTickets = $stmtCheckTickets->fetchAll(PDO::FETCH_COLUMN);
 
-// Si los tickets temporales no existen, redirigir a seats.php
+// Si faltan tickets, intentar recuperarlos
 if (count($userTickets) !== count($seatsArray)) {
-    error_log("⚠️ Tickets temporales no encontrados para usuario " . $_SESSION['user_id'] . " en showtime $showtimeId");
-    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Sesión+expirada,+selecciona+los+asientos+nuevamente');
-    exit;
+    error_log("⚠️ Tickets temporales faltantes en checkout para usuario " . $_SESSION['user_id'] . " en showtime $showtimeId");
+    error_log("Esperados: " . print_r($seatsArray, true));
+    error_log("Encontrados: " . print_r($userTickets, true));
+    
+    // Intentar crear los tickets faltantes
+    $missingSeats = array_diff($seatsArray, $userTickets);
+    
+    if (!empty($missingSeats)) {
+        $stmtInsert = $pdo->prepare("
+            INSERT IGNORE INTO tickets (user_id, showtime_id, seat_code, price_paid)
+            VALUES (?, ?, ?, 0)
+        ");
+        
+        $recovered = 0;
+        foreach ($missingSeats as $seat) {
+            $stmtInsert->execute([$_SESSION['user_id'], $showtimeId, $seat]);
+            $recovered++;
+            error_log("🔄 Ticket recuperado: asiento $seat");
+        }
+        
+        error_log("✅ $recovered tickets recuperados en checkout");
+        
+        // Verificar nuevamente
+        $stmtCheckTickets->execute(array_merge([$showtimeId, $_SESSION['user_id']], $seatsArray));
+        $userTickets = $stmtCheckTickets->fetchAll(PDO::FETCH_COLUMN);
+        
+        if (count($userTickets) !== count($seatsArray)) {
+            error_log("❌ Falló la recuperación de tickets para usuario " . $_SESSION['user_id']);
+            header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Sesión+expirada,+selecciona+los+asientos+nuevamente');
+            exit;
+        }
+    }
 }
 
 // ============================================
-// ✅ PROCESAR COMIDA DESDE SESIÓN
+// PROCESAR COMIDA DESDE SESIÓN
 // ============================================
 $sessionFoodKey = 'food_order_' . $showtimeId;
 $foodOrderData = isset($_SESSION[$sessionFoodKey]) ? $_SESSION[$sessionFoodKey] : '[]';
 $foodOrder = isset($_POST['food_order']) ? $_POST['food_order'] : $foodOrderData;
+
+error_log("📦 checkout.php - foodOrder recibido: " . $foodOrder);
 
 $foodItems = [];
 $totalFood = 0;
@@ -159,13 +191,13 @@ if (!empty($foodData) && is_array($foodData)) {
 }
 
 // ============================================
-// ✅ CALCULAR TOTALES CORRECTAMENTE
+// CALCULAR TOTALES CORRECTAMENTE
 // ============================================
 $subtotalGeneral = $ticketSubtotal + $totalFood;
 $taxAmountGeneral = $subtotalGeneral * ($taxRate / 100);
 $totalGeneral = $subtotalGeneral + $taxAmountGeneral;
 
-$ticketTypeMap = ['adult' => 1, 'child' => 2, 'senior' => 3];
+error_log("📊 checkout.php - TicketSubtotal: $ticketSubtotal, Food: $totalFood, Subtotal: $subtotalGeneral, Total: $totalGeneral");
 
 $purchaseId = null;
 
@@ -189,14 +221,13 @@ try {
     }
     
     // ============================================
-    // 2. VERIFICAR ASIENTOS OCUPADOS (EN tickets)
+    // 2. VERIFICAR ASIENTOS OCUPADOS
     // ============================================
     $placeholders = implode(',', array_fill(0, count($seatsArray), '?'));
     $stmtCheck = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ? AND seat_code IN ($placeholders) FOR UPDATE");
     $stmtCheck->execute(array_merge([$showtimeId], $seatsArray));
     $existingSeats = $stmtCheck->fetchAll(PDO::FETCH_COLUMN);
     
-    // ✅ Verificar que los asientos ocupados NO sean del usuario actual
     $conflictSeats = array_diff($existingSeats, $userTickets);
     
     if (!empty($conflictSeats)) {
@@ -233,44 +264,40 @@ try {
         throw new Exception("Los siguientes asientos están bloqueados: " . implode(', ', $blockedRequested));
     }
     
-    // ✅ OBTENER ASIENTOS ACCESIBLES DEL LAYOUT
-    $accessibleSeats = $layout['wheelchairSeats'] ?? ($layout['accessibleSeats'] ?? []);
-    
     $transactionId = generateTransactionId();
     
     // ============================================
-    // 5. INSERTAR TICKETS CON PRECIO CORRECTO SEGÚN TIPO
+    // 5. INSERTAR TICKETS CON PRECIO CORRECTO
     // ============================================
     $totalAdults = intval($ticketQuantities['adult'] ?? 0);
     $totalChildren = intval($ticketQuantities['child'] ?? 0);
     $totalSeniors = intval($ticketQuantities['senior'] ?? 0);
     
-    // ✅ Primero, eliminar los tickets temporales del usuario
+    // Eliminar los tickets temporales del usuario para este showtime
     $stmtDeleteTemp = $pdo->prepare("
         DELETE FROM tickets 
         WHERE showtime_id = ? AND user_id = ? AND seat_code IN ($placeholders)
     ");
     $stmtDeleteTemp->execute(array_merge([$showtimeId, $_SESSION['user_id']], $seatsArray));
+    error_log("🗑️ Tickets temporales eliminados para usuario " . $_SESSION['user_id']);
     
-    // ✅ Luego, insertar los tickets definitivos
+    // Insertar los tickets definitivos
     $stmtInsert = $pdo->prepare("INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid) VALUES (?, ?, ?, ?)");
     $ticketIds = [];
     
     foreach ($seatsArray as $index => $seat) {
         if ($index < $totalAdults) {
-            $type = 'adult';
             $price = $pricesByType['adult'];
         } elseif ($index < $totalAdults + $totalChildren) {
-            $type = 'child';
             $price = $pricesByType['child'];
         } else {
-            $type = 'senior';
             $price = $pricesByType['senior'];
         }
         
         $stmtInsert->execute([$userId, $showtimeId, $seat, $price]);
         $ticketIds[] = $pdo->lastInsertId();
     }
+    error_log("✅ " . count($ticketIds) . " tickets definitivos creados");
     
     // ============================================
     // 6. ELIMINAR COMPRAS PENDIENTES DEL USUARIO ACTUAL
@@ -282,10 +309,11 @@ try {
     $stmtDelete->execute([$userId, $showtimeId]);
     
     // ============================================
-    // 7. REGISTRAR LA COMPRA
+    // 7. REGISTRAR LA COMPRA (VERSIÓN CORREGIDA - SIN data_hash)
     // ============================================
     $seatsWithMarkers = [];
-    foreach ($seatsArray as $index => $seat) {
+    $accessibleSeats = $layout['wheelchairSeats'] ?? ($layout['accessibleSeats'] ?? []);
+    foreach ($seatsArray as $seat) {
         if (in_array($seat, $accessibleSeats)) {
             $seatsWithMarkers[] = $seat . '♿';
         } else {
@@ -308,17 +336,13 @@ try {
         'user_agent' => $_SERVER['HTTP_USER_AGENT'] ?? null
     ]);
     
-    // ✅ GENERAR HASH DE INTEGRIDAD
-    $dataString = $subtotalGeneral . '|' . $taxAmountGeneral . '|' . $totalGeneral . '|' . $seatsFormatted . '|' . $totalSeats . '|' . $totalFood;
-    $dataHash = hash('sha256', $dataString);
-    
+    // ✅ CORREGIDO: INSERT sin data_hash y data_integrity_check
     $stmtPurchase = $pdo->prepare("
         INSERT INTO purchases (
             user_id, showtime_id, seats, total_tickets, total_food, 
             subtotal, tax_amount, tax_rate, total_amount, 
-            session_token, expires_at, status, payment_method, payment_data,
-            data_hash, data_integrity_check
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, ?, 1)
+            session_token, expires_at, status, payment_method, payment_data
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?)
     ");
     $stmtPurchase->execute([
         $userId,
@@ -333,11 +357,11 @@ try {
         $sessionToken,
         $expiresAt,
         $paymentMethod,
-        $paymentData,
-        $dataHash
+        $paymentData
     ]);
     
     $purchaseId = $pdo->lastInsertId();
+    error_log("✅ Compra #$purchaseId registrada en purchases");
     
     // ============================================
     // 8. INSERTAR purchase_tickets
@@ -349,17 +373,14 @@ try {
     
     foreach ($seatsArray as $index => $seat) {
         if ($index < $totalAdults) {
-            $type = 'adult';
-            $price = $pricesByType['adult'];
             $ticketTypeId = 1;
+            $price = $pricesByType['adult'];
         } elseif ($index < $totalAdults + $totalChildren) {
-            $type = 'child';
-            $price = $pricesByType['child'];
             $ticketTypeId = 2;
+            $price = $pricesByType['child'];
         } else {
-            $type = 'senior';
-            $price = $pricesByType['senior'];
             $ticketTypeId = 3;
+            $price = $pricesByType['senior'];
         }
         
         $stmtPurchaseTicket->execute([
@@ -370,6 +391,7 @@ try {
             $price
         ]);
     }
+    error_log("✅ " . count($seatsArray) . " purchase_tickets creados");
     
     // ============================================
     // 9. INSERTAR food_orders
@@ -394,6 +416,7 @@ try {
                 $purchaseId
             ]);
         }
+        error_log("✅ " . count($foodItems) . " food_orders creados");
     }
     
     $_SESSION['last_order_id'] = $purchaseId;
@@ -404,9 +427,11 @@ try {
     
     $pdo->commit();
     
+    error_log("✅ Compra #$purchaseId completada exitosamente");
+    
 } catch (Exception $e) {
     $pdo->rollBack();
-    error_log("Error en checkout: " . $e->getMessage());
+    error_log("❌ Error en checkout: " . $e->getMessage());
     header('Location: seats.php?showtime_id=' . $showtimeId . '&error=' . urlencode($e->getMessage()));
     exit;
 }

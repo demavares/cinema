@@ -16,12 +16,12 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ DETECTAR SI VIENE DE FOOD_MENU.PHP
+// DETECTAR SI VIENE DE FOOD_MENU.PHP
 // ============================================
 $fromFood = isset($_GET['from']) && $_GET['from'] === 'food';
 
 // ============================================
-// ✅ VERIFICAR TIMEOUT DEL TOKEN DE COMPRA
+// VERIFICAR TIMEOUT DEL TOKEN DE COMPRA
 // ============================================
 if (isPurchaseTokenExpired($showtimeId)) {
     clearPurchaseSession($showtimeId);
@@ -30,7 +30,7 @@ if (isPurchaseTokenExpired($showtimeId)) {
 }
 
 // ============================================
-// ✅ VALIDAR TOKEN DE COMPRA DESDE SESIÓN
+// VALIDAR TOKEN DE COMPRA DESDE SESIÓN
 // ============================================
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
 $foodValidKey = 'food_valid_' . $showtimeId;
@@ -43,45 +43,24 @@ if (empty($purchaseToken) || !verifyPurchaseTokenWithTimeout($purchaseToken, $sh
     }
     if ($fromFood) {
         $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
+        $_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
     }
 }
 
 // ============================================
-// VERIFICAR QUE LA COMPRA NO ESTÉ COMPLETADA
+// CORREGIDO: NO ELIMINAR LA COMPRA PENDIENTE
 // ============================================
 $stmt = $pdo->prepare("
-    SELECT id, status FROM purchases
+    SELECT id, status, seats FROM purchases
     WHERE user_id = ? AND showtime_id = ? AND status IN ('completed', 'pending')
     ORDER BY id DESC LIMIT 1
 ");
 $stmt->execute([$_SESSION['user_id'], $showtimeId]);
 $purchase = $stmt->fetch();
 
-// Si hay una compra pendiente (sin completar), limpiarla para permitir nueva compra
+// Si hay una compra pendiente, actualizarla (no eliminarla)
 if ($purchase && $purchase['status'] === 'pending' && !$fromFood) {
-    $stmt = $pdo->prepare("DELETE FROM purchases WHERE id = ?");
-    $stmt->execute([$purchase['id']]);
-    
-    $stmt = $pdo->prepare("DELETE FROM tickets WHERE showtime_id = ? AND user_id = ?");
-    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
-    
-    $sessionKeys = [
-        'ticket_quantities_' . $showtimeId,
-        'total_seats_' . $showtimeId,
-        'subtotal_' . $showtimeId,
-        'tax_amount_' . $showtimeId,
-        'total_amount_' . $showtimeId,
-        'food_seats_' . $showtimeId,
-        'food_timeout_' . $showtimeId,
-        'food_valid_' . $showtimeId,
-        'food_order_' . $showtimeId,
-        'purchase_token_' . $showtimeId
-    ];
-    foreach ($sessionKeys as $key) {
-        if (isset($_SESSION[$key])) {
-            unset($_SESSION[$key]);
-        }
-    }
+    error_log("📌 Compra pendiente encontrada en seats.php: " . $purchase['id']);
 }
 
 // ============================================
@@ -107,7 +86,7 @@ $taxRate = isset($_SESSION['tax_rate_' . $showtimeId])
     : 16;
 
 // ============================================
-// ✅ RECUPERAR DATOS DESDE SESIÓN DE COMIDA SI ES NECESARIO
+// RECUPERAR DATOS DESDE SESIÓN DE COMIDA SI ES NECESARIO
 // ============================================
 $foodSeatsKey = 'food_seats_' . $showtimeId;
 $foodTimeoutKey = 'food_timeout_' . $showtimeId;
@@ -168,7 +147,7 @@ if (!$ticketsData || $totalSeats <= 0) {
 }
 
 // ============================================
-// OBTENER DATOS DEL SHOWTIME (CORREGIDO - SIN seat_image)
+// OBTENER DATOS DEL SHOWTIME
 // ============================================
 $stmt = $pdo->prepare("
     SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.description, m.duration,
@@ -189,25 +168,62 @@ if (!$showtime) {
 $finalPrice = getShowtimePrice($showtime);
 
 // ============================================
-// ✅ OBTENER ASIENTOS OCUPADOS (EXCLUYENDO LOS DEL USUARIO ACTUAL)
+// OBTENER ASIENTOS OCUPADOS (CORREGIDO - INCLUYE ASIENTOS DEL USUARIO CON COMPRAS COMPLETADAS)
 // ============================================
-$stmtSeats = $pdo->prepare("
-    SELECT t.seat_code 
+
+// 1. Obtener asientos de compras completadas (tickets definitivos) - TODOS los usuarios
+$stmtCompleted = $pdo->prepare("
+    SELECT t.seat_code, p.user_id, p.status
     FROM tickets t
-    LEFT JOIN purchases p ON t.user_id = p.user_id AND t.showtime_id = p.showtime_id
+    JOIN purchases p ON t.user_id = p.user_id AND t.showtime_id = p.showtime_id
     WHERE t.showtime_id = ? 
-    AND (
-        p.status = 'completed' 
-        OR (p.status = 'pending' AND t.user_id != ?)
-        OR p.status IS NULL
-    )
+    AND p.status = 'completed'
     GROUP BY t.seat_code
 ");
-$stmtSeats->execute([$showtimeId, $_SESSION['user_id']]);
-$occupiedSeats = $stmtSeats->fetchAll(PDO::FETCH_COLUMN);
+$stmtCompleted->execute([$showtimeId]);
+$completedSeatsData = $stmtCompleted->fetchAll(PDO::FETCH_ASSOC);
+
+$completedSeats = [];
+$userCompletedSeats = [];
+foreach ($completedSeatsData as $row) {
+    $completedSeats[] = $row['seat_code'];
+    if ($row['user_id'] == $_SESSION['user_id']) {
+        $userCompletedSeats[] = $row['seat_code'];
+    }
+}
+
+// 2. Obtener asientos de compras pendientes de OTROS usuarios
+$stmtPending = $pdo->prepare("
+    SELECT seats 
+    FROM purchases 
+    WHERE showtime_id = ? 
+    AND status = 'pending' 
+    AND user_id != ?
+");
+$stmtPending->execute([$showtimeId, $_SESSION['user_id']]);
+$pendingPurchases = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
+
+// Combinar todos los asientos ocupados (incluye los del usuario con compras completadas)
+$occupiedSeats = $completedSeats;
+
+foreach ($pendingPurchases as $seatsString) {
+    if (!empty($seatsString)) {
+        $seatsArray = array_map('trim', explode(',', $seatsString));
+        $seatsArray = array_map(function($seat) {
+            return str_replace('♿', '', $seat);
+        }, $seatsArray);
+        $occupiedSeats = array_merge($occupiedSeats, $seatsArray);
+    }
+}
+
+// Eliminar duplicados
+$occupiedSeats = array_unique($occupiedSeats);
+
+error_log("🔍 Asientos ocupados encontrados: " . implode(', ', $occupiedSeats));
+error_log("🔍 Asientos del usuario con compras completadas: " . implode(', ', $userCompletedSeats));
 
 // ============================================
-// ✅ OBTENER ASIENTOS SELECCIONADOS POR EL USUARIO ACTUAL
+// OBTENER ASIENTOS SELECCIONADOS POR EL USUARIO ACTUAL (SOLO PENDIENTES)
 // ============================================
 $stmtUserSeats = $pdo->prepare("
     SELECT t.seat_code 
@@ -220,6 +236,62 @@ $stmtUserSeats = $pdo->prepare("
 ");
 $stmtUserSeats->execute([$showtimeId, $_SESSION['user_id']]);
 $userPendingSeats = $stmtUserSeats->fetchAll(PDO::FETCH_COLUMN);
+
+// También verificar asientos en purchases pendientes del usuario
+$stmtUserPendingPurchases = $pdo->prepare("
+    SELECT seats 
+    FROM purchases 
+    WHERE showtime_id = ? 
+    AND user_id = ? 
+    AND status = 'pending'
+    AND expires_at > NOW()
+");
+$stmtUserPendingPurchases->execute([$showtimeId, $_SESSION['user_id']]);
+$userPendingPurchases = $stmtUserPendingPurchases->fetchAll(PDO::FETCH_COLUMN);
+
+foreach ($userPendingPurchases as $seatsString) {
+    if (!empty($seatsString)) {
+        $seatsArray = array_map('trim', explode(',', $seatsString));
+        $seatsArray = array_map(function($seat) {
+            return str_replace('♿', '', $seat);
+        }, $seatsArray);
+        $userPendingSeats = array_merge($userPendingSeats, $seatsArray);
+    }
+}
+$userPendingSeats = array_unique($userPendingSeats);
+
+// IMPORTANTE: Los asientos con compras COMPLETADAS NO deben estar en $userPendingSeats
+// porque ya están en $occupiedSeats
+$userPendingSeats = array_diff($userPendingSeats, $userCompletedSeats);
+$userPendingSeats = array_values($userPendingSeats);
+
+error_log("🔍 Asientos del usuario pendientes (excluyendo completados): " . implode(', ', $userPendingSeats));
+
+// ============================================
+// SI VIENE DE FOOD_MENU, RECUPERAR ASIENTOS DE LA BD
+// ============================================
+if ($fromFood) {
+    $stmtRecover = $pdo->prepare("
+        SELECT seat_code FROM tickets 
+        WHERE showtime_id = ? AND user_id = ?
+        AND NOT EXISTS (
+            SELECT 1 FROM purchases p 
+            WHERE p.user_id = tickets.user_id 
+            AND p.showtime_id = tickets.showtime_id 
+            AND p.status = 'completed'
+        )
+    ");
+    $stmtRecover->execute([$showtimeId, $_SESSION['user_id']]);
+    $recoveredSeats = $stmtRecover->fetchAll(PDO::FETCH_COLUMN);
+    
+    if (!empty($recoveredSeats)) {
+        // Filtrar asientos que ya están ocupados (completados)
+        $recoveredSeats = array_diff($recoveredSeats, $userCompletedSeats);
+        $userPendingSeats = array_merge($userPendingSeats, $recoveredSeats);
+        $userPendingSeats = array_unique($userPendingSeats);
+        error_log("🔄 Asientos recuperados desde BD en seats.php: " . implode(', ', $userPendingSeats));
+    }
+}
 
 // Decodificar layout
 $seatLayout = null;
@@ -250,7 +322,6 @@ $availableSeatsCount = $totalSeatsRoom - count($blockedSeats);
 $occupiedCount = count($occupiedSeats);
 $realAvailable = $availableSeatsCount - $occupiedCount;
 
-// ✅ Para el usuario actual, los asientos pendientes NO cuentan como ocupados
 if ($realAvailable < $totalSeats) {
     $userPendingCount = count($userPendingSeats);
     $availableForUser = $realAvailable + $userPendingCount;
@@ -286,7 +357,7 @@ if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
 }
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
 
-// ✅ Inicializar selectedSeats con los asientos pendientes del usuario
+// Inicializar selectedSeats con los asientos pendientes del usuario
 $selectedSeats = $userPendingSeats;
 
 require_once 'header.php';
@@ -352,7 +423,7 @@ body {
 .seat-occupied {
     background-color: #ef4444 !important;
     cursor: not-allowed !important;
-    opacity: 0.65;
+    opacity: 0.85;
 }
 .seat-accessible { background-color: #0284c7 !important; }
 .seat-accessible:hover:not(.seat-occupied):not(.seat-blocked):not(.seat-selected) {
@@ -934,7 +1005,8 @@ body {
                                     $seatClass = 'seat-available';
                                     if ($isBlocked) {
                                         $seatClass = 'seat-blocked';
-                                    } elseif ($isOccupied && !$isUserPending) {
+                                    } elseif ($isOccupied) {
+                                        // Ocupado incluye compras completadas (del usuario y de otros)
                                         $seatClass = 'seat-occupied';
                                     } elseif ($isUserPending) {
                                         $seatClass = 'seat-selected';
@@ -943,18 +1015,20 @@ body {
                                     }
                                     
                                     $seatTitle = $isBlocked ? 'Pasillo' : 
-                                                ($isOccupied && !$isUserPending ? 'Ocupado' : 
+                                                ($isOccupied ? 'Ocupado' : 
                                                 ($isUserPending ? "Asiento $seatId (Seleccionado)" : 
                                                 ($isAccessible ? "Asiento $seatId (Discapacidad ♿)" : "Asiento $seatId")));
                                 ?>
                                 <button 
                                     data-seat="<?= $seatId ?>" 
                                     class="seat <?= $seatClass ?>"
-                                    <?= ($isOccupied && !$isUserPending || $isBlocked) ? 'disabled' : '' ?>
+                                    <?= ($isOccupied || $isBlocked) ? 'disabled' : '' ?>
                                     title="<?= htmlspecialchars($seatTitle) ?>"
                                 >
-                                    <?php if(!$isBlocked): ?>
+                                    <?php if(!$isBlocked && !$isOccupied): ?>
                                     <span class="seat-label"><?= $isAccessible ? '♿' : $seatNumber ?></span>
+                                    <?php elseif($isOccupied): ?>
+                                    <span class="seat-label"><?= $seatNumber ?></span>
                                     <?php endif; ?>
                                 </button>
                                 <?php endforeach; ?>
@@ -1093,7 +1167,7 @@ const currencyConfig = {
     decimals: <?= intval($siteConfig['decimal_places'] ?? 2) ?>
 };
 
-// ✅ Inicializar selectedSeats con los asientos pendientes del usuario
+// Inicializar selectedSeats con los asientos pendientes del usuario
 let selectedSeats = [...userPendingSeats];
 const maxSeats = totalSeatsNeeded;
 
@@ -1103,6 +1177,7 @@ console.log('📊 occupiedSeats:', occupiedSeats);
 console.log('📊 userPendingSeats:', userPendingSeats);
 console.log('📊 selectedSeats inicial:', selectedSeats);
 console.log('📊 fromFood:', fromFood);
+console.log('📊 purchaseToken:', purchaseToken);
 
 // ============================================
 // FUNCIONES DE ALMACENAMIENTO
@@ -1111,6 +1186,7 @@ function saveSeatsToStorage() {
     try {
         sessionStorage.setItem('selected_seats_' + showtimeId, JSON.stringify(selectedSeats));
         sessionStorage.setItem('selected_seats_count_' + showtimeId, selectedSeats.length);
+        sessionStorage.setItem('purchase_token_' + showtimeId, purchaseToken);
     } catch (e) { console.warn('Error guardando en sessionStorage:', e); }
 }
 
@@ -1241,12 +1317,11 @@ function validateSeats() {
 }
 
 // ============================================
-// ✅ MANEJAR ENVÍO DEL FORMULARIO (CORREGIDO CON AJAX)
+// MANEJAR ENVÍO DEL FORMULARIO
 // ============================================
 window.handleFormSubmit = function(event) {
     event.preventDefault();
     
-    // Validar asientos
     if (!validateSeats()) {
         return false;
     }
@@ -1254,7 +1329,11 @@ window.handleFormSubmit = function(event) {
     const form = document.getElementById('foodForm');
     const formData = new FormData(form);
     
-    // ✅ Verificar que los asientos estén seleccionados
+    const tokenInput = document.querySelector('input[name="purchase_token"]');
+    if (tokenInput) {
+        tokenInput.value = purchaseToken;
+    }
+    
     const seatsInput = document.getElementById('seats-input');
     if (!seatsInput || !seatsInput.value) {
         showNotification('⚠️ No hay asientos seleccionados.', 'warning');
@@ -1263,9 +1342,8 @@ window.handleFormSubmit = function(event) {
 
     const btnContinue = document.getElementById('btn-continue');
     btnContinue.disabled = true;
-    btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Procesando...';
+    btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Reservando asientos...';
 
-    // ✅ Enviar con fetch (AJAX)
     fetch('create_food_session.php', {
         method: 'POST',
         body: formData,
@@ -1273,19 +1351,14 @@ window.handleFormSubmit = function(event) {
             'X-Requested-With': 'XMLHttpRequest'
         }
     })
-    .then(response => {
-        // ✅ Leer la respuesta como JSON
-        return response.json();
-    })
+    .then(response => response.json())
     .then(data => {
         console.log('✅ Respuesta de create_food_session:', data);
         
         if (data.success) {
-            // ✅ Redirigir a food_menu.php
             window.location.href = 'food_menu.php?showtime_id=' + showtimeId;
         } else {
-            // ✅ Mostrar error específico
-            const errorMsg = data.error || 'Error al crear la sesión. Intenta nuevamente.';
+            const errorMsg = data.error || 'Error al reservar los asientos. Intenta nuevamente.';
             showNotification('❌ ' + errorMsg, 'error');
             btnContinue.disabled = false;
             btnContinue.innerHTML = '<i class="fas fa-utensils mr-2"></i> Continuar a Comida';
@@ -1308,7 +1381,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const seats = document.querySelectorAll('.seat:not(.seat-blocked)');
     console.log('🪑 Total de asientos disponibles:', seats.length);
 
-    // Si venimos de food_menu.php, intentar restaurar desde sessionStorage
     if (fromFood) {
         const hasSavedSeats = loadSeatsFromStorage();
         if (hasSavedSeats) {
@@ -1316,7 +1388,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Marcar visualmente los asientos seleccionados
     seats.forEach(seat => {
         const seatId = seat.getAttribute('data-seat');
         if (selectedSeats.includes(seatId)) {
@@ -1327,17 +1398,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     updateSummary();
 
-    // Agregar event listeners a TODOS los asientos
     seats.forEach(seat => {
         seat.addEventListener('click', function() {
             const seatId = this.getAttribute('data-seat');
-            console.log('🖱️ Clic en asiento:', seatId);
 
             if (blockedSeats.includes(seatId)) {
                 showNotification('🚫 Este es un pasillo, no se puede seleccionar', 'warning');
                 return;
             }
-            // Verificar si está ocupado por otro usuario
             if (occupiedSeats.includes(seatId) && !userPendingSeats.includes(seatId)) {
                 this.classList.add('seat-occupied');
                 this.disabled = true;
@@ -1349,10 +1417,8 @@ document.addEventListener('DOMContentLoaded', function() {
             const isAccessible = accessibleSeats.includes(seatId);
 
             if (index > -1) {
-                // Deseleccionar
                 selectedSeats.splice(index, 1);
                 this.classList.remove('seat-selected');
-                // Si es un asiento pendiente del usuario, debe volver a disponible
                 if (userPendingSeats.includes(seatId)) {
                     this.classList.add('seat-available');
                 } else {
@@ -1363,7 +1429,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     showNotification(`⚠️ Ya tienes ${maxSeats} asientos seleccionados.`, 'warning', 4000);
                     return;
                 }
-                // Seleccionar
                 selectedSeats.push(seatId);
                 this.classList.remove('seat-available', 'seat-accessible', 'seat-occupied');
                 this.classList.add('seat-selected');
@@ -1373,36 +1438,9 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    console.log('✅ Event listeners agregados a', seats.length, 'asientos');
-
-    // ============================================
-    // ✅ ZOOM POR VARIABLE CSS
-    // ============================================
-    let currentZoom = 1;
-    const minZoom = 0.8, maxZoom = 1.8, stepZoom = 0.2;
-    const seatGridScrollWrapper = document.querySelector('.seat-grid-scroll-wrapper');
-    const btnZoomIn = document.getElementById('btn-zoom-in');
-    const btnZoomOut = document.getElementById('btn-zoom-out');
-    const btnZoomReset = document.getElementById('btn-zoom-reset');
-    const baseSeatSizeRem = 1.8;
-
-    function applyZoom(newZoom) {
-        currentZoom = Math.min(Math.max(newZoom, minZoom), maxZoom);
-        const newSize = baseSeatSizeRem * currentZoom;
-        document.documentElement.style.setProperty('--seat-size', newSize + 'rem');
-        if (btnZoomReset) btnZoomReset.innerText = Math.round(currentZoom * 100) + '%';
-        console.log('🔍 Zoom aplicado:', currentZoom, '| Tamaño de asiento:', newSize + 'rem');
-    }
-
-    if (btnZoomIn && btnZoomOut && btnZoomReset) {
-        btnZoomIn.addEventListener('click', () => applyZoom(currentZoom + stepZoom));
-        btnZoomOut.addEventListener('click', () => applyZoom(currentZoom - stepZoom));
-        btnZoomReset.addEventListener('click', () => applyZoom(1));
-    }
-
     // Verificar asientos ocupados periódicamente
     setInterval(function() {
-        fetch('check_seats.php?showtime_id=<?= $showtime['id'] ?>')
+        fetch('check_seats.php?showtime_id=' + showtimeId)
             .then(response => response.json())
             .then(data => {
                 if (data.error) {

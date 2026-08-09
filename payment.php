@@ -23,11 +23,12 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ VALIDAR TOKEN DE COMPRA DESDE SESIÓN
+// VALIDAR TOKEN DE COMPRA DESDE SESIÓN
 // ============================================
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
 
 if (empty($purchaseToken) || !verifyPurchaseTokenWithTimeout($purchaseToken, $showtimeId)) {
+    error_log("❌ Token inválido en payment.php: " . ($purchaseToken ?? 'NULL'));
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
     exit;
 }
@@ -63,7 +64,7 @@ if (!isset($_SESSION[$sessionTimeoutKey])) {
 }
 
 // ============================================
-// ✅ LEER ASIENTOS DESDE SESIÓN (SEGURO)
+// LEER ASIENTOS DESDE SESIÓN
 // ============================================
 $seats = isset($_SESSION[$sessionSeatsKey]) ? $_SESSION[$sessionSeatsKey] : '';
 if (empty($seats)) {
@@ -72,9 +73,10 @@ if (empty($seats)) {
 }
 
 // ============================================
-// ✅ LEER PEDIDO DE COMIDA DESDE SESIÓN
+// LEER PEDIDO DE COMIDA DESDE SESIÓN (CON LOG)
 // ============================================
 $foodOrder = isset($_SESSION[$sessionFoodKey]) ? json_decode($_SESSION[$sessionFoodKey], true) : [];
+error_log("🛒 Carrito recuperado en payment.php: " . print_r($foodOrder, true));
 
 // ============================================
 // OBTENER DATOS DEL SHOWTIME
@@ -99,14 +101,14 @@ $seatsArray = explode(',', $seats);
 $ticketCount = count($seatsArray);
 
 // ============================================
-// ✅ OBTENER DATOS DE BOLETOS DESDE LA SESIÓN
+// OBTENER DATOS DE BOLETOS DESDE LA SESIÓN
 // ============================================
 $ticketsData = isset($_SESSION['ticket_quantities_' . $showtimeId]) 
     ? $_SESSION['ticket_quantities_' . $showtimeId] 
     : null;
 
 // ============================================
-// ✅ CALCULAR SUBTOTAL DE BOLETOS (SIN COMIDA) - BASE SUBTOTAL
+// CALCULAR SUBTOTAL DE BOLETOS (SIN COMIDA)
 // ============================================
 $priceAdult = floatval($showtime['price_adult'] ?? $showtime['price'] ?? 0);
 $priceChild = floatval($showtime['price_child'] ?? 0);
@@ -126,18 +128,16 @@ if ($ticketsData) {
                     (intval($ticketsData['child'] ?? 0) * $priceChild) +
                     (intval($ticketsData['senior'] ?? 0) * $priceSenior);
 } else {
-    // Fallback: usar el precio base por boleto
     $basePrice = getShowtimePrice($showtime);
     $baseSubtotal = $ticketCount * $basePrice;
 }
 
-// Obtener tasa de IVA
 $stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
 $tax = $stmt->fetch();
 $taxRate = $tax ? floatval($tax['tax_rate']) : 16;
 
 // ============================================
-// ✅ PROCESAR COMIDA DESDE SESIÓN
+// PROCESAR COMIDA DESDE SESIÓN
 // ============================================
 $totalFoodPrice = 0;
 $foodItems = [];
@@ -172,13 +172,14 @@ if (!empty($foodOrder)) {
 }
 
 // ============================================
-// ✅ RECALCULAR TOTALES: baseSubtotal + comida
+// RECALCULAR TOTALES
 // ============================================
 $subtotalWithFood = $baseSubtotal + $totalFoodPrice;
 $taxAmountWithFood = $subtotalWithFood * ($taxRate / 100);
 $totalAmountWithFood = $subtotalWithFood + $taxAmountWithFood;
 
-// Guardar en sesión para usar en checkout
+error_log("📊 payment.php - BaseSubtotal: $baseSubtotal, Food: $totalFoodPrice, Subtotal: $subtotalWithFood, Total: $totalAmountWithFood");
+
 $_SESSION['subtotal_' . $showtimeId] = $subtotalWithFood;
 $_SESSION['tax_amount_' . $showtimeId] = $taxAmountWithFood;
 $_SESSION['total_amount_' . $showtimeId] = $totalAmountWithFood;
@@ -213,13 +214,13 @@ if (!empty($movieFormat)) {
     $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
 }
 
-// Asegurar que el token existe en sesión y está vigente
+// Asegurar que el token existe en sesión
 if (!isset($_SESSION['purchase_token_' . $showtimeId])) {
     $_SESSION['purchase_token_' . $showtimeId] = generatePurchaseTokenWithTimeout($showtimeId, 900);
 }
 $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
 
-// ✅ Preparar el JSON de foodOrder para el formulario
+// Preparar el JSON de foodOrder para el formulario
 $foodOrderJson = json_encode($foodOrder);
 $foodOrderEscaped = htmlspecialchars($foodOrderJson, ENT_QUOTES, 'UTF-8');
 
@@ -311,7 +312,7 @@ body {
     line-height: 1.3;
 }
 
-/* ✅ PROMOCIONES - BADGES BORDER AND DOT */
+/* PROMOCIONES - BADGES BORDER AND DOT */
 .promo-tag {
     display: inline-flex;
     align-items: center;
@@ -701,24 +702,20 @@ body {
                         <?= htmlspecialchars($showtime['title'] ?? '') ?>
                     </div>
 
-                    <!-- ✅ IDIOMA - TEXTO PLANO -->
                     <div class="text-sm text-gray-700 font-medium mt-1.5">
                         Idioma: <?= htmlspecialchars($languageLabel) ?>
                     </div>
 
-                    <!-- Sala · Fecha · Hora -->
                     <div class="text-sm text-gray-700 font-medium mt-1 whitespace-nowrap">
                         <?= htmlspecialchars($showtime['room_name'] ?? 'Sala no disponible') ?> · 
                         <?= formatDateShort($showtime['show_date'] ?? '') ?> · 
                         <?= formatTimeVenezuela($showtime['show_time'] ?? '') ?>
                     </div>
 
-                    <!-- FORMATO -->
                     <div class="mt-1.5">
                         <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
                     </div>
 
-                    <!-- ✅ PROMOCIONES - BADGES BORDER AND DOT -->
                     <div class="flex flex-col gap-2 mt-3 items-start">
                         <?php if ($hasMondayPromo): ?>
                             <span class="promo-tag monday">
@@ -736,7 +733,7 @@ body {
                 </div>
             </div>
 
-            <!-- ✅ RESUMEN DE BOLETOS POR TIPO -->
+            <!-- RESUMEN DE BOLETOS POR TIPO -->
             <div class="mb-3">
                 <p class="text-xs text-gray-400 font-semibold uppercase mb-1">🎫 Boletos</p>
                 <?php
@@ -767,7 +764,7 @@ body {
                 </div>
             </div>
 
-            <!-- ✅ COMIDA SELECCIONADA -->
+            <!-- COMIDA SELECCIONADA -->
             <?php if (!empty($foodItems)): ?>
             <div class="mb-3">
                 <p class="text-xs text-gray-400 font-semibold uppercase mb-1">🍿 Comida</p>
@@ -811,9 +808,9 @@ body {
                 <div class="text-xs text-gray-500 text-center font-medium">
                     <i class="fas fa-shield-alt text-green-600 mr-1"></i> Pago seguro y encriptado
                 </div>
-				<a href="<?= $backUrl ?>&from=payment" class="btn-back">
-					<i class="fas fa-arrow-left mr-2"></i> Volver a Comida
-				</a>
+                <a href="<?= $backUrl ?>&from=payment" class="btn-back">
+                    <i class="fas fa-arrow-left mr-2"></i> Volver a Comida
+                </a>
             </div>
         </div>
     </div>
@@ -930,7 +927,6 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
         }
     }
 
-    // ✅ Verificar que el token esté presente en el formulario
     const tokenInput = this.querySelector('input[name="purchase_token"]');
     if (!tokenInput || !tokenInput.value) {
         e.preventDefault();
