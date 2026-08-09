@@ -1,6 +1,8 @@
 <?php
 require_once 'config.php';
 
+header('Content-Type: application/json');
+
 if (!isset($_SESSION['user_id'])) {
     http_response_code(403);
     echo json_encode(['error' => 'Unauthorized']);
@@ -25,7 +27,7 @@ $token = isset($_POST['purchase_token']) ? $_POST['purchase_token'] : '';
 
 if ($showtimeId <= 0 || empty($seats)) {
     http_response_code(400);
-    echo json_encode(['error' => 'Datos inválidos']);
+    echo json_encode(['error' => 'Invalid data']);
     exit;
 }
 
@@ -51,9 +53,6 @@ if (empty($token) || !verifyPurchaseTokenWithTimeout($token, $showtimeId)) {
 try {
     $pdo->beginTransaction();
     
-    // ============================================
-    // 1. BLOQUEAR LA FILA DEL SHOWTIME
-    // ============================================
     $stmt = $pdo->prepare("
         SELECT s.*, r.capacity, r.seat_layout
         FROM showtimes s
@@ -68,60 +67,94 @@ try {
     }
     
     // ============================================
-    // 2. VERIFICAR ASIENTOS OCUPADOS
+    // ✅ NUEVA VALIDACIÓN: PROCESAR Y VALIDAR ASIENTOS
     // ============================================
-    $requestedSeats = array_filter(array_map('trim', explode(',', $seats)));
+    $seatArray = array_filter(array_map('trim', explode(',', $seats)));
+    $seatCount = count($seatArray);
     
-    $placeholders = implode(',', array_fill(0, count($requestedSeats), '?'));
-    $stmtCheck = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ? AND seat_code IN ($placeholders) FOR UPDATE");
-    $stmtCheck->execute(array_merge([$showtimeId], $requestedSeats));
-    $occupiedSeats = $stmtCheck->fetchAll(PDO::FETCH_COLUMN);
-    
-    if (!empty($occupiedSeats)) {
-        throw new Exception("Los siguientes asientos ya están ocupados: " . implode(', ', $occupiedSeats));
+    // ✅ Validar que haya al menos un asiento
+    if ($seatCount === 0) {
+        throw new Exception("Debes seleccionar al menos un asiento");
     }
     
-    // ============================================
-    // 3. VERIFICAR COMPRAS PENDIENTES DE OTROS USUARIOS
-    // ============================================
-    $stmtPending = $pdo->prepare("
-        SELECT seats FROM purchases 
-        WHERE showtime_id = ? AND status = 'pending' AND user_id != ?
-        FOR UPDATE
-    ");
-    $stmtPending->execute([$showtimeId, $_SESSION['user_id']]);
-    $pendingPurchases = $stmtPending->fetchAll();
-
-    foreach ($pendingPurchases as $pending) {
-        $pendingSeats = explode(',', $pending['seats']);
-        $conflictSeats = array_intersect($requestedSeats, $pendingSeats);
-        if (!empty($conflictSeats)) {
-            throw new Exception("Los siguientes asientos están siendo reservados por otro usuario: " . implode(', ', $conflictSeats));
+    // ✅ Validar asientos duplicados
+    if ($seatCount !== count(array_unique($seatArray))) {
+        throw new Exception("Se detectaron asientos duplicados en la selección");
+    }
+    
+    // ✅ Validar capacidad máxima de la sala
+    $capacity = intval($showtimeLocked['capacity'] ?? 0);
+    if ($capacity > 0 && $seatCount > $capacity) {
+        throw new Exception("La selección excede la capacidad de la sala ($capacity asientos)");
+    }
+    
+    // ✅ Validar límite máximo por compra (20 asientos)
+    if ($seatCount > 20) {
+        throw new Exception("Máximo 20 asientos por compra");
+    }
+    
+    // ✅ Validar formato de cada asiento (debe ser letra + número)
+    foreach ($seatArray as $seat) {
+        if (!preg_match('/^[A-Z]{1,2}[0-9]{1,3}$/', $seat)) {
+            throw new Exception("Formato de asiento inválido: $seat");
+        }
+    }
+    
+    // ✅ Verificar que los asientos coincidan con el total de boletos en sesión
+    $totalSeatsKey = 'total_seats_' . $showtimeId;
+    if (isset($_SESSION[$totalSeatsKey])) {
+        $expectedSeats = intval($_SESSION[$totalSeatsKey]);
+        if ($seatCount !== $expectedSeats) {
+            throw new Exception("La cantidad de asientos ($seatCount) no coincide con los boletos seleccionados ($expectedSeats)");
         }
     }
     
     // ============================================
-    // 4. VERIFICAR ASIENTOS BLOQUEADOS POR DISEÑO
+    // ✅ VERIFICAR ASIENTOS OCUPADOS (CON LOCK)
+    // ============================================
+    $placeholders = implode(',', array_fill(0, count($seatArray), '?'));
+    $stmt = $pdo->prepare("
+        SELECT seat_code FROM tickets 
+        WHERE showtime_id = ? AND seat_code IN ($placeholders)
+        FOR UPDATE
+    ");
+    $stmt->execute(array_merge([$showtimeId], $seatArray));
+    $occupiedSeats = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    $conflictSeats = array_intersect($seatArray, $occupiedSeats);
+    
+    if (!empty($conflictSeats)) {
+        throw new Exception("Los siguientes asientos ya están ocupados: " . implode(', ', $conflictSeats));
+    }
+    
+    // ============================================
+    // ✅ VERIFICAR ASIENTOS BLOQUEADOS
     // ============================================
     $layout = json_decode($showtimeLocked['seat_layout'], true);
     $blockedSeats = $layout['blockedSeats'] ?? [];
-    $blockedRequested = array_intersect($requestedSeats, $blockedSeats);
+    $blockedRequested = array_intersect($seatArray, $blockedSeats);
     
     if (!empty($blockedRequested)) {
         throw new Exception("Los siguientes asientos están bloqueados: " . implode(', ', $blockedRequested));
     }
     
-    // ============================================
-    // 5. ELIMINAR COMPRAS PENDIENTES DEL USUARIO ACTUAL
-    // ============================================
-    $stmtDelete = $pdo->prepare("
-        DELETE FROM purchases 
-        WHERE user_id = ? AND showtime_id = ? AND status = 'pending'
-    ");
-    $stmtDelete->execute([$_SESSION['user_id'], $showtimeId]);
+    // ✅ Verificar que los asientos existan en el layout de la sala
+    if ($layout && isset($layout['seatMap'])) {
+        $validSeats = [];
+        foreach ($layout['seatMap'] as $row => $seatNumbers) {
+            foreach ($seatNumbers as $seatNumber) {
+                $validSeats[] = $row . $seatNumber;
+            }
+        }
+        
+        $invalidSeats = array_diff($seatArray, $validSeats);
+        if (!empty($invalidSeats)) {
+            throw new Exception("Los siguientes asientos no existen en la sala: " . implode(', ', $invalidSeats));
+        }
+    }
     
     // ============================================
-    // 6. CREAR NUEVA COMPRA PENDIENTE
+    // ESTABLECER SESIONES DE COMIDA
     // ============================================
     $sessionKey = 'food_timeout_' . $showtimeId;
     $sessionSeatsKey = 'food_seats_' . $showtimeId;
@@ -138,63 +171,49 @@ try {
     $_SESSION[$sessionValidKey] = true;
     $_SESSION[$sessionCreatedKey] = time();
     
-    // ✅ Insertar compra pendiente con todos los campos necesarios
-    $sessionToken = bin2hex(random_bytes(32));
-    $tempHash = hash('sha256', $seats . '|' . count($requestedSeats) . '|pending');
-    
+    // ============================================
+    // CREAR O ACTUALIZAR COMPRA PENDIENTE
+    // ============================================
     $stmt = $pdo->prepare("
-        INSERT INTO purchases (
-            user_id, 
-            showtime_id, 
-            seats, 
-            total_tickets, 
-            total_food,
-            subtotal,
-            tax_amount,
-            tax_rate,
-            total_amount,
-            session_token, 
-            expires_at, 
-            status,
-            data_hash,
-            data_integrity_check
-        ) VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE), 'pending', ?, 0)
+        SELECT id FROM purchases 
+        WHERE user_id = ? AND showtime_id = ? AND status = 'pending'
+        FOR UPDATE
     ");
+    $stmt->execute([$_SESSION['user_id'], $showtimeId]);
+    $existing = $stmt->fetch();
     
-    $stmt->execute([
-        $_SESSION['user_id'],
-        $showtimeId,
-        $seats,
-        count($requestedSeats),
-        $sessionToken,
-        $tempHash
-    ]);
-    
-    // ============================================
-    // 7. INSERTAR TICKETS TEMPORALES
-    // ============================================
-    $stmtTicket = $pdo->prepare("
-        INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid) 
-        VALUES (?, ?, ?, ?)
-    ");
-    
-    $tempPrice = getShowtimePrice($showtimeLocked);
-    
-    foreach ($requestedSeats as $seat) {
-        $stmtTicket->execute([$_SESSION['user_id'], $showtimeId, $seat, $tempPrice]);
+    if ($existing) {
+        $stmt = $pdo->prepare("
+            UPDATE purchases 
+            SET seats = ?, expires_at = DATE_ADD(NOW(), INTERVAL 10 MINUTE), session_token = ?
+            WHERE id = ?
+        ");
+        $stmt->execute([$seats, bin2hex(random_bytes(32)), $existing['id']]);
+    } else {
+        $stmt = $pdo->prepare("
+            INSERT INTO purchases (user_id, showtime_id, seats, total_tickets, total_food, total_amount, session_token, expires_at, status) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE), 'pending')
+        ");
+        $stmt->execute([
+            $_SESSION['user_id'],
+            $showtimeId,
+            $seats,
+            $seatCount,
+            0,
+            0,
+            bin2hex(random_bytes(32))
+        ]);
     }
     
     $pdo->commit();
     
-    header('Content-Type: application/json');
     echo json_encode(['success' => true]);
     exit;
     
 } catch (Exception $e) {
     $pdo->rollBack();
-    error_log("Error en create_food_session: " . $e->getMessage());
+    error_log("Error en create_food_session.php: " . $e->getMessage());
     http_response_code(409);
-    header('Content-Type: application/json');
     echo json_encode(['error' => $e->getMessage()]);
     exit;
 }
