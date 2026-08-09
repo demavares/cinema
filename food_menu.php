@@ -685,9 +685,9 @@ body {
                     </button>
                 </form>
                 <!-- ✅ CORREGIDO: Ahora va a price_selection.php en lugar de seats.php -->
-                <a href="price_selection.php?showtime_id=<?= $showtimeId ?>" class="btn-back">
-                    <i class="fas fa-arrow-left mr-2"></i> Volver a Boletos
-                </a>
+<a href="price_selection.php?showtime_id=<?= $showtimeId ?>" class="btn-back">
+    <i class="fas fa-arrow-left mr-2"></i> Volver a Boletos
+</a>
             </div>
         </div>
     </div>

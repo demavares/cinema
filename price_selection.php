@@ -16,50 +16,102 @@ if ($showtimeId <= 0) {
 }
 
 // ============================================
-// ✅ CORREGIDO: LIMPIAR SESIONES DE COMPRA AL VOLVER DE FOOD_MENU
+// ✅ CORREGIDO: ELIMINAR SOLO TICKETS TEMPORALES
+// (MANTENER TICKETS DE COMPRAS COMPLETADAS)
 // ============================================
-$referer = $_SERVER['HTTP_REFERER'] ?? '';
-$fromFoodMenu = strpos($referer, 'food_menu.php') !== false;
+error_log("🔄 Cargando price_selection.php - Limpiando tickets temporales para usuario " . $_SESSION['user_id'] . " en showtime $showtimeId");
 
-if ($fromFoodMenu) {
-    error_log("🔄 Usuario vuelve de food_menu.php a price_selection.php - Limpiando sesiones");
-    
-    // 1. Limpiar todas las sesiones relacionadas con esta compra
-    clearPurchaseSession($showtimeId);
-    
-    // 2. Eliminar tickets temporales del usuario para este showtime
-    try {
-        $stmt = $pdo->prepare("
-            DELETE t FROM tickets t
-            WHERE t.showtime_id = ? AND t.user_id = ?
-            AND NOT EXISTS (
-                SELECT 1 FROM purchases p 
-                WHERE p.user_id = t.user_id 
-                AND p.showtime_id = t.showtime_id 
-                AND p.status = 'completed'
-            )
-        ");
-        $stmt->execute([$showtimeId, $_SESSION['user_id']]);
-        error_log("🗑️ Tickets temporales eliminados para usuario " . $_SESSION['user_id'] . " en showtime $showtimeId");
-    } catch (PDOException $e) {
-        error_log("Error eliminando tickets temporales: " . $e->getMessage());
+// 1. Limpiar todas las sesiones relacionadas con esta compra
+clearPurchaseSession($showtimeId);
+
+// 2. Eliminar tickets huérfanos (sin compra asociada)
+try {
+    $stmt = $pdo->prepare("
+        DELETE t FROM tickets t
+        WHERE t.showtime_id = ? AND t.user_id = ?
+        AND NOT EXISTS (
+            SELECT 1 FROM purchases p 
+            WHERE p.user_id = t.user_id 
+            AND p.showtime_id = t.showtime_id 
+        )
+    ");
+    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
+    $deletedOrphaned = $stmt->rowCount();
+    if ($deletedOrphaned > 0) {
+        error_log("🗑️ Tickets huérfanos eliminados: $deletedOrphaned asientos");
     }
-    
-    // 3. Eliminar compras pendientes del usuario para este showtime
-    try {
-        $stmt = $pdo->prepare("
-            DELETE FROM purchases 
-            WHERE user_id = ? AND showtime_id = ? AND status = 'pending'
-        ");
-        $stmt->execute([$_SESSION['user_id'], $showtimeId]);
-        error_log("🗑️ Compras pendientes eliminadas para usuario " . $_SESSION['user_id'] . " en showtime $showtimeId");
-    } catch (PDOException $e) {
-        error_log("Error eliminando compras pendientes: " . $e->getMessage());
-    }
-    
-    // 4. Marcar para limpiar sessionStorage
-    $_SESSION['clear_storage_on_load'] = true;
+} catch (PDOException $e) {
+    error_log("Error eliminando tickets huérfanos: " . $e->getMessage());
 }
+
+// 3. Eliminar tickets con compra PENDIENTE
+try {
+    $stmt = $pdo->prepare("
+        DELETE t FROM tickets t
+        INNER JOIN purchases p ON p.user_id = t.user_id AND p.showtime_id = t.showtime_id
+        WHERE t.showtime_id = ? AND t.user_id = ?
+        AND p.status = 'pending'
+    ");
+    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
+    $deletedPending = $stmt->rowCount();
+    if ($deletedPending > 0) {
+        error_log("🗑️ Tickets con compra pendiente eliminados: $deletedPending asientos");
+    }
+} catch (PDOException $e) {
+    error_log("Error eliminando tickets con compra pendiente: " . $e->getMessage());
+}
+
+// 4. Eliminar tickets con compra EXPIRADA
+try {
+    $stmt = $pdo->prepare("
+        DELETE t FROM tickets t
+        INNER JOIN purchases p ON p.user_id = t.user_id AND p.showtime_id = t.showtime_id
+        WHERE t.showtime_id = ? AND t.user_id = ?
+        AND p.status = 'expired'
+    ");
+    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
+    $deletedExpired = $stmt->rowCount();
+    if ($deletedExpired > 0) {
+        error_log("🗑️ Tickets con compra expirada eliminados: $deletedExpired asientos");
+    }
+} catch (PDOException $e) {
+    error_log("Error eliminando tickets con compra expirada: " . $e->getMessage());
+}
+
+// 5. ✅ NO ELIMINAR tickets con compra COMPLETADA (se mantienen para mostrar asientos ocupados)
+
+// 6. Eliminar compras pendientes
+try {
+    $stmt = $pdo->prepare("
+        DELETE FROM purchases 
+        WHERE user_id = ? AND showtime_id = ? AND status = 'pending'
+    ");
+    $stmt->execute([$_SESSION['user_id'], $showtimeId]);
+    $deletedPurchases = $stmt->rowCount();
+    if ($deletedPurchases > 0) {
+        error_log("🗑️ Compras pendientes eliminadas: $deletedPurchases registros");
+    }
+} catch (PDOException $e) {
+    error_log("Error eliminando compras pendientes: " . $e->getMessage());
+}
+
+// 7. Eliminar compras expiradas
+try {
+    $stmt = $pdo->prepare("
+        DELETE FROM purchases 
+        WHERE user_id = ? AND showtime_id = ? AND status = 'expired'
+    ");
+    $stmt->execute([$_SESSION['user_id'], $showtimeId]);
+    $deletedExpiredPurchases = $stmt->rowCount();
+    if ($deletedExpiredPurchases > 0) {
+        error_log("🗑️ Compras expiradas eliminadas: $deletedExpiredPurchases registros");
+    }
+} catch (PDOException $e) {
+    error_log("Error eliminando compras expiradas: " . $e->getMessage());
+}
+
+// 8. Marcar para limpiar sessionStorage
+$_SESSION['clear_storage_on_load'] = true;
 
 // ============================================
 // VERIFICAR TIMEOUT DEL TOKEN ANTERIOR
@@ -79,6 +131,16 @@ if (!canGenerateToken($showtimeId)) {
 // ✅ GENERAR NUEVO TOKEN DE COMPRA CON TIMEOUT
 $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
 
+// ✅ VERIFICAR QUE EL TOKEN SE GUARDÓ CORRECTAMENTE
+$verifyToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
+if (empty($verifyToken)) {
+    error_log("❌ price_selection.php - ERROR: Token no se guardó en sesión");
+    $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
+    error_log("🔄 price_selection.php - Token regenerado: " . substr($purchaseToken, 0, 10) . "...");
+} else {
+    error_log("✅ price_selection.php - Token guardado correctamente: " . substr($verifyToken, 0, 10) . "...");
+}
+
 // ============================================
 // LIMPIAR VARIABLES DE SESIÓN PARA FLUJO LIMPIO
 // ============================================
@@ -95,7 +157,9 @@ $keysToClean = [
     'total_amount_' . $showtimeId
 ];
 foreach ($keysToClean as $key) {
-    unset($_SESSION[$key]);
+    if (isset($_SESSION[$key])) {
+        unset($_SESSION[$key]);
+    }
 }
 
 // ============================================

@@ -186,7 +186,10 @@ try {
         )
     ");
     $stmt->execute([$showtimeId, $_SESSION['user_id']]);
-    error_log("🗑️ Tickets temporales antiguos eliminados para usuario " . $_SESSION['user_id']);
+    $deletedCount = $stmt->rowCount();
+    if ($deletedCount > 0) {
+        error_log("🗑️ Tickets temporales eliminados en create_food_session: $deletedCount asientos");
+    }
     
     // Luego, insertar los nuevos tickets
     $stmtInsert = $pdo->prepare("
