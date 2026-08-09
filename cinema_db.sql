@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: datame
--- Tiempo de generación: 09-08-2026 a las 00:32:13
+-- Tiempo de generación: 09-08-2026 a las 08:27:19
 -- Versión del servidor: 10.11.18-MariaDB-ubu2204
 -- Versión de PHP: 8.3.26
 
@@ -138,6 +138,14 @@ CREATE TABLE `food_orders` (
   `status` enum('pending','completed','cancelled') DEFAULT 'pending'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Volcado de datos para la tabla `food_orders`
+--
+
+INSERT INTO `food_orders` (`id`, `user_id`, `ticket_id`, `showtime_id`, `purchase_id`, `food_item_id`, `quantity`, `unit_price`, `total_price`, `order_date`, `status`) VALUES
+(20, 8, 486, 62, 350, 3, 2, 15.00, 30.00, '2026-08-09 00:37:46', 'completed'),
+(21, 8, 486, 62, 350, 4, 2, 1500.00, 3000.00, '2026-08-09 00:37:46', 'completed');
+
 -- --------------------------------------------------------
 
 --
@@ -205,6 +213,14 @@ CREATE TABLE `purchases` (
   `integrity_issues` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Volcado de datos para la tabla `purchases`
+--
+
+INSERT INTO `purchases` (`id`, `user_id`, `showtime_id`, `seats`, `accessible_seats`, `total_tickets`, `total_food`, `total_amount`, `subtotal`, `tax_amount`, `tax_rate`, `purchase_date`, `status`, `payment_method`, `payment_data`, `session_token`, `expires_at`, `data_hash`, `data_integrity_check`, `integrity_issues`) VALUES
+(350, 8, 62, 'B15,B14', NULL, 2, 3030.00, 6994.80, 6030.00, 964.80, 16.00, '2026-08-09 00:37:46', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260808-BDAE75D5\",\"method\":\"movil\",\"simulated\":true,\"reference\":\"CMP-20260808-AE849E\",\"date\":\"2026-08-08 20:37:46\",\"ip\":\"172.22.0.1\",\"user_agent\":\"Mozilla\\/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit\\/537.36 (KHTML, like Gecko) Chrome\\/151.0.0.0 Safari\\/537.36\"}', '9f9f57fcbbec6393e44d10a35053e80f656585483f5d3ecc5a0b545483e7d050', '2026-08-08 20:47:46', '50c7f19c2e47513306ec7ce0387fee210f047beb7f5704a3d97d9f97eac7da0b', 1, NULL),
+(351, 8, 61, 'A12', NULL, 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-09 07:31:01', 'expired', NULL, NULL, 'a9d76c050accb8bd394c1388eabfe9e5a6b90e484d0b17214584eb03bd25f57f', '2026-08-09 03:41:01', NULL, 0, NULL);
+
 -- --------------------------------------------------------
 
 --
@@ -220,6 +236,14 @@ CREATE TABLE `purchase_tickets` (
   `price` decimal(10,2) NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `purchase_tickets`
+--
+
+INSERT INTO `purchase_tickets` (`id`, `purchase_id`, `showtime_id`, `ticket_type_id`, `seat_code`, `price`, `created_at`) VALUES
+(37, 350, 62, 3, 'B15', 1500.00, '2026-08-09 00:37:46'),
+(38, 350, 62, 3, 'B14', 1500.00, '2026-08-09 00:37:46');
 
 -- --------------------------------------------------------
 
@@ -357,6 +381,14 @@ CREATE TABLE `tickets` (
   `price_paid` decimal(10,2) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Volcado de datos para la tabla `tickets`
+--
+
+INSERT INTO `tickets` (`id`, `user_id`, `showtime_id`, `seat_code`, `purchase_date`, `price_paid`) VALUES
+(486, 8, 62, 'B15', '2026-08-09 00:37:46', 1500.00),
+(487, 8, 62, 'B14', '2026-08-09 00:37:46', 1500.00);
+
 -- --------------------------------------------------------
 
 --
@@ -423,7 +455,7 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`id`, `name`, `email`, `cedula_type`, `cedula_number`, `phone_prefix`, `phone_number`, `birth_date`, `password`, `role`, `is_blocked`, `created_at`, `last_login`) VALUES
 (1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-08 19:30:59'),
-(8, 'Darwin Mavares', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-08 20:29:30');
+(8, 'Darwin Mavares', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-09 02:38:02');
 
 --
 -- Índices para tablas volcadas
@@ -566,7 +598,7 @@ ALTER TABLE `food_items`
 -- AUTO_INCREMENT de la tabla `food_orders`
 --
 ALTER TABLE `food_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
 
 --
 -- AUTO_INCREMENT de la tabla `movies`
@@ -578,13 +610,13 @@ ALTER TABLE `movies`
 -- AUTO_INCREMENT de la tabla `purchases`
 --
 ALTER TABLE `purchases`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=349;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=352;
 
 --
 -- AUTO_INCREMENT de la tabla `purchase_tickets`
 --
 ALTER TABLE `purchase_tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=37;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=39;
 
 --
 -- AUTO_INCREMENT de la tabla `rooms`
@@ -614,7 +646,7 @@ ALTER TABLE `tax_config`
 -- AUTO_INCREMENT de la tabla `tickets`
 --
 ALTER TABLE `tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=484;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=488;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_logs`

@@ -505,11 +505,24 @@ body {
     border-radius: 6px;
     border: 1px solid #e2e8f0;
 }
-.selected-info { background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; min-height: 60px; }
+.selected-info {
+    background: #f1f5f9 !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 8px !important;
+    padding: 14px !important;
+    margin-top: 12px;
+    margin-bottom: 16px;
+}
+.selected-info .text-sm {
+    font-size: 0.9rem !important;
+}
+.selected-info .font-bold {
+    font-weight: 700 !important;
+}
 #subtotal { color: #0f172a !important; }
 
 /* ============================================
-   CARD SUMMARY
+   CARD SUMMARY - MISMO ESTILO QUE PRICE_SELECTION
    ============================================ */
 .card-summary {
     background: #ffffff !important;
@@ -551,6 +564,15 @@ body {
     font-size: 1.1rem;
     line-height: 1.3;
 }
+.summary-movie-details {
+    font-size: 0.9rem;
+    color: #475569;
+    margin-top: 2px;
+}
+.summary-movie-details strong {
+    color: #0f172a;
+}
+
 .promo-tag {
     display: inline-flex;
     align-items: center;
@@ -580,6 +602,7 @@ body {
     border-color: #fde68a;
 }
 .promo-tag.presale .promo-dot { background: #b45309; }
+
 .format-badge {
     display: inline-flex;
     align-items: center;
@@ -605,6 +628,7 @@ body {
     border-color: #4f5e71;
     color: #4f5e71;
 }
+
 .btn-continue-food {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: #ffffff !important;
@@ -624,6 +648,7 @@ body {
     box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
 }
 .btn-continue-food:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
 .btn-back {
     background: #ffffff;
     border: 1px solid #cbd5e1;
@@ -995,7 +1020,7 @@ body {
             </div>
 
             <!-- ASIENTOS ELEGIDOS -->
-            <div class="selected-info" style="margin-bottom: 16px;">
+            <div class="selected-info">
                 <p class="text-sm text-gray-600">
                     Asientos elegidos: <span id="selected-seats-list" class="font-bold text-slate-900">-</span>
                 </p>
@@ -1375,41 +1400,37 @@ document.addEventListener('DOMContentLoaded', function() {
         btnZoomReset.addEventListener('click', () => applyZoom(1));
     }
 
-// Verificar asientos ocupados periódicamente
-setInterval(function() {
-    fetch('check_seats.php?showtime_id=<?= $showtime['id'] ?>')
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                console.warn('Error verificando asientos:', data.error);
-                return;
-            }
-            
-            // ✅ Actualizar asientos ocupados
-            if (data.occupied && Array.isArray(data.occupied)) {
-                data.occupied.forEach(seatId => {
-                    const seatEl = document.querySelector('[data-seat="' + seatId + '"]');
-                    if (seatEl && !seatEl.classList.contains('seat-occupied')) {
-                        seatEl.classList.remove('seat-selected', 'seat-available', 'seat-accessible');
-                        seatEl.classList.add('seat-occupied');
-                        seatEl.disabled = true;
-                        const index = selectedSeats.indexOf(seatId);
-                        if (index > -1) {
-                            selectedSeats.splice(index, 1);
-                            showNotification('⚠️ El asiento ' + seatId + ' acaba de ser reservado por otro usuario.', 'warning');
+    // Verificar asientos ocupados periódicamente
+    setInterval(function() {
+        fetch('check_seats.php?showtime_id=<?= $showtime['id'] ?>')
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.warn('Error verificando asientos:', data.error);
+                    return;
+                }
+                
+                if (data.occupied && Array.isArray(data.occupied)) {
+                    data.occupied.forEach(seatId => {
+                        const seatEl = document.querySelector('[data-seat="' + seatId + '"]');
+                        if (seatEl && !seatEl.classList.contains('seat-occupied')) {
+                            seatEl.classList.remove('seat-selected', 'seat-available', 'seat-accessible');
+                            seatEl.classList.add('seat-occupied');
+                            seatEl.disabled = true;
+                            const index = selectedSeats.indexOf(seatId);
+                            if (index > -1) {
+                                selectedSeats.splice(index, 1);
+                                showNotification('⚠️ El asiento ' + seatId + ' acaba de ser reservado por otro usuario.', 'warning');
+                            }
                         }
-                    }
-                });
-                updateSummary();
-            }
-            
-            // ✅ Actualizar timestamp de última verificación
-            console.log('🔄 Asientos verificados:', data.count, 'ocupados | Timestamp:', data.timestamp);
-        })
-        .catch(err => {
-            console.log('Error checking seats:', err);
-        });
-}, 30000);
+                    });
+                    updateSummary();
+                }
+            })
+            .catch(err => {
+                console.log('Error checking seats:', err);
+            });
+    }, 30000);
 });
 </script>
 </body>

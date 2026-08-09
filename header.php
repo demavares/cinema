@@ -1,16 +1,20 @@
 <?php
 require_once 'config.php';
+
 // Obtener la configuración del sitio desde la base de datos
 $siteConfig = getSiteConfig($pdo);
 $siteName = $siteConfig['site_name'] ?? 'Cinema Pro';
 $siteLogo = $siteConfig['site_logo'] ?? '';
 $siteFavicon = $siteConfig['site_favicon'] ?? '';
+
 // Verificar si existe un logo subido y si el archivo existe en el servidor
 $hasLogo = !empty($siteLogo) && file_exists($siteLogo);
 $hasFavicon = !empty($siteFavicon) && file_exists($siteFavicon);
+
 // ✅ GENERAR TOKEN CSRF PARA EL FORMULARIO DE LOGOUT
 $header_csrf_token = generateCSRFToken();
 ?>
+
 <!DOCTYPE html>
 <html lang="es">
 <head>

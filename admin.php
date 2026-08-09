@@ -138,8 +138,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $cast_members = sanitizeInput($_POST['cast_members'] ?? '');
             $country_id = !empty($_POST['country_id']) ? filter_var($_POST['country_id'], FILTER_VALIDATE_INT) : null;
 
-            if (empty($title) || empty($trailer_url) || empty($classification) || empty($director)) {
-                $error = "Título, Director, Clasificación y URL del tráiler son obligatorios.";
+            // ✅ MODIFICADO: Director ya no es obligatorio
+            if (empty($title) || empty($trailer_url) || empty($classification)) {
+                $error = "Título, Clasificación y URL del tráiler son obligatorios.";
             } elseif (!empty($poster_url) && !filter_var($poster_url, FILTER_VALIDATE_URL)) {
                 $error = "URL del póster no válida.";
             } elseif (!empty($trailer_url) && !filter_var($trailer_url, FILTER_VALIDATE_URL)) {
@@ -218,8 +219,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($id <= 0) {
                 $error = "ID de película inválido.";
-            } elseif (empty($title) || empty($trailer_url) || empty($classification) || empty($director)) {
-                $error = "Título, Director, Clasificación y URL del tráiler son obligatorios.";
+            // ✅ MODIFICADO: Director ya no es obligatorio en edición
+            } elseif (empty($title) || empty($trailer_url) || empty($classification)) {
+                $error = "Título, Clasificación y URL del tráiler son obligatorios.";
             } elseif (!empty($poster_url) && !filter_var($poster_url, FILTER_VALIDATE_URL)) {
                 $error = "URL del póster no válida.";
             } elseif (!empty($trailer_url) && !filter_var($trailer_url, FILTER_VALIDATE_URL)) {
@@ -1489,7 +1491,7 @@ $favicon_exists = !empty($favicon_path) && file_exists($favicon_path);
         <div class="mb-4 p-3 rounded-lg bg-blue-600/10 border border-blue-500/30 text-blue-300 text-sm">
             <p>ℹ️ Al colocar el <strong>título</strong>, el sistema intentará autocompletar la información desde TMDb. Sin embargo, todos los campos son editables manualmente.</p>
             <p class="mt-1 text-yellow-300">🔒 Las películas nuevas se registran como <strong>OCULTAS</strong> por defecto. Debes activarlas manualmente.</p>
-            <p class="mt-1 text-red-300">⚠️ Los campos <strong>Director</strong>, <strong>Clasificación</strong> y <strong>URL del Tráiler</strong> son obligatorios.</p>
+            <p class="mt-1 text-red-300">⚠️ Los campos <strong>Clasificación</strong> y <strong>URL del Tráiler</strong> son obligatorios.</p>
         </div>
         <form action="" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
@@ -1544,9 +1546,10 @@ $favicon_exists = !empty($favicon_path) && file_exists($favicon_path);
                 </select>
             </div>
             <div>
-                <label class="block text-sm text-gray-400 mb-1">Director *</label>
-                <input type="text" name="director" required value="<?= $edit_movie ? htmlspecialchars($edit_movie['director'] ?? '') : '' ?>" placeholder="Director de la película"
+                <label class="block text-sm text-gray-400 mb-1">Director</label>
+                <input type="text" name="director" value="<?= $edit_movie ? htmlspecialchars($edit_movie['director'] ?? '') : '' ?>" placeholder="Director de la película (opcional)"
                        class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <p class="text-xs text-gray-500 mt-1">Deja vacío para autocompletar vía TMDb</p>
             </div>
             <div class="md:col-span-2">
                 <label class="block text-sm text-gray-400 mb-1">Reparto Principal</label>
@@ -2757,7 +2760,6 @@ function togglePriceInput(checkbox, inputId) {
 
 // --------------------------------------------
 // ✅ VERIFICADOR DE CONFLICTOS (CORREGIDO)
-// Verifica que los elementos existan antes de usarlos
 // --------------------------------------------
 document.addEventListener('DOMContentLoaded', function() {
     const movieSelect = document.getElementById('movieSelect');
