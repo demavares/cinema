@@ -29,7 +29,7 @@ define('DB_PASS', '123456');
 define('DB_NAME', 'cinema_db');
 define('TMDB_API_KEY', 'ddfdd934489b749f7d132c356a3d687a');
 define('TMDB_API_URL', 'https://api.themoviedb.org/3/');
-define('TMDB_TIMEOUT', 5); // Timeout de 5 segundos para TMDb
+define('TMDB_TIMEOUT', 5);
 
 try {
     $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
@@ -81,25 +81,7 @@ function getSiteConfig($pdo) {
         }
         return $config;
     } catch (PDOException $e) {
-        return [
-            'site_name' => 'Cinema Pro',
-            'site_logo' => '',
-            'footer_logo' => '',
-            'site_favicon' => '',
-            'currency_symbol' => '$',
-            'currency_position' => 'left',
-            'thousands_separator' => '.',
-            'decimal_separator' => ',',
-            'decimal_places' => '2',
-            'address' => '',
-            'phone' => '',
-            'email' => '',
-            'instagram' => '',
-            'facebook' => '',
-            'twitter' => '',
-            'telegram' => '',
-            'whatsapp' => ''
-        ];
+        return $defaults;
     }
 }
 
@@ -117,11 +99,7 @@ function formatCurrency($amount, $config = null) {
     $decimal = $config['decimal_separator'] ?? ',';
     $decimals = intval($config['decimal_places'] ?? 2);
     $formatted = number_format($amount, $decimals, $decimal, $thousands);
-    if ($position === 'right') {
-        return $formatted . ' ' . $symbol;
-    } else {
-        return $symbol . $formatted;
-    }
+    return $position === 'right' ? $formatted . ' ' . $symbol : $symbol . $formatted;
 }
 
 // ============================================
@@ -277,7 +255,6 @@ function releaseExpiredSeats($pdo) {
     return $total_released;
 }
 
-// Ejecutar liberación automática al cargar cualquier página
 $released_count = releaseExpiredSeats($pdo);
 
 // ============================================
@@ -333,24 +310,20 @@ function verifyPurchaseTokenWithTimeout($token, $showtimeId) {
     if (empty($token) || empty($showtimeId)) {
         return false;
     }
-    
     $expectedToken = $_SESSION['purchase_token_' . $showtimeId] ?? null;
     if (!$expectedToken || !hash_equals($expectedToken, $token)) {
         return false;
     }
-    
     $usedKey = 'purchase_token_used_' . $showtimeId;
     if (isset($_SESSION[$usedKey]) && $_SESSION[$usedKey] === true) {
         return false;
     }
-    
     $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
     if (time() > $expiresAt) {
         unset($_SESSION['purchase_token_' . $showtimeId]);
         unset($_SESSION['purchase_expires_at_' . $showtimeId]);
         return false;
     }
-    
     return true;
 }
 
@@ -404,36 +377,54 @@ function generateTransactionId() {
 // VERIFICAR SESIÓN EXPIRADA PARA PÁGINAS DEL FLUJO
 // ============================================
 function checkSessionExpired($showtimeId = null) {
+    $limite_inactividad = 1800; // 30 minutos
+    
+    // Verificar inactividad general
+    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $limite_inactividad)) {
+        // 1. Vaciar array de sesión
+        $_SESSION = array();
+        
+        // 2. Eliminar cookie de sesión en el cliente
+        if (ini_get("session.use_cookies")) {
+            $params = session_get_cookie_params();
+            setcookie(
+                session_name(),
+                '',
+                time() - 42000,
+                $params["path"],
+                $params["domain"],
+                $params["secure"],
+                $params["httponly"]
+            );
+        }
+        
+        // 3. Destruir la sesión actual
+        session_destroy();
+        
+        // 4. Redirigir enviando la alerta solo mediante GET
+        header("Location: index.php?expired=1");
+        exit();
+    }
+    
+    // Si no hay usuario logueado
     if (!isset($_SESSION['user_id'])) {
-        header('Location: login.php?session_expired=1');
+        header('Location: login.php');
         exit;
     }
     
+    // Verificar token específico del showtime
     if ($showtimeId !== null && $showtimeId > 0) {
         $sessionToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
         $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
         
         if (empty($sessionToken) || time() > $expiresAt) {
             clearPurchaseSession($showtimeId);
-            unset($_SESSION['food_valid_' . $showtimeId]);
-            unset($_SESSION['food_seats_' . $showtimeId]);
-            unset($_SESSION['food_timeout_' . $showtimeId]);
-            unset($_SESSION['food_order_' . $showtimeId]);
-            unset($_SESSION['base_subtotal_' . $showtimeId]);
-            
-            header('Location: index.php?session_expired=1');
+            header('Location: index.php?expired=1');
             exit;
         }
     }
     
-    if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 1800)) {
-        $_SESSION = array();
-        session_destroy();
-        session_start();
-        header('Location: login.php?session_expired=1');
-        exit;
-    }
-    
+    // Actualizar timestamp si la sesión sigue activa
     $_SESSION['last_activity'] = time();
 }
 
@@ -460,10 +451,7 @@ function formatDateShort($date) {
 
 function formatDateVenezuela($date) {
     if (empty($date)) return '';
-    $months = [
-        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-    ];
+    $months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     $days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
     $timestamp = strtotime($date);
     $dayName = $days[date('w', $timestamp)];

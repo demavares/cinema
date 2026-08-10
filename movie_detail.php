@@ -1,6 +1,18 @@
 <?php
 require_once 'config.php';
 
+// ✅ Regenerar id de sesión para un nuevo intento limpio
+if (!isset($_SESSION['last_activity'])) {
+    session_regenerate_id(true);
+    $_SESSION['last_activity'] = time();
+}
+
+// ✅ Verificar si viene con expired
+if (isset($_GET['expired']) && $_GET['expired'] === '1') {
+    header('Location: index.php?expired=1');
+    exit;
+}
+
 // ============================================
 // ✅ OBTENER Y VALIDAR ID DE LA PELÍCULA
 // ============================================
@@ -67,13 +79,10 @@ if ($tmdb_data) {
 // ============================================
 // ✅ USAR SIEMPRE LAS IMÁGENES DE LA BASE DE DATOS
 // ============================================
-// Poster URL - PRIORIZAR LA BD
 $poster_url = $movie['poster_url'] ?? '';
-
-// Banner/Backdrop - PRIORIZAR LA BD
 $backdrop_url = !empty($movie['banner_url']) ? $movie['banner_url'] : $poster_url;
 
-// ✅ SOLO EN CASO DE EMERGENCIA: usar TMDb si no hay imagen en la BD
+// Solo usar TMDb si no hay imagen en la BD
 if (empty($poster_url) && $tmdb_data && !empty($tmdb_data['poster_path'])) {
     $poster_url = $tmdb_data['poster_path'];
 }
@@ -81,7 +90,6 @@ if (empty($backdrop_url) && $tmdb_data && !empty($tmdb_data['backdrop_path'])) {
     $backdrop_url = $tmdb_data['backdrop_path'];
 }
 
-// Si aún no hay imagen, usar placeholder
 if (empty($poster_url)) {
     $poster_url = getPlaceholderImage(300, 450, '🎬');
 }
@@ -92,27 +100,22 @@ if (empty($backdrop_url)) {
 // ============================================
 // DATOS PARA LA VISTA - PRIORIZAR DATOS MANUALES
 // ============================================
-// Descripción
 $description = $movie['description'];
 if (empty($description) && !empty($tmdb_data['description'])) {
     $description = $tmdb_data['description'];
 }
-// Duración
 $duration = $movie['duration'];
 if (empty($duration) && !empty($tmdb_data['runtime'])) {
     $duration = $tmdb_data['runtime'];
 }
-// Género
 $genre = $movie['genre'];
 if (empty($genre) && !empty($tmdb_data['genres'])) {
     $genre = $tmdb_data['genres'];
 }
-// Año
 $year = $movie['year'];
 if (empty($year) && !empty($tmdb_data['year'])) {
     $year = $tmdb_data['year'];
 }
-// Director
 $director = $movie['director'];
 if (empty($director) && !empty($tmdb_data['director']) && $tmdb_data['director'] !== 'No disponible') {
     $director = $tmdb_data['director'];
@@ -133,7 +136,6 @@ if (!empty($movie['country_id'])) {
         $country = $country_data['name'];
     }
 }
-// Solo usar TMDb si no hay país en la BD
 if (empty($country) && $tmdb_id) {
     $api_key = TMDB_API_KEY;
     $url = TMDB_API_URL . "movie/{$tmdb_id}?api_key={$api_key}&language=es-ES";
@@ -198,13 +200,10 @@ if (!empty($movie['cast_members'])) {
     }
 }
 
-// Clasificación
 $classification = $movie['classification'] ?? 'B (Mayores de 12)';
-// Trailer
 $trailer_url = $movie['trailer_url'] ?? '';
 $title = $movie['title'];
 
-// Obtener key del trailer de YouTube
 $trailer_key = '';
 if (!empty($trailer_url)) {
     preg_match('/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&
@@ -247,20 +246,15 @@ foreach ($showtimes as $showtime) {
     $showtimes_by_date[$date][] = $showtime;
 }
 
-// Obtener fechas disponibles
 $available_dates = array_keys($showtimes_by_date);
 $first_date = !empty($available_dates) ? $available_dates[0] : null;
 
-// ============================================
-// ✅ OBTENER EL FORMATO DEL PRIMER SHOWTIME
-// ============================================
 $display_format = '2D';
 if (!empty($showtimes)) {
     $first_showtime = $showtimes[0];
     $display_format = $first_showtime['format'] ?? '2D';
 }
 
-// Pasar configuración de moneda a JavaScript
 $currencyConfig = [
     'symbol' => $siteConfig['currency_symbol'] ?? '$',
     'position' => $siteConfig['currency_position'] ?? 'left',
@@ -269,9 +263,6 @@ $currencyConfig = [
     'places' => intval($siteConfig['decimal_places'] ?? 2)
 ];
 
-// ============================================
-// TÍTULO DEL NAVEGADOR
-// ============================================
 $year_display = !empty($year) ? ' (' . $year . ')' : '';
 $pageTitle = $title . $year_display . ' - ' . ($siteConfig['site_name'] ?? 'Cinema Pro');
 $backUrl = 'index.php';

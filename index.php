@@ -4,10 +4,7 @@ require_once 'config.php';
 // ============================================
 // ✅ DETECTAR SESIÓN EXPIRADA
 // ============================================
-$showSessionExpired = false;
-if (isset($_GET['session_expired']) && $_GET['session_expired'] == 1) {
-    $showSessionExpired = true;
-}
+$mostrar_alerta = isset($_GET['expired']) && $_GET['expired'] === '1';
 
 // ============================================
 // ✅ DETECTAR LOGOUT RECIENTE
@@ -24,7 +21,7 @@ if (isset($_GET['logout']) && $_GET['logout'] == 1) {
 // ============================================
 // ✅ LIMPIAR SESSIONSTORAGE AL CERRAR SESIÓN O TIMEOUT
 // ============================================
-$shouldClearStorage = isset($_GET['logout']) || isset($_GET['timeout']) || isset($_GET['nocache']) || isset($_GET['session_expired']);
+$shouldClearStorage = isset($_GET['logout']) || isset($_GET['timeout']) || isset($_GET['nocache']) || isset($_GET['expired']);
 
 // ============================================
 // VERIFICAR TIMEOUT EXPIRADO
@@ -41,7 +38,6 @@ $currentDateTime = getCurrentDateTime();
 
 // ✅ PROCESAR PELÍCULAS Y USAR IMÁGENES DE LA BD
 foreach ($movies as $key => $movie) {
-    // Obtener showtimes
     $stmtShowtimes = $pdo->prepare("
         SELECT * FROM showtimes
         WHERE movie_id = ? AND is_active = 1 AND show_date >= ?
@@ -49,12 +45,9 @@ foreach ($movies as $key => $movie) {
     $stmtShowtimes->execute([$movie['id'], $currentDate]);
     $movies[$key]['showtimes'] = $stmtShowtimes->fetchAll();
     
-    // ✅ USAR IMÁGENES DE LA BASE DE DATOS (PRIORITARIO)
-    // Poster
     if (empty($movies[$key]['poster_url'])) {
         $movies[$key]['poster_url'] = getPlaceholderImage(300, 450, '🎬');
     }
-    // Banner
     if (empty($movies[$key]['banner_url'])) {
         $movies[$key]['banner_url'] = $movies[$key]['poster_url'];
     }
@@ -63,7 +56,55 @@ foreach ($movies as $key => $movie) {
 require_once 'header.php';
 ?>
 
+<!-- ============================================ -->
+<!-- ✅ ALERTA DE SESIÓN EXPIRADA -->
+<!-- ============================================ -->
+<?php if ($mostrar_alerta): ?>
+<div class="session-expired-alert">
+    <div class="session-expired-alert-content">
+        <i class="fas fa-clock"></i>
+        <span>¡Sesión Expirada! Tu sesión ha expirado por inactividad. Por favor, selecciona nuevamente tus boletos para continuar.</span>
+    </div>
+</div>
+
+<!-- ✅ CÓDIGO CLAVE: Remueve ?expired=1 de la URL para romper el bucle -->
+<script>
+    if (window.history.replaceState) {
+        const urlLimpia = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState(null, "", urlLimpia);
+        console.log('🧹 URL limpiada, eliminado parámetro expired');
+    }
+</script>
+<?php endif; ?>
+
+<!-- ============================================ -->
+<!-- MODAL DE TIMEOUT EXPIRADO -->
+<!-- ============================================ -->
+<div class="timeout-modal-overlay <?= $showTimeoutModal ? 'active' : '' ?>" id="timeoutModal">
+    <div class="timeout-modal">
+        <div class="timeout-icon">⏰</div>
+        <h2 class="timeout-title">¡Sesión Expirada!</h2>
+        <p class="timeout-text">Tu tiempo para seleccionar comida ha expirado.<br>Los asientos han sido liberados automáticamente.</p>
+        <button class="timeout-btn" onclick="closeTimeoutModal()"><i class="fas fa-home mr-2"></i> Entendido</button>
+    </div>
+</div>
+
+<!-- ============================================ -->
+<!-- MODAL DE SESIÓN EXPIRADA POR INACTIVIDAD (FALLBACK) -->
+<!-- ============================================ -->
+<div class="session-expired-modal-overlay <?= isset($_GET['session_expired']) && $_GET['session_expired'] == 1 ? 'active' : '' ?>" id="sessionExpiredModal">
+    <div class="session-expired-modal">
+        <div class="session-expired-icon">⏰</div>
+        <h2 class="session-expired-title">¡Sesión Expirada!</h2>
+        <p class="session-expired-text">Tu sesión ha expirado por inactividad.<br>Por favor, selecciona nuevamente tus boletos para continuar.</p>
+        <button class="session-expired-btn" onclick="window.location.href='index.php'"><i class="fas fa-home mr-2"></i> Ir al Inicio</button>
+    </div>
+</div>
+
 <style>
+/* ============================================
+   ESTILOS GENERALES
+   ============================================ */
 html {
     overflow-x: clip;
     background-color: #ffffff;
@@ -86,6 +127,181 @@ main.container {
     background-color: #ffffff;
     margin-bottom: 3.5rem;
 }
+
+/* ============================================
+   ALERTA DE SESIÓN EXPIRADA
+   ============================================ */
+.session-expired-alert {
+    background: #fef3c7;
+    border: 1px solid #f59e0b;
+    border-radius: 8px;
+    padding: 16px 24px;
+    margin: 16px auto 24px auto;
+    max-width: 1200px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.15);
+}
+.session-expired-alert-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #92400e;
+    font-weight: 500;
+    font-size: 1rem;
+}
+.session-expired-alert-content i {
+    font-size: 1.5rem;
+    color: #d97706;
+}
+
+/* ============================================
+   MODAL DE TIMEOUT
+   ============================================ */
+.timeout-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.timeout-modal-overlay.active {
+    display: flex;
+}
+.timeout-modal {
+    background: #1a1a2e;
+    border: 2px solid #ef4444;
+    border-radius: 16px;
+    padding: 40px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    animation: modalFadeIn 0.5s ease;
+    box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);
+}
+.timeout-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+    display: block;
+    animation: pulse-danger 1s ease-in-out infinite;
+}
+.timeout-title {
+    color: #fca5a5;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+.timeout-text {
+    color: #9ca3af;
+    font-size: 0.95rem;
+    margin-bottom: 24px;
+    line-height: 1.6;
+}
+.timeout-btn {
+    background: #ef4444;
+    color: white;
+    padding: 12px 32px;
+    border-radius: 8px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+.timeout-btn:hover {
+    background: #dc2626;
+    transform: scale(1.05);
+}
+
+/* ============================================
+   MODAL DE SESIÓN EXPIRADA
+   ============================================ */
+.session-expired-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+.session-expired-modal-overlay.active {
+    display: flex;
+}
+.session-expired-modal {
+    background: #1a1a2e;
+    border: 2px solid #f59e0b;
+    border-radius: 16px;
+    padding: 40px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    animation: modalFadeIn 0.5s ease;
+    box-shadow: 0 20px 60px rgba(245, 158, 11, 0.2);
+}
+.session-expired-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+    display: block;
+    animation: pulse-warning 1.5s ease-in-out infinite;
+}
+.session-expired-title {
+    color: #fbbf24;
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+.session-expired-text {
+    color: #9ca3af;
+    font-size: 0.95rem;
+    margin-bottom: 24px;
+    line-height: 1.6;
+}
+.session-expired-btn {
+    background: #f59e0b;
+    color: white;
+    padding: 12px 32px;
+    border-radius: 8px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 1rem;
+}
+.session-expired-btn:hover {
+    background: #d97706;
+    transform: scale(1.05);
+}
+
+@keyframes pulse-danger {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+@keyframes pulse-warning {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; transform: scale(1.05); }
+}
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: scale(0.9) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* ============================================
+   CARRUSEL HERO
+   ============================================ */
 .hero-carousel {
     position: relative;
     z-index: 1;
@@ -241,6 +457,10 @@ main.container {
     width: 24px;
     border-radius: 10px;
 }
+
+/* ============================================
+   BOTÓN RESERVAR
+   ============================================ */
 .btn-reserve {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: white;
@@ -266,6 +486,10 @@ main.container {
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(79, 70, 229, 0.3);
 }
+
+/* ============================================
+   TARJETAS DE PELÍCULAS
+   ============================================ */
 .movie-card {
     background: #ffffff;
     border: 1px solid #d1d5db;
@@ -346,148 +570,6 @@ main.container {
 .certification-tag.b { background: #3b82f6; }
 .certification-tag.c { background: #ef4444; }
 
-/* ============================================
-MODAL DE TIMEOUT
-============================================ */
-.timeout-modal-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(8px);
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-}
-.timeout-modal-overlay.active {
-    display: flex;
-}
-.timeout-modal {
-    background: #1a1a2e;
-    border: 2px solid #ef4444;
-    border-radius: 16px;
-    padding: 40px;
-    max-width: 420px;
-    width: 100%;
-    text-align: center;
-    animation: modalFadeIn 0.5s ease;
-    box-shadow: 0 20px 60px rgba(239, 68, 68, 0.2);
-}
-.timeout-icon {
-    font-size: 4rem;
-    margin-bottom: 16px;
-    display: block;
-    animation: pulse-danger 1s ease-in-out infinite;
-}
-.timeout-title {
-    color: #fca5a5;
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 12px;
-}
-.timeout-text {
-    color: #9ca3af;
-    font-size: 0.95rem;
-    margin-bottom: 24px;
-    line-height: 1.6;
-}
-.timeout-btn {
-    background: #ef4444;
-    color: white;
-    padding: 12px 32px;
-    border-radius: 8px;
-    font-weight: 700;
-    border: none;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 1rem;
-}
-.timeout-btn:hover {
-    background: #dc2626;
-    transform: scale(1.05);
-}
-
-/* ============================================
-MODAL DE SESIÓN EXPIRADA
-============================================ */
-.session-expired-modal-overlay {
-    display: none;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(8px);
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-}
-.session-expired-modal-overlay.active {
-    display: flex;
-}
-.session-expired-modal {
-    background: #1a1a2e;
-    border: 2px solid #f59e0b;
-    border-radius: 16px;
-    padding: 40px;
-    max-width: 420px;
-    width: 100%;
-    text-align: center;
-    animation: modalFadeIn 0.5s ease;
-    box-shadow: 0 20px 60px rgba(245, 158, 11, 0.2);
-}
-.session-expired-icon {
-    font-size: 4rem;
-    margin-bottom: 16px;
-    display: block;
-    animation: pulse-warning 1.5s ease-in-out infinite;
-}
-.session-expired-title {
-    color: #fbbf24;
-    font-size: 1.5rem;
-    font-weight: 700;
-    margin-bottom: 12px;
-}
-.session-expired-text {
-    color: #9ca3af;
-    font-size: 0.95rem;
-    margin-bottom: 24px;
-    line-height: 1.6;
-}
-.session-expired-btn {
-    background: #f59e0b;
-    color: white;
-    padding: 12px 32px;
-    border-radius: 8px;
-    font-weight: 700;
-    border: none;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 1rem;
-}
-.session-expired-btn:hover {
-    background: #d97706;
-    transform: scale(1.05);
-}
-
-@keyframes pulse-danger {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
-}
-@keyframes pulse-warning {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; transform: scale(1.05); }
-}
-@keyframes modalFadeIn {
-    from { opacity: 0; transform: scale(0.9) translateY(20px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
-}
 @media (max-width: 480px) {
     .timeout-modal, .session-expired-modal {
         padding: 30px 20px;
@@ -537,40 +619,6 @@ MODAL DE SESIÓN EXPIRADA
 }
 </style>
 
-<!-- ============================================ -->
-<!-- MODAL DE TIMEOUT EXPIRADO -->
-<!-- ============================================ -->
-<div class="timeout-modal-overlay <?= $showTimeoutModal ? 'active' : '' ?>" id="timeoutModal">
-    <div class="timeout-modal">
-        <div class="timeout-icon">⏰</div>
-        <h2 class="timeout-title">¡Sesión Expirada!</h2>
-        <p class="timeout-text">
-            Tu tiempo para seleccionar comida ha expirado.<br>
-            Los asientos han sido liberados automáticamente.
-        </p>
-        <button class="timeout-btn" onclick="closeTimeoutModal()">
-            <i class="fas fa-home mr-2"></i> Entendido
-        </button>
-    </div>
-</div>
-
-<!-- ============================================ -->
-<!-- MODAL DE SESIÓN EXPIRADA POR INACTIVIDAD -->
-<!-- ============================================ -->
-<div class="session-expired-modal-overlay <?= $showSessionExpired ? 'active' : '' ?>" id="sessionExpiredModal">
-    <div class="session-expired-modal">
-        <div class="session-expired-icon">⏰</div>
-        <h2 class="session-expired-title">¡Sesión Expirada!</h2>
-        <p class="session-expired-text">
-            Tu sesión ha expirado por inactividad.<br>
-            Por favor, selecciona nuevamente tus boletos para continuar.
-        </p>
-        <button class="session-expired-btn" onclick="closeSessionExpiredModal()">
-            <i class="fas fa-home mr-2"></i> Ir al Inicio
-        </button>
-    </div>
-</div>
-
 <!-- Main Content -->
 <main class="container mx-auto px-4 pb-16 mb-12">
     <?php if (!empty($movies)): ?>
@@ -580,7 +628,6 @@ MODAL DE SESIÓN EXPIRADA
     <section class="hero-carousel">
         <div class="carousel-slides-container" id="carouselSlides">
             <?php foreach ($movies as $index => $m):
-                // ✅ USAR IMÁGENES DE LA BD (ya procesadas arriba)
                 $poster_url = $m['poster_url'] ?? getPlaceholderImage(300, 450, '🎬');
                 $backdrop_url = !empty($m['banner_url']) ? $m['banner_url'] : $poster_url;
                 $m_description = $m['description'] ?? '';
@@ -617,9 +664,7 @@ MODAL DE SESIÓN EXPIRADA
                         <p class="overview-text text-sm mb-4"><?= htmlspecialchars($m_description) ?></p>
                         <?php endif; ?>
                         <div class="flex items-center gap-3 flex-wrap">
-                            <a href="movie_detail.php?id=<?= intval($m_id) ?>" class="btn-reserve btn-hero-reserve">
-                                <i class="fas fa-ticket-alt"></i> Ver Funciones
-                            </a>
+                            <a href="movie_detail.php?id=<?= intval($m_id) ?>" class="btn-reserve btn-hero-reserve"><i class="fas fa-ticket-alt"></i> Ver Funciones</a>
                         </div>
                     </div>
                 </div>
@@ -627,12 +672,8 @@ MODAL DE SESIÓN EXPIRADA
             <?php endforeach; ?>
         </div>
         <?php if(count($movies) > 1): ?>
-        <button class="carousel-nav-btn prev" onclick="moveSlide(-1)">
-            <i class="fas fa-chevron-left"></i>
-        </button>
-        <button class="carousel-nav-btn next" onclick="moveSlide(1)">
-            <i class="fas fa-chevron-right"></i>
-        </button>
+        <button class="carousel-nav-btn prev" onclick="moveSlide(-1)"><i class="fas fa-chevron-left"></i></button>
+        <button class="carousel-nav-btn next" onclick="moveSlide(1)"><i class="fas fa-chevron-right"></i></button>
         <div class="carousel-dots">
             <?php foreach($movies as $i => $m): ?>
             <span class="carousel-dot <?= $i === 0 ? 'active' : '' ?>" onclick="goToSlide(<?= $i ?>)"></span>
@@ -659,10 +700,7 @@ MODAL DE SESIÓN EXPIRADA
     <div class="bg-white border border-gray-300 rounded-2xl p-12 text-center shadow-sm">
         <div class="text-6xl mb-4">🎬</div>
         <h3 class="text-xl font-bold text-gray-700 mb-2">No hay películas programadas</h3>
-        <p class="text-gray-500 text-sm">
-            El administrador debe agregar películas y horarios desde el
-            <a href="admin.php" class="text-indigo-600 hover:underline">panel de configuración</a>.
-        </p>
+        <p class="text-gray-500 text-sm">El administrador debe agregar películas y horarios desde el <a href="admin.php" class="text-indigo-600 hover:underline">panel de configuración</a>.</p>
     </div>
     <?php else: ?>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">
@@ -694,7 +732,6 @@ MODAL DE SESIÓN EXPIRADA
                     }
                 }
             }
-            // ✅ USAR IMAGEN DE LA BD
             $poster_url = $movie['poster_url'] ?? getPlaceholderImage(300, 450, '🎬');
         ?>
         <div class="movie-card rounded-xl">
@@ -706,16 +743,12 @@ MODAL DE SESIÓN EXPIRADA
             </a>
             <div class="p-4">
                 <h3 class="font-bold text-gray-900 text-base truncate" title="<?= htmlspecialchars($movie['title']) ?>">
-                    <a href="movie_detail.php?id=<?= intval($movie['id']) ?>" class="hover:text-indigo-600 transition-colors">
-                        <?= htmlspecialchars($movie['title']) ?>
-                    </a>
+                    <a href="movie_detail.php?id=<?= intval($movie['id']) ?>" class="hover:text-indigo-600 transition-colors"><?= htmlspecialchars($movie['title']) ?></a>
                 </h3>
                 <?php if(count($genre_names) > 0): ?>
                 <div class="flex flex-wrap gap-1 mt-2">
-                    <?php
-                    $display_genres = array_slice($genre_names, 0, 2);
-                    foreach ($display_genres as $genre_name):
-                    ?>
+                    <?php $display_genres = array_slice($genre_names, 0, 2);
+                    foreach ($display_genres as $genre_name): ?>
                     <span class="genre-tag"><?= htmlspecialchars($genre_name) ?></span>
                     <?php endforeach; ?>
                     <?php if(count($genre_names) > 2): ?>
@@ -737,14 +770,9 @@ MODAL DE SESIÓN EXPIRADA
                     <?php endif; ?>
                 </div>
                 <?php if(!empty($director)): ?>
-                <div class="mt-1 text-xs text-gray-500">
-                    <span class="text-gray-600">Dir: <?= htmlspecialchars($director) ?></span>
-                </div>
+                <div class="mt-1 text-xs text-gray-500"><span class="text-gray-600">Dir: <?= htmlspecialchars($director) ?></span></div>
                 <?php endif; ?>
-                <button onclick="window.location.href='movie_detail.php?id=<?= intval($movie['id']) ?>'"
-                        class="btn-reserve mt-3">
-                    <i class="fas fa-ticket-alt"></i> Ver Funciones
-                </button>
+                <button onclick="window.location.href='movie_detail.php?id=<?= intval($movie['id']) ?>'" class="btn-reserve mt-3"><i class="fas fa-ticket-alt"></i> Ver Funciones</button>
             </div>
         </div>
         <?php endforeach; ?>
@@ -781,7 +809,7 @@ MODAL DE SESIÓN EXPIRADA
 <?php endif; ?>
 
 // ============================================
-// MODAL DE TIMEOUT
+// FUNCIONES DE MODALES
 // ============================================
 function closeTimeoutModal() {
     const modal = document.getElementById('timeoutModal');
@@ -795,50 +823,14 @@ function closeTimeoutModal() {
     document.body.style.overflow = '';
 }
 
-// ============================================
-// MODAL DE SESIÓN EXPIRADA
-// ============================================
 function closeSessionExpiredModal() {
     const modal = document.getElementById('sessionExpiredModal');
-    if (modal) {
-        modal.classList.remove('active');
-        modal.style.display = 'none';
-    }
-    
-    try {
-        const sessionPrefixes = [
-            'food_timeout_', 'food_seats_', 'food_valid_', 'food_order_', 'food_created_',
-            'purchase_token_', 'purchase_expires_at_', 'purchase_token_used_', 'purchase_created_at_',
-            'ticket_quantities_', 'total_seats_', 'subtotal_', 'tax_amount_', 'total_amount_', 'tax_rate_',
-            'payment_method_', 'selected_seats_', 'selected_seats_count_', 'ticket_selection_',
-            'pending_checkout', 'last_order_id', 'last_showtime_id'
-        ];
-        
-        const keysToRemove = [];
-        for (let i = 0; i < sessionStorage.length; i++) {
-            const key = sessionStorage.key(i);
-            if (key) {
-                const shouldRemove = sessionPrefixes.some(prefix => key.includes(prefix));
-                if (shouldRemove) keysToRemove.push(key);
-            }
-        }
-        keysToRemove.forEach(key => sessionStorage.removeItem(key));
-        localStorage.clear();
-    } catch(e) {}
-    
-    if (window.location.href.includes('session_expired')) {
-        window.location.href = 'index.php';
-    } else {
-        if (window.history && window.history.replaceState) {
-            const url = new URL(window.location.href);
-            url.searchParams.delete('session_expired');
-            url.searchParams.delete('timeout');
-            window.history.replaceState({}, document.title, url.toString());
-        }
-        document.body.style.overflow = '';
-    }
+    if (!modal) return;
+    modal.classList.remove('active');
+    document.body.style.overflow = '';
 }
 
+// Cerrar modales con Escape
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         const timeoutModal = document.getElementById('timeoutModal');
@@ -848,6 +840,7 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
+// Click fuera del modal
 document.addEventListener('DOMContentLoaded', function() {
     const timeoutModal = document.getElementById('timeoutModal');
     if (timeoutModal && timeoutModal.classList.contains('active')) {
@@ -856,7 +849,6 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.target === this) closeTimeoutModal();
         });
     }
-    
     const sessionModal = document.getElementById('sessionExpiredModal');
     if (sessionModal && sessionModal.classList.contains('active')) {
         document.body.style.overflow = 'hidden';
@@ -909,10 +901,12 @@ function resetAutoSlide() {
     startAutoSlide();
 }
 
+// Animar tarjetas al cargar
 document.querySelectorAll('.movie-card').forEach((card, index) => {
     card.style.animationDelay = (index * 0.1) + 's';
 });
 
+// Iniciar carrusel automático
 document.addEventListener('DOMContentLoaded', () => {
     startAutoSlide();
 });
