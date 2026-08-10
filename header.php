@@ -3,7 +3,7 @@ require_once 'config.php';
 
 // Obtener la configuración del sitio desde la base de datos
 $siteConfig = getSiteConfig($pdo);
-$siteName = $siteConfig['site_name'] ?? 'Cinema Pro';
+$siteName = $siteConfig['site_name'] ?? 'Cinema';
 $siteLogo = $siteConfig['site_logo'] ?? '';
 $siteFavicon = $siteConfig['site_favicon'] ?? '';
 
@@ -13,6 +13,9 @@ $hasFavicon = !empty($siteFavicon) && file_exists($siteFavicon);
 
 // ✅ GENERAR TOKEN CSRF PARA EL FORMULARIO DE LOGOUT
 $header_csrf_token = generateCSRFToken();
+
+// ✅ LIMPIAR SESSIONSTORAGE SI LA SESIÓN EXPIRÓ (Script de limpieza automática)
+$cleanStorage = isset($_GET['session_expired']) || isset($_GET['timeout']) || isset($_GET['logout']);
 ?>
 
 <!DOCTYPE html>
@@ -402,7 +405,6 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 </ul>
 <?php if(isset($_SESSION['user_id'])): ?>
 <div class="menu-footer">
-<!-- ✅ CORREGIDO: Logout como formulario POST con CSRF (menú móvil) -->
 <form action="logout.php" method="POST" class="logout-form-inline" style="width:100%;">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($header_csrf_token) ?>">
 <button type="submit" class="logout-btn">
@@ -463,7 +465,6 @@ La mejor experiencia cinematográfica
 <span class="hidden sm:inline">Configurar</span>
 </a>
 <?php endif; ?>
-<!-- ✅ CORREGIDO: Logout como formulario POST con CSRF (menú desktop) -->
 <form action="logout.php" method="POST" class="logout-form-inline">
 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($header_csrf_token) ?>">
 <button type="submit" class="logout-link-btn">
@@ -487,6 +488,77 @@ La mejor experiencia cinematográfica
 </div>
 </div>
 </header>
+
+<!-- ============================================ -->
+<!-- SCRIPT DE LIMPIEZA AUTOMÁTICA DE SESSIONSTORAGE -->
+<!-- ============================================ -->
+<script>
+// ============================================
+// LIMPIAR SESSIONSTORAGE SI LA SESIÓN EXPIRÓ
+// ============================================
+(function() {
+    <?php if ($cleanStorage): ?>
+    console.log('🗑️ Limpiando sessionStorage por sesión expirada/logout');
+    
+    const prefixes = [
+        'food_timeout_', 'food_seats_', 'food_valid_', 'food_order_', 'food_created_',
+        'purchase_token_', 'purchase_expires_at_', 'purchase_token_used_', 'purchase_created_at_',
+        'ticket_quantities_', 'total_seats_', 'subtotal_', 'tax_amount_', 'total_amount_', 'tax_rate_',
+        'payment_method_', 'selected_seats_', 'selected_seats_count_', 'ticket_selection_'
+    ];
+    
+    const keysToRemove = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key) {
+            const shouldRemove = prefixes.some(prefix => key.includes(prefix));
+            if (shouldRemove) keysToRemove.push(key);
+        }
+    }
+    keysToRemove.forEach(key => sessionStorage.removeItem(key));
+    console.log('✅ SessionStorage limpiado:', keysToRemove.length, 'claves');
+    
+    // Limpiar localStorage también
+    try {
+        localStorage.clear();
+    } catch(e) {}
+    <?php endif; ?>
+    
+    // Verificar si venimos de index con session_expired en la URL
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('session_expired') || document.referrer.includes('session_expired')) {
+        console.log('🗑️ Limpiando sessionStorage por sesión expirada (desde URL/referrer)');
+        
+        const prefixes = [
+            'food_timeout_', 'food_seats_', 'food_valid_', 'food_order_', 'food_created_',
+            'purchase_token_', 'purchase_expires_at_', 'purchase_token_used_', 'purchase_created_at_',
+            'ticket_quantities_', 'total_seats_', 'subtotal_', 'tax_amount_', 'total_amount_', 'tax_rate_',
+            'payment_method_', 'selected_seats_', 'selected_seats_count_', 'ticket_selection_'
+        ];
+        
+        const keysToRemove = [];
+        for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key) {
+                const shouldRemove = prefixes.some(prefix => key.includes(prefix));
+                if (shouldRemove) keysToRemove.push(key);
+            }
+        }
+        keysToRemove.forEach(key => sessionStorage.removeItem(key));
+        console.log('✅ SessionStorage limpiado:', keysToRemove.length, 'claves');
+        
+        // Si estamos en price_selection.php y hay parámetro session_expired, redirigir limpio
+        if (window.location.pathname.includes('price_selection.php') && urlParams.has('session_expired')) {
+            const showtimeId = urlParams.get('showtime_id');
+            if (showtimeId) {
+                const cleanUrl = window.location.pathname + '?showtime_id=' + showtimeId;
+                window.history.replaceState({}, document.title, cleanUrl);
+            }
+        }
+    }
+})();
+</script>
+
 <script>
 // ============================================
 // MENÚ HAMBURGUESA
@@ -515,98 +587,25 @@ closeMenu();
 openMenu();
 }
 }
-// Event listeners
 hamburgerBtn.addEventListener('click', toggleMenu);
 closeMenuBtn.addEventListener('click', closeMenu);
 menuOverlay.addEventListener('click', closeMenu);
-// Cerrar con Escape
 document.addEventListener('keydown', function(e) {
 if (e.key === 'Escape' && mobileMenu.classList.contains('active')) {
 closeMenu();
 }
 });
-// Cerrar al hacer clic en un enlace del menú
 mobileMenu.querySelectorAll('a').forEach(function(link) {
 link.addEventListener('click', function() {
-// No cerrar si es logout (para que la redirección funcione)
 if (!this.href.includes('logout.php')) {
 setTimeout(closeMenu, 150);
 }
 });
 });
-// Prevenir scroll cuando el menú está abierto
 mobileMenu.addEventListener('touchmove', function(e) {
 if (mobileMenu.classList.contains('active')) {
 e.stopPropagation();
 }
-});
-})();
-// ============================================
-// VERIFICAR SESIÓN AL CARGAR (EXCLUYENDO confirmation.php)
-// ============================================
-(function() {
-const currentPage = window.location.pathname.split('/').pop();
-// Excluir confirmation.php y seats.php de la verificación
-const pagesToCheck = ['food_menu.php', 'payment.php', 'checkout.php'];
-if (currentPage === 'seats.php' || currentPage === 'confirmation.php') {
-return;
-}
-if (!pagesToCheck.includes(currentPage)) {
-return;
-}
-const urlParams = new URLSearchParams(window.location.search);
-const showtimeId = urlParams.get('showtime_id');
-if (!showtimeId) {
-return;
-}
-fetch('check_session.php?showtime_id=' + showtimeId + '&t=' + Date.now())
-.then(response => response.json())
-.then(data => {
-if (!data.valid) {
-sessionStorage.removeItem('food_timeout_' + showtimeId);
-sessionStorage.removeItem('food_seats_' + showtimeId);
-if (data.reason === 'timeout_expired') {
-// ✅ El servidor ya limpió las sesiones
-window.location.href = 'index.php?timeout=1';
-} else if (data.reason === 'showtime_inactive') {
-window.location.href = 'index.php?error=showtime_inactive';
-} else {
-window.location.href = 'index.php';
-}
-} else {
-if (data.timeLeft !== undefined) {
-if (data.timeLeft <= 0) {
-sessionStorage.removeItem('food_timeout_' + showtimeId);
-sessionStorage.removeItem('food_seats_' + showtimeId);
-window.location.href = 'index.php?timeout=1';
-return;
-}
-// ✅ Usar tiempo formateado si está disponible
-sessionStorage.setItem('food_timeout_' + showtimeId, data.timeLeft.toString());
-// ✅ Mostrar contador en tiempo real si existe el elemento
-const timerElement = document.getElementById('session-timer');
-if (timerElement && data.timeLeftFormatted) {
-timerElement.textContent = data.timeLeftFormatted;
-// Cambiar color si queda poco tiempo (< 2 minutos)
-if (data.timeLeft < 120) {
-timerElement.classList.add('text-red-500');
-timerElement.classList.remove('text-green-500');
-}
-}
-}
-if (data.seats) {
-sessionStorage.setItem('food_seats_' + showtimeId, data.seats);
-}
-// ✅ Log de estado (solo en desarrollo)
-console.log('📊 Sesión válida:', {
-tiempo: data.timeLeftFormatted,
-asientos: data.seatCount,
-compraPendiente: data.hasPendingPurchase
-});
-}
-})
-.catch(error => {
-console.log('Error verificando sesión:', error);
 });
 })();
 </script>

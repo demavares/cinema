@@ -1,9 +1,9 @@
 <?php
 require_once 'config.php';
 
-// ============================================
-// VERIFICAR AUTENTICACIÓN
-// ============================================
+// ✅ Verificar sesión expirada
+checkSessionExpired();
+
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
@@ -15,156 +15,39 @@ if ($showtimeId <= 0) {
     exit;
 }
 
-// ============================================
-// ✅ CORREGIDO: ELIMINAR SOLO TICKETS TEMPORALES
-// (MANTENER TICKETS DE COMPRAS COMPLETADAS)
-// ============================================
-error_log("🔄 Cargando price_selection.php - Limpiando tickets temporales para usuario " . $_SESSION['user_id'] . " en showtime $showtimeId");
+// ✅ Verificar sesión expirada específica para este showtime
+checkSessionExpired($showtimeId);
 
-// 1. Limpiar todas las sesiones relacionadas con esta compra
+// ✅ LIMPIAR COMPLETAMENTE CUALQUIER SESIÓN RESIDUAL
 clearPurchaseSession($showtimeId);
+unset($_SESSION['food_valid_' . $showtimeId]);
+unset($_SESSION['food_seats_' . $showtimeId]);
+unset($_SESSION['food_timeout_' . $showtimeId]);
+unset($_SESSION['food_order_' . $showtimeId]);
+unset($_SESSION['base_subtotal_' . $showtimeId]);
 
-// 2. Eliminar tickets huérfanos (sin compra asociada)
-try {
-    $stmt = $pdo->prepare("
-        DELETE t FROM tickets t
-        WHERE t.showtime_id = ? AND t.user_id = ?
-        AND NOT EXISTS (
-            SELECT 1 FROM purchases p 
-            WHERE p.user_id = t.user_id 
-            AND p.showtime_id = t.showtime_id 
-        )
-    ");
-    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
-    $deletedOrphaned = $stmt->rowCount();
-    if ($deletedOrphaned > 0) {
-        error_log("🗑️ Tickets huérfanos eliminados: $deletedOrphaned asientos");
+// ✅ LIMPIAR SESSIONSTORAGE (vía JavaScript)
+echo '<script>
+    // Limpiar sessionStorage para este showtime
+    const prefixes = ["food_timeout_", "food_seats_", "food_valid_", "food_order_", 
+                      "purchase_token_", "ticket_quantities_", "selected_seats_"];
+    const keysToRemove = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key) {
+            const shouldRemove = prefixes.some(prefix => key.startsWith(prefix));
+            if (shouldRemove) keysToRemove.push(key);
+        }
     }
-} catch (PDOException $e) {
-    error_log("Error eliminando tickets huérfanos: " . $e->getMessage());
-}
+    keysToRemove.forEach(key => sessionStorage.removeItem(key));
+    console.log("🗑️ SessionStorage limpiado en price_selection.php");
+</script>';
 
-// 3. Eliminar tickets con compra PENDIENTE
-try {
-    $stmt = $pdo->prepare("
-        DELETE t FROM tickets t
-        INNER JOIN purchases p ON p.user_id = t.user_id AND p.showtime_id = t.showtime_id
-        WHERE t.showtime_id = ? AND t.user_id = ?
-        AND p.status = 'pending'
-    ");
-    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
-    $deletedPending = $stmt->rowCount();
-    if ($deletedPending > 0) {
-        error_log("🗑️ Tickets con compra pendiente eliminados: $deletedPending asientos");
-    }
-} catch (PDOException $e) {
-    error_log("Error eliminando tickets con compra pendiente: " . $e->getMessage());
-}
-
-// 4. Eliminar tickets con compra EXPIRADA
-try {
-    $stmt = $pdo->prepare("
-        DELETE t FROM tickets t
-        INNER JOIN purchases p ON p.user_id = t.user_id AND p.showtime_id = t.showtime_id
-        WHERE t.showtime_id = ? AND t.user_id = ?
-        AND p.status = 'expired'
-    ");
-    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
-    $deletedExpired = $stmt->rowCount();
-    if ($deletedExpired > 0) {
-        error_log("🗑️ Tickets con compra expirada eliminados: $deletedExpired asientos");
-    }
-} catch (PDOException $e) {
-    error_log("Error eliminando tickets con compra expirada: " . $e->getMessage());
-}
-
-// 5. ✅ NO ELIMINAR tickets con compra COMPLETADA (se mantienen para mostrar asientos ocupados)
-
-// 6. Eliminar compras pendientes
-try {
-    $stmt = $pdo->prepare("
-        DELETE FROM purchases 
-        WHERE user_id = ? AND showtime_id = ? AND status = 'pending'
-    ");
-    $stmt->execute([$_SESSION['user_id'], $showtimeId]);
-    $deletedPurchases = $stmt->rowCount();
-    if ($deletedPurchases > 0) {
-        error_log("🗑️ Compras pendientes eliminadas: $deletedPurchases registros");
-    }
-} catch (PDOException $e) {
-    error_log("Error eliminando compras pendientes: " . $e->getMessage());
-}
-
-// 7. Eliminar compras expiradas
-try {
-    $stmt = $pdo->prepare("
-        DELETE FROM purchases 
-        WHERE user_id = ? AND showtime_id = ? AND status = 'expired'
-    ");
-    $stmt->execute([$_SESSION['user_id'], $showtimeId]);
-    $deletedExpiredPurchases = $stmt->rowCount();
-    if ($deletedExpiredPurchases > 0) {
-        error_log("🗑️ Compras expiradas eliminadas: $deletedExpiredPurchases registros");
-    }
-} catch (PDOException $e) {
-    error_log("Error eliminando compras expiradas: " . $e->getMessage());
-}
-
-// 8. Marcar para limpiar sessionStorage
-$_SESSION['clear_storage_on_load'] = true;
-
-// ============================================
-// VERIFICAR TIMEOUT DEL TOKEN ANTERIOR
-// ============================================
-if (isPurchaseTokenExpired($showtimeId)) {
-    clearPurchaseSession($showtimeId);
-}
-
-// ============================================
-// VERIFICAR RATE LIMITING ANTES DE GENERAR TOKEN
-// ============================================
-if (!canGenerateToken($showtimeId)) {
-    header('Location: index.php?error=Demasiadas+solicitudes.+Espera+unos+minutos.');
-    exit;
-}
-
-// ✅ GENERAR NUEVO TOKEN DE COMPRA CON TIMEOUT
+// Generar nuevo token
 $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
+$_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
 
-// ✅ VERIFICAR QUE EL TOKEN SE GUARDÓ CORRECTAMENTE
-$verifyToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
-if (empty($verifyToken)) {
-    error_log("❌ price_selection.php - ERROR: Token no se guardó en sesión");
-    $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
-    error_log("🔄 price_selection.php - Token regenerado: " . substr($purchaseToken, 0, 10) . "...");
-} else {
-    error_log("✅ price_selection.php - Token guardado correctamente: " . substr($verifyToken, 0, 10) . "...");
-}
-
-// ============================================
-// LIMPIAR VARIABLES DE SESIÓN PARA FLUJO LIMPIO
-// ============================================
-$keysToClean = [
-    'food_timeout_' . $showtimeId,
-    'food_seats_' . $showtimeId,
-    'food_valid_' . $showtimeId,
-    'food_order_' . $showtimeId,
-    'payment_method_' . $showtimeId,
-    'ticket_quantities_' . $showtimeId,
-    'total_seats_' . $showtimeId,
-    'subtotal_' . $showtimeId,
-    'tax_amount_' . $showtimeId,
-    'total_amount_' . $showtimeId
-];
-foreach ($keysToClean as $key) {
-    if (isset($_SESSION[$key])) {
-        unset($_SESSION[$key]);
-    }
-}
-
-// ============================================
-// OBTENER DATOS DEL SHOWTIME
-// ============================================
+// Obtener datos del showtime
 $stmt = $pdo->prepare("
     SELECT s.*, m.title, m.poster_url, m.duration, r.name as room_name
     FROM showtimes s
@@ -180,24 +63,14 @@ if (!$showtime) {
     exit;
 }
 
-// ============================================
-// OBTENER PRECIOS DESDE BD - CON FALLBACKS
-// ============================================
+// Obtener precios
 $priceAdult = floatval($showtime['price_adult'] ?? $showtime['price'] ?? 0);
 $priceChild = floatval($showtime['price_child'] ?? 0);
 $priceSenior = floatval($showtime['price_senior'] ?? 0);
 
-// Si los precios específicos son 0, usar el precio general como adulto
-if ($priceAdult == 0 && isset($showtime['price']) && $showtime['price'] > 0) {
-    $priceAdult = floatval($showtime['price']);
-}
-
-// Si priceAdult sigue siendo 0, usar un valor por defecto
 if ($priceAdult == 0) {
     $priceAdult = 50.00;
 }
-
-// Si child y senior son 0, usar porcentajes del precio adulto
 if ($priceChild == 0 && $priceAdult > 0) {
     $priceChild = $priceAdult * 0.5;
 }
@@ -205,12 +78,10 @@ if ($priceSenior == 0 && $priceAdult > 0) {
     $priceSenior = $priceAdult * 0.7;
 }
 
-$enableChild = isset($showtime['enable_child_price']) && $showtime['enable_child_price'] == 1 ? 1 : 0;
-$enableSenior = isset($showtime['enable_senior_price']) && $showtime['enable_senior_price'] == 1 ? 1 : 0;
+$enableChild = isset($showtime['enable_child_price']) && $showtime['enable_child_price'] == 1;
+$enableSenior = isset($showtime['enable_senior_price']) && $showtime['enable_senior_price'] == 1;
 
-// ============================================
-// PROMOCIONES
-// ============================================
+// Promociones
 $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
 $hasMondayPromo = in_array('lunes_mitad', $promotions);
 $hasPresale = in_array('preventa', $promotions);
@@ -222,16 +93,12 @@ if ($hasMondayPromo && $currentDay == 1) {
     $priceSenior = $priceSenior / 2;
 }
 
-// ============================================
-// OBTENER TASA DE IVA
-// ============================================
+// Obtener tasa de IVA
 $stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
 $tax = $stmt->fetch();
 $taxRate = $tax ? floatval($tax['tax_rate']) : 16;
 
-// ============================================
-// OBTENER ASIENTOS DISPONIBLES
-// ============================================
+// Obtener asientos disponibles
 $stmtRoom = $pdo->prepare("
     SELECT r.capacity, r.seat_layout
     FROM showtimes s
@@ -258,29 +125,14 @@ $occupied = $stmtOccupied->fetch();
 $occupiedCount = intval($occupied['occupied'] ?? 0);
 $realAvailableSeats = max(0, $totalAvailableSeats - $occupiedCount);
 
-// ============================================
-// IDIOMA Y FORMATO
-// ============================================
 $language = $showtime['language'] ?? 'español';
 $languageLabel = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 $format = $showtime['format'] ?? '2D';
-
-$formatClass = 'format-2d';
-if (!empty($format)) {
-    $formatLower = strtolower($format);
-    $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
-}
 
 $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "Selección de Boletos - " . $showtime['title'];
 $backUrl = 'movie_detail.php?id=' . $showtime['movie_id'];
-
-$currency_symbol = $siteConfig['currency_symbol'] ?? 'Bs';
-$currency_position = $siteConfig['currency_position'] ?? 'left';
-$thousands_separator = $siteConfig['thousands_separator'] ?? '.';
-$decimal_separator = $siteConfig['decimal_separator'] ?? ',';
-$decimal_places = intval($siteConfig['decimal_places'] ?? 2);
 
 require_once 'header.php';
 ?>
@@ -440,17 +292,13 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
     color: #15803d;
     border-color: #bbf7d0;
 }
-.promo-tag.monday .promo-dot {
-    background: #15803d;
-}
+.promo-tag.monday .promo-dot { background: #15803d; }
 .promo-tag.presale {
     background: #fef3c7;
     color: #b45309;
     border-color: #fde68a;
 }
-.promo-tag.presale .promo-dot {
-    background: #b45309;
-}
+.promo-tag.presale .promo-dot { background: #b45309; }
 
 .format-badge {
     display: inline-flex;
@@ -465,16 +313,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
     line-height: 1.4;
     background: transparent !important;
     border: 1px solid #4f5e71;
-    color: #4f5e71;
-}
-.format-badge.format-2d,
-.format-badge.format-3d,
-.format-badge.format-imax,
-.format-badge.format-imax-3d,
-.format-badge.format-4dx,
-.format-badge.format-screenx,
-.format-badge.format-d-box {
-    border-color: #4f5e71;
     color: #4f5e71;
 }
 
@@ -498,13 +336,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                 <div class="text-sm text-gray-700 font-semibold mt-1"><?= $realAvailableSeats ?> asientos disponibles en esta función</div>
                 <?php endif; ?>
             </div>
-
-            <?php if ($priceAdult <= 0): ?>
-            <div class="bg-yellow-50 border border-yellow-200 text-yellow-800 p-4 rounded-lg mb-4">
-                <p class="font-semibold">⚠️ Atención:</p>
-                <p class="text-sm">Esta función no tiene precios configurados. Por favor, contacta al administrador.</p>
-            </div>
-            <?php endif; ?>
 
             <div class="grid grid-cols-1 gap-4" id="priceGrid">
                 <!-- Adulto -->
@@ -555,14 +386,12 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
             </div>
         </div>
 
-        <!-- CARD SUMMARY COMPONENT -->
+        <!-- Card Summary -->
         <div class="w-full lg:w-96 card-summary">
-            <!-- SECCIÓN DE PELÍCULA -->
             <div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
                 <?php if (!empty($showtime['poster_url'])): ?>
                 <img src="<?= htmlspecialchars($showtime['poster_url']) ?>"
                      alt="<?= htmlspecialchars($showtime['title']) ?>"
-                     title="<?= htmlspecialchars($showtime['title']) ?>"
                      class="w-24 h-36 object-cover rounded-lg shadow-sm flex-shrink-0">
                 <?php endif; ?>
                 <div class="flex flex-col justify-start text-left text-gray-900 flex-1 min-w-0">
@@ -572,26 +401,19 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                         <?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?>
                     </div>
                     <div class="mt-1.5">
-                        <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($format) ?></span>
+                        <span class="format-badge"><?= htmlspecialchars($format) ?></span>
                     </div>
                     <div class="flex flex-col gap-2 mt-3 items-start">
                         <?php if ($hasMondayPromo): ?>
-                        <span class="promo-tag monday">
-                            <span class="promo-dot"></span>
-                            Lunes a mitad de precio
-                        </span>
+                        <span class="promo-tag monday"><span class="promo-dot"></span> Lunes a mitad de precio</span>
                         <?php endif; ?>
                         <?php if ($hasPresale): ?>
-                        <span class="promo-tag presale">
-                            <span class="promo-dot"></span>
-                            Preventa
-                        </span>
+                        <span class="promo-tag presale"><span class="promo-dot"></span> Preventa</span>
                         <?php endif; ?>
                     </div>
                 </div>
             </div>
 
-            <!-- DETALLE DE BOLETOS SELECCIONADOS -->
             <div id="summaryItems" class="mt-4">
                 <div class="text-sm text-gray-500 text-center py-2">No has seleccionado boletos</div>
             </div>
@@ -636,46 +458,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
     </div>
 </div>
 
-<?php 
-// ✅ Si hay que limpiar sessionStorage, agregar el script
-if (isset($_SESSION['clear_storage_on_load']) && $_SESSION['clear_storage_on_load'] === true): 
-?>
-<script>
-// Limpiar sessionStorage al cargar
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('🗑️ Limpiando sessionStorage desde price_selection.php');
-    const showtimeId = <?= $showtimeId ?>;
-    
-    // Limpiar todas las claves relacionadas con este showtime
-    const keysToRemove = [];
-    for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (key && (
-            key.startsWith('selected_seats_' + showtimeId) ||
-            key.startsWith('selected_seats_count_' + showtimeId) ||
-            key.startsWith('food_timeout_' + showtimeId) ||
-            key.startsWith('food_seats_' + showtimeId) ||
-            key.startsWith('ticket_selection_' + showtimeId) ||
-            key.startsWith('food_order_' + showtimeId) ||
-            key.startsWith('purchase_token_' + showtimeId)
-        )) {
-            keysToRemove.push(key);
-        }
-    }
-    
-    keysToRemove.forEach(key => {
-        sessionStorage.removeItem(key);
-        console.log('🗑️ Eliminado de sessionStorage:', key);
-    });
-    
-    console.log('✅ SessionStorage limpiado correctamente');
-});
-</script>
-<?php 
-unset($_SESSION['clear_storage_on_load']);
-endif; 
-?>
-
 <?php require_once 'footer.php'; ?>
 
 <script>
@@ -685,39 +467,30 @@ endif;
 const priceAdult = <?= floatval($priceAdult) ?>;
 const priceChild = <?= floatval($priceChild) ?>;
 const priceSenior = <?= floatval($priceSenior) ?>;
-const enableChild = <?= intval($enableChild) ?>;
-const enableSenior = <?= intval($enableSenior) ?>;
+const enableChild = <?= $enableChild ? 'true' : 'false' ?>;
+const enableSenior = <?= $enableSenior ? 'true' : 'false' ?>;
 const taxRate = <?= floatval($taxRate) ?>;
 const showtimeId = <?= $showtimeId ?>;
-const purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
 const maxAvailableSeats = <?= intval($realAvailableSeats) ?>;
+const purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
+
 const currencyConfig = {
-    symbol: '<?= $currency_symbol ?>',
-    position: '<?= $currency_position ?>',
-    thousands: '<?= $thousands_separator ?>',
-    decimal: '<?= $decimal_separator ?>',
-    decimals: <?= intval($decimal_places) ?>
+    symbol: '<?= $siteConfig['currency_symbol'] ?? '$' ?>',
+    position: '<?= $siteConfig['currency_position'] ?? 'left' ?>',
+    thousands: '<?= $siteConfig['thousands_separator'] ?? '.' ?>',
+    decimal: '<?= $siteConfig['decimal_separator'] ?? ',' ?>',
+    decimals: <?= intval($siteConfig['decimal_places'] ?? 2) ?>
 };
 
 // ============================================
 // ESTADO
 // ============================================
-let quantities = {
-    adult: 0,
-    child: 0,
-    senior: 0
-};
-
-const prices = {
-    adult: priceAdult,
-    child: priceChild,
-    senior: priceSenior
-};
-
-const enabledTypes = {
-    adult: true,
-    child: enableChild === 1 && priceChild > 0,
-    senior: enableSenior === 1 && priceSenior > 0
+let quantities = { adult: 0, child: 0, senior: 0 };
+const prices = { adult: priceAdult, child: priceChild, senior: priceSenior };
+const enabledTypes = { 
+    adult: true, 
+    child: enableChild && priceChild > 0, 
+    senior: enableSenior && priceSenior > 0 
 };
 
 // ============================================
@@ -735,90 +508,64 @@ function formatCurrency(amount) {
     return position === 'right' ? formatted + ' ' + symbol : symbol + formatted;
 }
 
-function getElement(id) {
-    return document.getElementById(id);
-}
-
 function updateUI() {
     const total = quantities.adult + quantities.child + quantities.senior;
-    const subtotal = (quantities.adult * prices.adult) +
-        (quantities.child * prices.child) +
-        (quantities.senior * prices.senior);
+    const subtotal = (quantities.adult * prices.adult) + (quantities.child * prices.child) + (quantities.senior * prices.senior);
     const tax = subtotal * (taxRate / 100);
     const totalAmount = subtotal + tax;
 
-    // Actualizar contadores
-    const qtyAdult = getElement('qty_adult');
-    const qtyChild = getElement('qty_child');
-    const qtySenior = getElement('qty_senior');
+    const qtyAdult = document.getElementById('qty_adult');
+    const qtyChild = document.getElementById('qty_child');
+    const qtySenior = document.getElementById('qty_senior');
+    
     if (qtyAdult) qtyAdult.textContent = quantities.adult;
     if (qtyChild) qtyChild.textContent = quantities.child;
     if (qtySenior) qtySenior.textContent = quantities.senior;
 
-    // Actualizar resumen de asientos
-    const totalSeatsCount = getElement('totalSeatsCount');
-    const btnSeatsCount = getElement('btnSeatsCount');
-    const totalSeatsInput = getElement('totalSeatsInput');
+    const totalSeatsCount = document.getElementById('totalSeatsCount');
+    const btnSeatsCount = document.getElementById('btnSeatsCount');
+    const totalSeatsInput = document.getElementById('totalSeatsInput');
+    
     if (totalSeatsCount) totalSeatsCount.textContent = total;
     if (btnSeatsCount) btnSeatsCount.textContent = total;
     if (totalSeatsInput) totalSeatsInput.value = total;
 
-    // Actualizar campos ocultos
-    const subtotalHidden = getElement('subtotalHidden');
-    const taxHidden = getElement('taxHidden');
-    const totalHidden = getElement('totalHidden');
+    const subtotalHidden = document.getElementById('subtotalHidden');
+    const taxHidden = document.getElementById('taxHidden');
+    const totalHidden = document.getElementById('totalHidden');
+    
     if (subtotalHidden) subtotalHidden.value = subtotal.toFixed(2);
     if (taxHidden) taxHidden.value = tax.toFixed(2);
     if (totalHidden) totalHidden.value = totalAmount.toFixed(2);
 
-    // Actualizar lista de items en la Card Summary
-    const summaryItems = getElement('summaryItems');
+    const summaryItems = document.getElementById('summaryItems');
     if (summaryItems) {
         let html = '';
         let hasItems = false;
         if (quantities.adult > 0) {
             hasItems = true;
-            html += `
-            <div class="summary-plain-row">
-                <span>Adulto x${quantities.adult}</span>
-                <span>${formatCurrency(quantities.adult * prices.adult)}</span>
-            </div>
-            `;
+            html += `<div class="summary-plain-row"><span>Adulto x${quantities.adult}</span><span>${formatCurrency(quantities.adult * prices.adult)}</span></div>`;
         }
         if (quantities.child > 0) {
             hasItems = true;
-            html += `
-            <div class="summary-plain-row">
-                <span>Niño x${quantities.child}</span>
-                <span>${formatCurrency(quantities.child * prices.child)}</span>
-            </div>
-            `;
+            html += `<div class="summary-plain-row"><span>Niño x${quantities.child}</span><span>${formatCurrency(quantities.child * prices.child)}</span></div>`;
         }
         if (quantities.senior > 0) {
             hasItems = true;
-            html += `
-            <div class="summary-plain-row">
-                <span>Tercera Edad x${quantities.senior}</span>
-                <span>${formatCurrency(quantities.senior * prices.senior)}</span>
-            </div>
-            `;
+            html += `<div class="summary-plain-row"><span>Tercera Edad x${quantities.senior}</span><span>${formatCurrency(quantities.senior * prices.senior)}</span></div>`;
         }
-        if (!hasItems) {
-            html = `<div class="text-sm text-gray-500 text-center py-2">No has seleccionado boletos</div>`;
-        }
-        summaryItems.innerHTML = html;
+        summaryItems.innerHTML = hasItems ? html : `<div class="text-sm text-gray-500 text-center py-2">No has seleccionado boletos</div>`;
     }
 
-    // Actualizar totales
-    const subtotalAmount = getElement('subtotalAmount');
-    const taxAmount = getElement('taxAmount');
-    const totalAmountEl = getElement('totalAmount');
+    const subtotalAmount = document.getElementById('subtotalAmount');
+    const taxAmount = document.getElementById('taxAmount');
+    const totalAmountEl = document.getElementById('totalAmount');
+    
     if (subtotalAmount) subtotalAmount.textContent = formatCurrency(subtotal);
     if (taxAmount) taxAmount.textContent = formatCurrency(tax);
     if (totalAmountEl) totalAmountEl.textContent = formatCurrency(totalAmount);
 
-    // Habilitar/deshabilitar botón
-    const btnContinue = getElement('btnContinue');
+    const btnContinue = document.getElementById('btnContinue');
     if (btnContinue) {
         if (total > 0 && total <= maxAvailableSeats) {
             btnContinue.disabled = false;
@@ -832,15 +579,8 @@ function updateUI() {
         }
     }
 
-    // Actualizar campo de tickets
-    const ticketsInput = getElement('ticketsInput');
+    const ticketsInput = document.getElementById('ticketsInput');
     if (ticketsInput) ticketsInput.value = JSON.stringify(quantities);
-
-    try {
-        sessionStorage.setItem('ticket_selection_' + showtimeId, JSON.stringify(quantities));
-    } catch (e) {
-        console.warn('Error guardando en sessionStorage:', e);
-    }
 }
 
 function updateQuantity(type, change) {
