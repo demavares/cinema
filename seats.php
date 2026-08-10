@@ -1,6 +1,12 @@
 <?php
 require_once 'config.php';
 
+// ✅ Verificar si viene con expired
+if (isset($_GET['expired']) && $_GET['expired'] === '1') {
+    header('Location: index.php?expired=1');
+    exit;
+}
+
 if (isset($_GET['session_expired']) || 
     (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'session_expired') !== false)) {
     $keys = array_keys($_SESSION);
@@ -15,12 +21,6 @@ if (isset($_GET['session_expired']) ||
             unset($_SESSION[$key]);
         }
     }
-    header('Location: index.php');
-    exit;
-}
-
-// ✅ Verificar si viene con expired
-if (isset($_GET['expired']) && $_GET['expired'] === '1') {
     header('Location: index.php?expired=1');
     exit;
 }
@@ -634,86 +634,41 @@ window.addEventListener('beforeunload', function() {
 });
 
 // ============================================
-// MANEJAR ENVÍO DEL FORMULARIO (VERSIÓN MEJORADA)
+// ENVIAR FORMULARIO DIRECTAMENTE
 // ============================================
 document.getElementById('foodForm').addEventListener('submit', function(e) {
     e.preventDefault();
-    if (!validateSeats()) return false;
-
+    
+    // ✅ Verificar que hay asientos seleccionados
+    const count = selectedSeats.length;
+    if (count === 0) {
+        showNotification('⚠️ Por favor, selecciona al menos un asiento.', 'warning');
+        return false;
+    }
+    if (count !== maxSeats) {
+        showNotification(`⚠️ Debes seleccionar ${maxSeats} asientos. Has seleccionado ${count}.`, 'warning');
+        return false;
+    }
+    
     const form = this;
     const btnContinue = document.getElementById('btn-continue');
-    const tokenInput = form.querySelector('input[name="purchase_token"]');
+    const tokenInput = document.getElementById('purchaseTokenInput');
+    const seatsInput = document.getElementById('seats-input');
+
+    // ✅ Actualizar campos del formulario
+    if (seatsInput) {
+        seatsInput.value = selectedSeats.join(',');
+    }
+    
+    if (tokenInput && purchaseToken) {
+        tokenInput.value = purchaseToken;
+    }
 
     btnContinue.disabled = true;
     btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Reservando asientos...';
 
-    // Obtener token actualizado
-    fetch('get_purchase_token.php?showtime_id=' + showtimeId, {
-        method: 'GET',
-        headers: { 
-            'X-Requested-With': 'XMLHttpRequest',
-            'Accept': 'application/json'
-        }
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error('Error del servidor: ' + response.status);
-        }
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            throw new Error('El servidor devolvió una respuesta no válida. Por favor, recarga la página.');
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data && data.token) {
-            if (tokenInput) tokenInput.value = data.token;
-            sessionStorage.setItem('purchase_token_' + showtimeId, data.token);
-            
-            const formData = new FormData(form);
-            return fetch('create_food_session.php', {
-                method: 'POST',
-                body: formData,
-                headers: { 
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json'
-                }
-            });
-        } else {
-            throw new Error('No se pudo obtener un token válido.');
-        }
-    })
-    .then(response => {
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            throw new Error('Error del servidor. Por favor, recarga la página.');
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            window.location.href = 'food_menu.php?showtime_id=' + showtimeId;
-        } else {
-            showNotification('❌ ' + (data.error || 'Error al reservar asientos.'), 'error');
-            btnContinue.disabled = false;
-            btnContinue.innerHTML = '<i class="fas fa-utensils mr-2"></i> Continuar a Comida';
-        }
-    })
-    .catch(error => {
-        console.error('❌ Error:', error);
-        
-        if (error.message && (error.message.includes('sesión') || error.message.includes('expir'))) {
-            showNotification('⏰ Tu sesión ha expirado. Serás redirigido al inicio.', 'warning', 3000);
-            setTimeout(() => {
-                window.location.href = 'index.php?expired=1';
-            }, 2000);
-            return;
-        }
-        
-        showNotification('❌ ' + error.message, 'error', 5000);
-        btnContinue.disabled = false;
-        btnContinue.innerHTML = '<i class="fas fa-utensils mr-2"></i> Continuar a Comida';
-    });
+    // ✅ Enviar directamente el formulario
+    form.submit();
 });
 
 // ============================================

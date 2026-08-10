@@ -1,7 +1,31 @@
 <?php
 require_once 'config.php';
 
+// ✅ Verificar si viene con expired
+if (isset($_GET['expired']) && $_GET['expired'] === '1') {
+    header('Location: index.php?expired=1');
+    exit;
+}
+
 // ✅ Verificar sesión expirada
+if (isset($_GET['session_expired']) || 
+    (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'session_expired') !== false)) {
+    $keys = array_keys($_SESSION);
+    foreach ($keys as $key) {
+        if (strpos($key, 'purchase_') === 0 || 
+            strpos($key, 'food_') === 0 || 
+            strpos($key, 'ticket_') === 0 || 
+            strpos($key, 'total_') === 0 || 
+            strpos($key, 'subtotal_') === 0 || 
+            strpos($key, 'tax_') === 0 || 
+            strpos($key, 'payment_') === 0) {
+            unset($_SESSION[$key]);
+        }
+    }
+    header('Location: index.php?expired=1');
+    exit;
+}
+
 checkSessionExpired();
 
 if (!isset($_SESSION['user_id'])) {
@@ -15,44 +39,69 @@ if ($showtimeId <= 0) {
     exit;
 }
 
-// ✅ Verificar sesión expirada específica para este showtime
 checkSessionExpired($showtimeId);
 
 // ============================================
-// VERIFICAR SESIÓN DE COMIDA
+// ✅ VERIFICAR SESIÓN DE COMIDA
 // ============================================
 $sessionValidKey = 'food_valid_' . $showtimeId;
 $sessionSeatsKey = 'food_seats_' . $showtimeId;
 $sessionTimeoutKey = 'food_timeout_' . $showtimeId;
 $sessionFoodKey = 'food_order_' . $showtimeId;
 
+// ✅ LOG DE DEPURACIÓN
+error_log("🔍 food_menu.php - Verificando sesión para showtime $showtimeId");
+error_log("🔍 food_valid_" . $showtimeId . " = " . (isset($_SESSION[$sessionValidKey]) ? ($_SESSION[$sessionValidKey] ? 'true' : 'false') : 'NO EXISTE'));
+error_log("🔍 food_seats_" . $showtimeId . " = " . (isset($_SESSION[$sessionSeatsKey]) ? $_SESSION[$sessionSeatsKey] : 'NO EXISTE'));
+
+// ✅ VERIFICAR QUE LA SESIÓN DE COMIDA EXISTA
 if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true) {
-    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=session_expired');
+    error_log("❌ food_menu.php - Sesión de comida NO válida para showtime $showtimeId");
+    header('Location: index.php?expired=1');
     exit;
 }
 
 if (isset($_SESSION[$sessionTimeoutKey]) && $_SESSION[$sessionTimeoutKey] <= 0) {
-    header('Location: index.php?timeout=1');
+    error_log("⏰ food_menu.php - Timeout expirado para showtime $showtimeId");
+    unset($_SESSION[$sessionTimeoutKey]);
+    unset($_SESSION[$sessionSeatsKey]);
+    unset($_SESSION[$sessionValidKey]);
+    unset($_SESSION[$sessionFoodKey]);
+    header('Location: index.php?expired=1');
     exit;
 }
 
-// Verificar token
+if (!isset($_SESSION[$sessionTimeoutKey])) {
+    $_SESSION[$sessionTimeoutKey] = 600;
+}
+
+// ✅ VERIFICAR TOKEN
 $token = $_SESSION['purchase_token_' . $showtimeId] ?? '';
 if (!verifyPurchaseToken($token, $showtimeId)) {
+    error_log("❌ food_menu.php - Token inválido para showtime $showtimeId");
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
     exit;
 }
 
+// ✅ OBTENER ASIENTOS
 $seats = $_SESSION[$sessionSeatsKey] ?? '';
 if (empty($seats)) {
+    error_log("❌ food_menu.php - No hay asientos en sesión para showtime $showtimeId");
     header('Location: seats.php?showtime_id=' . $showtimeId . '&error=no_seats');
     exit;
 }
 
+// ✅ SI LLEGAMOS AQUÍ, LA SESIÓN ES VÁLIDA
+error_log("✅ food_menu.php - Sesión válida para showtime $showtimeId, asientos: $seats");
+
 $seatsArray = explode(',', $seats);
 $ticketCount = count($seatsArray);
 
-// Recuperar carrito desde sesión
+// ============================================
+// RECUPERAR CARRITO DE COMIDA
+// ============================================
+$fromPayment = isset($_GET['from']) && $_GET['from'] === 'payment';
+
 $foodOrder = isset($_SESSION[$sessionFoodKey]) ? json_decode($_SESSION[$sessionFoodKey], true) : [];
 $foodCart = [];
 if (!empty($foodOrder)) {
@@ -61,7 +110,9 @@ if (!empty($foodOrder)) {
     }
 }
 
-// Obtener datos del showtime
+// ============================================
+// OBTENER DATOS DEL SHOWTIME
+// ============================================
 $stmt = $pdo->prepare("
     SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.duration, r.name as room_name
     FROM showtimes s
@@ -77,10 +128,14 @@ if (!$showtime) {
     exit;
 }
 
-// Obtener datos de boletos
+// ============================================
+// OBTENER DATOS DE BOLETOS
+// ============================================
 $ticketsData = $_SESSION['ticket_quantities_' . $showtimeId] ?? null;
 
-// Calcular subtotal base
+// ============================================
+// CALCULAR SUBTOTAL BASE
+// ============================================
 $baseSubtotal = 0;
 if ($ticketsData) {
     $priceAdult = floatval($showtime['price_adult'] ?? $showtime['price'] ?? 0);
@@ -88,7 +143,9 @@ if ($ticketsData) {
     $priceSenior = floatval($showtime['price_senior'] ?? 0);
     $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
     if (in_array('lunes_mitad', $promotions) && date('N') == 1) {
-        $priceAdult /= 2; $priceChild /= 2; $priceSenior /= 2;
+        $priceAdult /= 2;
+        $priceChild /= 2;
+        $priceSenior /= 2;
     }
     $baseSubtotal = (intval($ticketsData['adult'] ?? 0) * $priceAdult) +
                     (intval($ticketsData['child'] ?? 0) * $priceChild) +
@@ -104,8 +161,16 @@ $taxRate = $tax ? floatval($tax['tax_rate']) : 16;
 $_SESSION['base_subtotal_' . $showtimeId] = $baseSubtotal;
 $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
 
-// Obtener productos de comida
-$stmt = $pdo->prepare("SELECT f.*, c.name as category_name FROM food_items f LEFT JOIN food_categories c ON f.category_id = c.id WHERE f.is_active = 1 ORDER BY c.name, f.name");
+// ============================================
+// OBTENER PRODUCTOS DE COMIDA
+// ============================================
+$stmt = $pdo->prepare("
+    SELECT f.*, c.name as category_name 
+    FROM food_items f 
+    LEFT JOIN food_categories c ON f.category_id = c.id 
+    WHERE f.is_active = 1 
+    ORDER BY c.name, f.name
+");
 $stmt->execute();
 $foodItems = $stmt->fetchAll();
 
@@ -115,16 +180,23 @@ foreach ($foodItems as $item) {
     $foodByCategory[$catName][] = $item;
 }
 
-// Calcular totales iniciales
+// ============================================
+// CALCULAR TOTALES INICIALES
+// ============================================
 $initialFoodTotal = 0;
 foreach ($foodItems as $item) {
     $qty = $foodCart[$item['id']] ?? 0;
-    if ($qty > 0) $initialFoodTotal += $item['price'] * $qty;
+    if ($qty > 0) {
+        $initialFoodTotal += $item['price'] * $qty;
+    }
 }
 $initialSubtotal = $baseSubtotal + $initialFoodTotal;
 $initialTax = $initialSubtotal * ($taxRate / 100);
 $initialTotal = $initialSubtotal + $initialTax;
 
+// ============================================
+// DATOS PARA LA VISTA
+// ============================================
 $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "Comida - " . $showtime['title'];
@@ -157,7 +229,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 
 .food-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; transition: all 0.3s ease; cursor: pointer; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); display: flex; flex-direction: column; justify-content: space-between; }
 .food-card:hover { border-color: #6366f1; transform: translateY(-3px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
-.food-card.selected { border-color: #4f46e5; background: #f5f3ff; box-shadow: 0 0 15px rgba(99, 102, 241, 0.15); }
+.food-card.selected { border-color: #4f46e5; background: #f5f3ff; box-shadow: 0 0 15px rgba(99,102,241,0.15); }
 .food-card .food-image { width: 100%; height: 210px; max-height: 233px; object-fit: cover; background: #f1f5f9; }
 .food-card .food-info { padding: 14px 16px 16px 16px; display: flex; flex-direction: column; justify-content: space-between; flex: 1; }
 .food-card .food-name { font-weight: 700; color: #0f172a; font-size: 1.1rem; }
@@ -185,7 +257,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .promo-tag.presale .promo-dot { background: #b45309; }
 .format-badge { display: inline-flex; align-items: center; justify-content: center; padding: 2px 10px; border-radius: 5px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.4; background: transparent !important; border: 1px solid #4f5e71; color: #4f5e71; }
 .btn-continue { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff !important; padding: 14px 20px; border-radius: 8px; font-weight: 700; font-size: 1.1rem; border: none; cursor: pointer; transition: all 0.3s ease; width: 100%; text-align: center; display: block; }
-.btn-continue:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25); }
+.btn-continue:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79,70,229,0.25); }
 .btn-continue:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
 .btn-back { background: #ffffff; border: 1px solid #cbd5e1; color: #334155 !important; padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 0.95rem; transition: all 0.3s ease; cursor: pointer; width: 100%; text-align: center; text-decoration: none; display: block; }
 .btn-back:hover { border-color: #6366f1; color: #4f46e5 !important; background: #eef2ff; }
@@ -507,7 +579,6 @@ document.getElementById('foodForm').addEventListener('submit', function(e) {
 
 updateCartUI();
 
-// Timeout Manager
 document.addEventListener('DOMContentLoaded', function() {
     if (window.TimeoutManager) {
         TimeoutManager.init({
