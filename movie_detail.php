@@ -441,7 +441,7 @@ require_once 'header.php';
 }
 .tech-list .value {
     color: #111827;
-    font-weight: 600;
+    font-weight: 400;
     font-size: 1rem;
 }
 .actors-list {
@@ -534,11 +534,6 @@ require_once 'header.php';
     border-color: #4f46e5;
     background: #f4f5f7;
 }
-.date-card.active {
-    border-color: #4f46e5;
-    background: rgba(99, 102, 241, 0.08);
-    color: #4f46e5;
-}
 .date-card .day {
     font-size: 0.75rem;
     font-weight: 600;
@@ -553,14 +548,12 @@ require_once 'header.php';
     line-height: 1.2;
     color: #111827;
 }
-.date-card.active .number {
-    color: #4f46e5;
-}
 .date-card .month {
     font-size: 0.75rem;
     font-weight: 500;
     text-transform: uppercase;
     display: block;
+    color: #6b7280;
 }
 .date-card.sold-out {
     border-color: #fca5a5;
@@ -579,6 +572,31 @@ require_once 'header.php';
 }
 .date-card.has-showtimes { border-color: #818cf8; }
 .date-card.has-showtimes:not(.active):hover { border-color: #4f46e5; }
+
+/* ✅ ESTILOS PARA 'TODAY' (DÍA DE HOY) */
+.date-card.today {
+    border-color: #818cf8;
+}
+.date-card.today .day {
+    color: #6366f1;
+    font-weight: 700;
+}
+
+/* ✅ ESTILOS EXCLUSIVOS PARA CUANDO UNA FECHA ESTÁ SELECCIONADA/ACTIVA */
+.date-card.active,
+.date-card.today.active {
+    border-color: #4f46e5;
+    background: rgba(99, 102, 241, 0.08);
+}
+.date-card.active .day,
+.date-card.active .number,
+.date-card.active .month,
+.date-card.today.active .day,
+.date-card.today.active .number,
+.date-card.today.active .month {
+    color: #4f46e5;
+}
+
 .times-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -927,7 +945,7 @@ require_once 'header.php';
     <div class="hero-backdrop" style="background-image: url('<?= htmlspecialchars($backdrop_url) ?>');"></div>
     <div class="hero-content">
         <div class="hero-poster">
-            <img src="<?= htmlspecialchars($poster_url) ?>" alt="<?= htmlspecialchars($title) ?>" loading="lazy">
+            <img src="<?= htmlspecialchars($poster_url) ?>" alt="<?= htmlspecialchars($title) ?>" title="<?= htmlspecialchars($title) ?>" loading="lazy">
         </div>
         <div class="hero-info">
             <h1><?= htmlspecialchars($title) ?></h1>
@@ -1022,7 +1040,7 @@ require_once 'header.php';
         <?php if(empty($showtimes_by_date)): ?>
         <div class="no-showtimes">
             <i class="fas fa-calendar-times"></i>
-            <p>No hay funciones disponibles para esta película.</p>
+            <p>No hay funciones disponibles.</p>
         </div>
         <?php else: ?>
         <div class="dates-slider-wrapper">
@@ -1042,11 +1060,13 @@ require_once 'header.php';
                     }
                     $isSoldOut = !$hasAvailable && !$isPast;
                     $isFirst = $date === $first_date;
+                    $isToday = ($date === date('Y-m-d'));
                 ?>
-                <div class="date-card <?= $isFirst ? 'active' : '' ?> <?= $isPast ? 'past' : '' ?> <?= $isSoldOut ? 'sold-out' : '' ?> <?= !$isPast && !$isSoldOut ? 'has-showtimes' : '' ?>"
+                <!-- ✅ MODIFICADO: Asignación directa de clase 'active' para $isFirst -->
+                <div class="date-card <?= $isFirst ? 'active' : '' ?> <?= $isPast ? 'past' : '' ?> <?= $isSoldOut ? 'sold-out' : '' ?> <?= $isToday ? 'today' : '' ?> <?= !$isPast && !$isSoldOut ? 'has-showtimes' : '' ?>"
                      data-date="<?= $date ?>"
                      onclick="selectDate('<?= $date ?>')">
-                    <span class="day"><?= $dateInfo['day'] ?></span>
+                    <span class="day"><?= $isToday ? 'HOY' : $dateInfo['day'] ?></span>
                     <span class="number"><?= $dateInfo['number'] ?></span>
                     <span class="month"><?= $dateInfo['month'] ?></span>
                     <?php if($isPast): ?>
@@ -1129,12 +1149,17 @@ const availableDates = <?= json_encode($available_dates) ?>;
 const currencyConfig = <?= json_encode($currencyConfig) ?>;
 
 function selectDate(date) {
+    // ✅ Remover clase 'active' de TODAS las tarjetas
     document.querySelectorAll('.date-card').forEach(card => {
         card.classList.remove('active');
-        if (card.dataset.date === date) {
-            card.classList.add('active');
-        }
     });
+    
+    // ✅ Agregar clase 'active' SOLO a la tarjeta seleccionada
+    const selectedCard = document.querySelector(`.date-card[data-date="${date}"]`);
+    if (selectedCard) {
+        selectedCard.classList.add('active');
+    }
+    
     const container = document.getElementById('timesContainer');
     if (!container) return;
     

@@ -58,7 +58,7 @@ if (isset($validation['error'])) {
     exit;
 }
 
-// Guardar en sesión
+// ✅ GUARDAR EN SESIÓN CON LOGS
 $_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
 $_SESSION['total_seats_' . $showtimeId] = $validation['total_seats'];
 $_SESSION['subtotal_' . $showtimeId] = $validation['subtotal'];
@@ -66,6 +66,16 @@ $_SESSION['tax_amount_' . $showtimeId] = $validation['tax_amount'];
 $_SESSION['total_amount_' . $showtimeId] = $validation['total_amount'];
 $_SESSION['tax_rate_' . $showtimeId] = $validation['tax_rate'];
 $_SESSION['purchase_token_' . $showtimeId] = $token;
+
+// ✅ LOG DE DEPURACIÓN
+error_log("✅ process_selection.php - Datos guardados en sesión:");
+error_log("  ticket_quantities_" . $showtimeId . " = " . json_encode($ticketsData));
+error_log("  total_seats_" . $showtimeId . " = " . $validation['total_seats']);
+error_log("  subtotal_" . $showtimeId . " = " . $validation['subtotal']);
+error_log("  tax_amount_" . $showtimeId . " = " . $validation['tax_amount']);
+error_log("  total_amount_" . $showtimeId . " = " . $validation['total_amount']);
+error_log("  tax_rate_" . $showtimeId . " = " . $validation['tax_rate']);
+error_log("  purchase_token_" . $showtimeId . " = " . substr($token, 0, 10) . "...");
 
 // Limpiar sesiones de comida antiguas
 unset($_SESSION['food_seats_' . $showtimeId]);

@@ -8,7 +8,6 @@ require_once 'config.php';
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
-// Desactivar display de errores
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 
@@ -33,11 +32,11 @@ if ($showtimeId <= 0) {
 // GENERAR O RECUPERAR TOKEN
 // ============================================
 try {
-    // Verificar si el token existe y no ha expirado
+    // ✅ Verificar si el token existe y no ha expirado
     if (!isset($_SESSION['purchase_token_' . $showtimeId]) || isPurchaseTokenExpired($showtimeId)) {
+        error_log("🔄 get_purchase_token.php: Generando nuevo token para showtime $showtimeId");
         $token = generatePurchaseTokenWithTimeout($showtimeId, 900);
         $_SESSION['purchase_token_' . $showtimeId] = $token;
-        error_log("🆕 get_purchase_token.php: Nuevo token generado para showtime $showtimeId");
     } else {
         $token = $_SESSION['purchase_token_' . $showtimeId];
         error_log("✅ get_purchase_token.php: Token existente para showtime $showtimeId: " . substr($token, 0, 10) . "...");

@@ -37,10 +37,15 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $show_date)) {
     exit;
 }
 
-// ✅ Validar formato de hora
-if (!preg_match('/^\d{2}:\d{2}$/', $show_time)) {
+// ✅ Validar formato de hora (acepta HH:MM o HH:MM:SS)
+if (!preg_match('/^\d{2}:\d{2}(:\d{2})?$/', $show_time)) {
     echo json_encode(['error' => 'Formato de hora inválido']);
     exit;
+}
+
+// Normalizar a HH:MM:SS
+if (strlen($show_time) === 5) {
+    $show_time .= ':00';
 }
 
 // ✅ Validar duración razonable (1 minuto a 12 horas)
@@ -50,7 +55,7 @@ if ($duration < 1 || $duration > 720) {
 }
 
 // ============================================
-// ✅ OBTENER EL NOMBRE DE LA SALA (ESCAPADO)
+// ✅ OBTENER EL NOMBRE DE LA SALA
 // ============================================
 try {
     $stmt = $pdo->prepare("SELECT name FROM rooms WHERE id = ?");
@@ -62,7 +67,6 @@ try {
         exit;
     }
     
-    // ✅ ESCAPAR el nombre de la sala para prevenir XSS
     $room_name = htmlspecialchars($room['name'], ENT_QUOTES, 'UTF-8');
     
 } catch (PDOException $e) {
@@ -75,28 +79,31 @@ try {
 // VERIFICAR CONFLICTOS
 // ============================================
 try {
+    // ✅ Verificar que la función checkShowtimeConflict existe
+    if (!function_exists('checkShowtimeConflict')) {
+        error_log("ERROR: checkShowtimeConflict no está definida");
+        echo json_encode(['error' => 'Función de verificación no disponible']);
+        exit;
+    }
+    
     $result = checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration, $exclude_id);
     
     // Agregar mensaje personalizado según el resultado
     if (!$result['conflict']) {
-        // Mensaje cuando no hay conflicto
         if (empty($result['message'])) {
             $result['message'] = '✅ No hay conflictos. La ' . $room_name . ' está disponible en el horario seleccionado.';
         }
     } else {
-        // Si hay conflicto, limpiar mensaje para evitar duplicación de "Sala"
         if (!empty($result['message'])) {
             $result['message'] = str_replace('Sala Sala', 'Sala', $result['message']);
             $result['message'] = str_replace('sala sala', 'sala', $result['message']);
         }
     }
     
-    // ✅ ESCAPAR el mensaje final antes de enviarlo
     if (isset($result['message'])) {
         $result['message'] = htmlspecialchars($result['message'], ENT_QUOTES, 'UTF-8');
     }
     
-    // ✅ ESCAPAR el título de la película en conflicto si existe
     if (isset($result['conflicting_showtime']['title'])) {
         $result['conflicting_showtime']['title'] = htmlspecialchars($result['conflicting_showtime']['title'], ENT_QUOTES, 'UTF-8');
     }
@@ -104,7 +111,6 @@ try {
         $result['conflicting_showtime']['room_name'] = htmlspecialchars($result['conflicting_showtime']['room_name'], ENT_QUOTES, 'UTF-8');
     }
     
-    // No enviar información de depuración
     unset($result['debug']);
     
     echo json_encode($result);
@@ -112,7 +118,7 @@ try {
     
 } catch (Exception $e) {
     error_log("Error verificando conflictos: " . $e->getMessage());
-    echo json_encode(['error' => 'Error al verificar conflictos']);
+    echo json_encode(['error' => 'Error al verificar conflictos: ' . $e->getMessage()]);
     exit;
 }
 ?>

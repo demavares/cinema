@@ -68,6 +68,7 @@ if (empty($purchaseToken) || !verifyPurchaseTokenWithTimeout($purchaseToken, $sh
     }
 }
 
+// ✅ VERIFICAR QUE HAYA DATOS DE BOLETOS EN SESIÓN
 $ticketsData = isset($_SESSION['ticket_quantities_' . $showtimeId]) ? $_SESSION['ticket_quantities_' . $showtimeId] : null;
 $totalSeats = isset($_SESSION['total_seats_' . $showtimeId]) ? intval($_SESSION['total_seats_' . $showtimeId]) : 0;
 $subtotal = isset($_SESSION['subtotal_' . $showtimeId]) ? floatval($_SESSION['subtotal_' . $showtimeId]) : 0;
@@ -75,9 +76,20 @@ $taxAmount = isset($_SESSION['tax_amount_' . $showtimeId]) ? floatval($_SESSION[
 $totalAmount = isset($_SESSION['total_amount_' . $showtimeId]) ? floatval($_SESSION['total_amount_' . $showtimeId]) : 0;
 $taxRate = isset($_SESSION['tax_rate_' . $showtimeId]) ? floatval($_SESSION['tax_rate_' . $showtimeId]) : 16;
 
+// ✅ LOG DE DEPURACIÓN
+error_log("=== SESIÓN EN SEATS.PHP ===");
+error_log("showtimeId: " . $showtimeId);
+error_log("ticket_quantities_" . $showtimeId . " = " . (isset($_SESSION['ticket_quantities_' . $showtimeId]) ? json_encode($_SESSION['ticket_quantities_' . $showtimeId]) : 'NO EXISTE'));
+error_log("total_seats_" . $showtimeId . " = " . ($_SESSION['total_seats_' . $showtimeId] ?? 'NO EXISTE'));
+error_log("purchase_token_" . $showtimeId . " = " . ($_SESSION['purchase_token_' . $showtimeId] ?? 'NO EXISTE'));
+error_log("food_seats_" . $showtimeId . " = " . ($_SESSION['food_seats_' . $showtimeId] ?? 'NO EXISTE'));
+error_log("food_valid_" . $showtimeId . " = " . (isset($_SESSION['food_valid_' . $showtimeId]) ? ($_SESSION['food_valid_' . $showtimeId] ? 'true' : 'false') : 'NO EXISTE'));
+error_log("============================");
+
 $foodSeatsKey = 'food_seats_' . $showtimeId;
 $foodTimeoutKey = 'food_timeout_' . $showtimeId;
 
+// ✅ Si no hay datos de boletos en sesión, intentar recuperar de food_seats
 if (!$ticketsData || $totalSeats <= 0) {
     if ($hasFoodSession && isset($_SESSION[$foodSeatsKey]) && !empty($_SESSION[$foodSeatsKey])) {
         $foodSeats = $_SESSION[$foodSeatsKey];
@@ -110,11 +122,13 @@ if (!$ticketsData || $totalSeats <= 0) {
                 $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
                 $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
                 $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
+                error_log("✅ seats.php - Recuperado de food_seats: $totalSeats asientos");
             }
         }
     }
 }
 
+// ✅ Si aún no hay datos, redirigir a price_selection
 if (!$ticketsData || $totalSeats <= 0) {
     if ($hasFoodSession) {
         unset($_SESSION[$foodValidKey]);
@@ -122,7 +136,8 @@ if (!$ticketsData || $totalSeats <= 0) {
         unset($_SESSION[$foodTimeoutKey]);
     }
     if (!$fromFood) {
-        header('Location: price_selection.php?showtime_id=' . $showtimeId);
+        error_log("❌ seats.php - No hay datos de boletos, redirigiendo a price_selection");
+        header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+de+boletos+no+encontrados');
         exit;
     }
 }
@@ -299,11 +314,28 @@ $pageTitle = "Selección de Asientos - " . $showtime['title'];
 $backUrl = 'price_selection.php?showtime_id=' . $showtimeId;
 $siteConfig = getSiteConfig($pdo);
 
+// ✅ Asegurar que el token esté actualizado antes de mostrar la página
 if (!isset($_SESSION['purchase_token_' . $showtimeId]) || isPurchaseTokenExpired($showtimeId)) {
     $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
     $_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
 } else {
     $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
+}
+
+// ✅ Si el token está por expirar (menos de 60 segundos), regenerar
+$timeLeft = getPurchaseTokenTimeLeft($showtimeId);
+if ($timeLeft < 60 && $timeLeft > 0) {
+    error_log("🔄 seats.php: Token por expirar ($timeLeft segundos), regenerando");
+    clearPurchaseSession($showtimeId);
+    $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
+    $_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
+    // Restaurar datos de boletos
+    $_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
+    $_SESSION['total_seats_' . $showtimeId] = $totalSeats;
+    $_SESSION['subtotal_' . $showtimeId] = $subtotal;
+    $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
+    $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
+    $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
 }
 
 $selectedSeats = $userPendingSeats;
@@ -484,7 +516,7 @@ const occupiedSeats = <?= json_encode($occupiedSeats) ?>;
 const blockedSeats = <?= json_encode($blockedSeats) ?>;
 const accessibleSeats = <?= json_encode($accessibleSeats) ?>;
 const userPendingSeats = <?= json_encode($userPendingSeats) ?>;
-const purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
+let purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
 const fromFood = <?= $fromFood ? 'true' : 'false' ?>;
 
 const currencyConfig = {
@@ -634,7 +666,7 @@ window.addEventListener('beforeunload', function() {
 });
 
 // ============================================
-// ENVIAR FORMULARIO DIRECTAMENTE
+// ENVIAR FORMULARIO CON OBTENCIÓN DE TOKEN FRESCO
 // ============================================
 document.getElementById('foodForm').addEventListener('submit', function(e) {
     e.preventDefault();
@@ -655,20 +687,40 @@ document.getElementById('foodForm').addEventListener('submit', function(e) {
     const tokenInput = document.getElementById('purchaseTokenInput');
     const seatsInput = document.getElementById('seats-input');
 
-    // ✅ Actualizar campos del formulario
+    // ✅ Actualizar campo de asientos
     if (seatsInput) {
         seatsInput.value = selectedSeats.join(',');
     }
     
-    if (tokenInput && purchaseToken) {
-        tokenInput.value = purchaseToken;
-    }
-
+    // ✅ OBTENER TOKEN FRESCO DESDE EL SERVIDOR
     btnContinue.disabled = true;
-    btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Reservando asientos...';
-
-    // ✅ Enviar directamente el formulario
-    form.submit();
+    btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Obteniendo token...';
+    
+    fetch('get_purchase_token.php?showtime_id=' + showtimeId + '&t=' + Date.now())
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.token) {
+                // ✅ Actualizar token en el formulario
+                if (tokenInput) {
+                    tokenInput.value = data.token;
+                }
+                // ✅ También actualizar la variable local
+                purchaseToken = data.token;
+                
+                btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Reservando asientos...';
+                form.submit();
+            } else {
+                btnContinue.disabled = false;
+                btnContinue.innerHTML = '<i class="fas fa-chair mr-2"></i> Selecciona ' + count + ' asiento(s)';
+                showNotification('⚠️ Error al obtener token. Intenta nuevamente.', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Error obteniendo token:', error);
+            btnContinue.disabled = false;
+            btnContinue.innerHTML = '<i class="fas fa-chair mr-2"></i> Selecciona ' + count + ' asiento(s)';
+            showNotification('⚠️ Error de conexión. Intenta nuevamente.', 'error');
+        });
 });
 
 // ============================================

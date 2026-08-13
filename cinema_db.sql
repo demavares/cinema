@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: datame
--- Tiempo de generación: 09-08-2026 a las 11:39:59
+-- Tiempo de generación: 13-08-2026 a las 02:53:39
 -- Versión del servidor: 10.11.18-MariaDB-ubu2204
 -- Versión de PHP: 8.3.26
 
@@ -168,13 +168,13 @@ CREATE TABLE `movies` (
 
 INSERT INTO `movies` (`id`, `title`, `description`, `poster_url`, `banner_url`, `cast_members`, `country_id`, `duration`, `genre`, `year`, `director`, `classification`, `trailer_url`, `is_active`, `created_at`) VALUES
 (18, 'Aliens', 'Alien es un organismo perfecto, una máquina de matar cuya superioridad física sólo puede competir con su agresividad. La oficial Ripley y la tripulación de la nave «Nostromo» se habían enfrentado, en el pasado, a esa monstruosa criatura. Y sólo Ripley sobrevivió a la masacre. Después de vagar por el espacio durante varios años, Ripley fue rescatada. Durante ese tiempo, el planeta de Alien ha sido colonizado. Pero, de repente, se pierde la comunicación con la colonia y, para investigar los motivos, se envía una expedición de marines espaciales, capitaneados por Ripley. Allí les esperan miles de espeluznantes criaturas. Alien se ha reproducido y esta vez la lucha es por la supervivencia de la Humanidad.', 'https://image.tmdb.org/t/p/w500/3QU9EP8BFLnTh6w9ycDSCvhqbRU.jpg', 'https://image.tmdb.org/t/p/original/4kix6fAblJIH6eMs0Ku2loyZJXK.jpg', 'Sigourney Weaver, Carrie Henn, Michael Biehn, Paul Reiser, Lance Henriksen, Bill Paxton', 21, 150, 'Acción, Suspense, Ciencia ficción', '1986', 'James Cameron', 'C (Mayores de 18)', 'https://youtu.be/gOnNP4ONTtI?si=VQ2YbkdpPoA_mGPG', 1, '2026-07-20 01:06:32'),
-(21, 'The Mandalorian and Grogu', 'El Imperio ha caído y los señores de la guerra imperiales siguen dispersos por toda la galaxia. Mientras la incipiente Nueva República trabaja para proteger todo por lo que luchó la Rebelión, ha reclutado la ayuda del legendario cazarrecompensas mandaloriano Din Djarin y su joven aprendiz Grogu.', 'https://image.tmdb.org/t/p/w500/sWitU9IjgFwf6y1OrI0zUaL3GNa.jpg', 'https://image.tmdb.org/t/p/original/MJcERawyqGqJdPsOBc0C449hQ9.jpg', 'Pedro Pascal, Jeremy Allen White, Sigourney Weaver, Brendan Wayne, Lateef Crowder, Steve Blum', 21, 132, 'Acción, Aventura, Ciencia ficción', '2026', 'Jon Favreau', 'B (Mayores de 12)', 'https://youtu.be/LjLamj-b0I8?si=lALDYK1Vkjt42iZ9', 1, '2026-07-20 01:15:22'),
-(22, 'Spider-Man: Brand New Day', 'Han pasado cuatro años desde los acontecimientos de No Way Home, y Peter Parker ahora es un adulto que vive completamente solo, ha desaparecido voluntariamente de las vidas y recuerdos de quienes ama. Combatiendo el crimen en una Nueva York que ya no conoce su nombre, se ha dedicado por completo a proteger su ciudad, pero a medida que aumentan las exigencias sobre él, la presión desencadena una evolución física que amenaza su existencia, al mismo tiempo que un extraño nuevo patrón de crímenes da lugar a una de las amenazas más poderosas a las que se ha enfrentado.', 'https://image.tmdb.org/t/p/w500/1bfaqGFi63AaQWlHuEahhCmxPUU.jpg', 'https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg', 'Tom Holland, Sadie Sink, Tramell Tillman, Zendaya, Jon Bernthal, Jacob Batalon', 21, 144, 'Ciencia ficción, Acción, Aventura', '2026', 'Destin Daniel Cretton', 'B (Mayores de 12)', 'https://youtu.be/lBU9_kIJI9U?si=p76bf5PItFGwTUI_', 1, '2026-07-21 03:58:04'),
-(29, 'Papita, maní, tostón', 'Andrés (Jean Pierre Agostini) es fanático de Los Leones del Caracas, uno de los principales equipos de béisbol de Venezuela. Julissa (Juliette Pardau) es fanática de Los Navegantes del Magallanes, el equipo rival. Un día Andrés recibe boletos para ver el juego en la Zona VIP de Magallanes. Conoce a Julissa y a su padre, que no solo es admirador sino también uno de los gerentes del equipo. Andrés y Julissa se enamorarán y tendrán que fingir ser fanáticos del equipo del otro. Pero pronto surgirán problemas.', 'https://image.tmdb.org/t/p/w500/hF3I0Zd54EOgt9PuI1yXDmsx4gb.jpg', 'https://image.tmdb.org/t/p/original/k2W93PeASnRtucQnRVxOKeFatf.jpg', 'Jean Pierre Agostini De Risi, Juliette Pardau, Vicente Peña, Vantroy Sánchez, Juan Andres Belgrave, José Roberto Díaz', 20, 112, 'Comedia, Romance', '2013', 'Luis Carlos Hueck', 'B (Mayores de 12)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-07-22 09:56:45'),
-(35, 'Babymetal', 'Babymetal es un grupo idol japonés de kawaii metal formada en Tokio en 2010.', 'https://www.prints4u.net/wp-content/uploads/2024/06/BabyMetal-019-1.jpg', 'https://shop.metalforth.com/cdn/shop/files/METALFORTH-ALTCOVERKITSUNE-DIGITALCOVER.png?v=1754604266', 'Suzuka Nakamoto (Su-metal), Moa Kikuchi (Moametal), Momoko Okazaki (Momometal)', 27, 120, 'Música, Concierto', '2026', 'No disponible', 'A (Todo público)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-07-27 03:25:09'),
-(46, 'Avengers: Doomsday', 'Quinta entrega de la saga \'Vengadores\' incluida en el Universo Cinematográfico Marvel (UCM). Sinopsis desconocido.', 'https://image.tmdb.org/t/p/w500/rQKabpeIewLLNStFr3anEXI0xqu.jpg', 'https://image.tmdb.org/t/p/original/s4v0UX1anfXm0UvloLsTTJ4v222.jpg', 'Robert Downey Jr., Chris Evans, Chris Hemsworth, Pedro Pascal, Paul Rudd, Anthony Mackie', 21, 165, 'Ciencia ficción, Acción, Aventura', '2026', 'Joe Russo y Anthony Russo', 'A (Todo público)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-07-28 07:15:09'),
+(22, 'Spider-Man: Brand New Day', 'Han pasado cuatro años desde los acontecimientos de No Way Home, y Peter Parker ahora es un adulto que vive completamente solo, ha desaparecido voluntariamente de las vidas y recuerdos de quienes ama. Combatiendo el crimen en una Nueva York que ya no conoce su nombre, se ha dedicado por completo a proteger su ciudad, pero a medida que aumentan las exigencias sobre él, la presión desencadena una evolución física que amenaza su existencia, al mismo tiempo que un extraño nuevo patrón de crímenes da lugar a una de las amenazas más poderosas a las que se ha enfrentado.', 'https://image.tmdb.org/t/p/w500/tluwRNA7k0XfTtDkdLYKX1KOSCJ.jpg', 'https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg', 'Tom Holland, Zendaya, Mark Ruffalo, Jon Bernthal, Jacob Batalon, Sadie Sink', 21, 144, 'Ciencia ficción, Acción, Aventura', '2026', 'Destin Daniel Cretton', 'B (Mayores de 12)', 'https://youtu.be/lBU9_kIJI9U?si=p76bf5PItFGwTUI_', 1, '2026-07-21 03:58:04'),
+(35, 'Babymetal', 'Babymetal es un grupo idol japonés de kawaii metal formada en Tokio en 2010.', 'https://image.tmdb.org/t/p/w500/36J5ZBPg4i7BqDjnHevwqA6QBuO.jpg', 'https://image.tmdb.org/t/p/original/7VYLNFvdt5R5yCAJWVYZmOPx6aw.jpg', '中元すず香, 菊地最愛, 岡崎百々子', 27, 120, 'Música', '2026', 'No disponible', 'A (Todo público)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-07-27 03:25:09'),
 (47, 'He-Man y los Masters del Universo', 'En las regiones más lejanas del espacio, el reino de Eternia está amenazado por el villano Skeletor y sus traviesos ejércitos de oscuridad. Para salvar el reino de su padre y proteger las vidas de sus seres queridos, el joven príncipe Adam tiene que recuperar una espada mítica y convertirse en el legendario guerrero conocido como He-Man.', 'https://image.tmdb.org/t/p/w500/A6kqScyPEsn6akDS5HyPf9jE4Od.jpg', 'https://image.tmdb.org/t/p/original/yQIdU11DYQQp0neGtGtGxbGfRer.jpg', 'Nicholas Galitzine, Camila Mendes, Idris Elba, Jared Leto, Alison Brie, Jóhannes Haukur Jóhannesson', 21, 140, 'Acción, Fantasía, Ciencia ficción', '2026', 'Travis Knight', 'A (Todo público)', 'https://youtu.be/LjLamj-b0I8?si=lALDYK1Vkjt42iZ9', 1, '2026-08-07 04:42:39'),
-(48, 'Transformers: La película', 'Es el año 2005. Los Decepticons han conquistado Cybertron totalmente. Pero los Autobots tienen bases en la dos lunas de Cybertron, y también tienen Autobot City en la Tierra. La película comienza con una espectacular secuencia en la que Unicron, un planeta mecánico viviente, se come el mundo de Lithone, matando a todos sus habitantes, excepto uno que escapa en una nave espacial. Para impedir una ofensiva Autobot, los Decepticons atacan Autobot City y tiene lugar una enorme batalla que termina con la derrota de Optimus Prime y Megatron…', 'https://image.tmdb.org/t/p/w500/zeWczm28NqrPWII3BeqH77N0IIV.jpg', 'https://image.tmdb.org/t/p/original/8NvaYUSmpe56dBz7B5m3jSpJI3t.jpg', 'Judd Nelson, Peter Cullen, Frank Welker, Leonard Nimoy, Orson Welles, Casey Kasem', 21, 86, 'Animación, Ciencia ficción, Acción, Aventura, Familia', '1986', 'Nelson Shin', 'A (Todo público)', 'https://www.youtube.com/watch?v=OtgnqWLYqHo', 1, '2026-08-09 09:05:02');
+(54, 'Minions & Monsters', 'Narra la historia de cómo los minions conquistaron la industria de Hollywood, se convirtieron en estrellas de cine, lo perdieron todo, desataron monstruos en el mundo y luego se unieron para intentar salvar al planeta del caos que acababan de crear.', 'https://image.tmdb.org/t/p/w500/7DUzo8Ys7BfmZpqnzIwG4qA0egl.jpg', 'https://image.tmdb.org/t/p/original/kkcwhgSFd81QDlXo8ytrpHPQjhy.jpg', 'Pierre Coffin, Trey Parker, Christoph Waltz, Allison Janney, Jesse Eisenberg, Jeff Bridges', 21, 90, 'Aventura, Animación, Comedia, Familia, Fantasía', '2026', 'Pierre Coffin', 'A (Todo público)', 'https://youtu.be/lBU9_kIJI9U?si=p76bf5PItFGwTUI_', 1, '2026-08-11 13:26:41'),
+(55, 'La casa del fin de los tiempos', 'La casa del fin de los tiempos es el primer thriller de suspenso y terror venezolano. Narra la historia de Dulce, Ruddy Rodríguez, una madre de familia que tiene encuentros con Apariciones dentro de su vieja casa, lugar donde debe descifrar un misterio que podría desencadenar una profecía: la muerte de su familia.', 'https://image.tmdb.org/t/p/w500/weNI3TFmC2JGYwEX4YKvYIKbGme.jpg', 'https://image.tmdb.org/t/p/original/ZIwr7usYLrVodguqdosMiXzJc5.jpg', 'Ruddy Rodriguez, Gonzalo Cubero, Guillermo García, Adriana Calzadilla, Rosmel Bustamante, Hector Mercado', 20, 100, 'Terror, Drama, Fantasía', '2013', 'Alejandro Hidalgo', 'C (Mayores de 18)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-08-11 13:53:18'),
+(63, 'The Exorcist', 'Regan es una niña de doce años víctima de fenómenos paranormales como la levitación o la manifestación de una fuerza sobrehumana. Su madre, aterrorizada, tras someter a su hija a múltiples análisis médicos que no ofrecen ningún resultado, acude a un sacerdote con estudios de psiquiatría. Éste está convencido de que el mal no es físico sino espiritual, es decir, que la niña es víctima de una posesión diabólica. Por eso, con la ayuda de otro sacerdote decide practicar un exorcismo.', 'https://image.tmdb.org/t/p/w500/hwJvgHQ4tf9eRQec1ouAgg33dPV.jpg', 'https://image.tmdb.org/t/p/original/xcjJ5khg2yzOa282mza39Lbrm7j.jpg', 'Ellen Burstyn, Linda Blair, Jason Miller, Max von Sydow, Lee J. Cobb, William O\'Malley', 21, 132, 'Terror', '1973', 'William Friedkin', 'C (Mayores de 18)', 'https://youtu.be/LjLamj-b0I8?si=lALDYK1Vkjt42iZ9', 1, '2026-08-12 09:14:15'),
+(64, 'Rogue One', 'El Imperio Galáctico ha terminado de construir el arma más poderosa de todas, la Estrella de la muerte, pero un grupo de rebeldes decide realizar una misión de muy alto riesgo: robar los planos de dicha estación antes de que entre en operaciones, mientras se enfrentan también al poderoso Lord Sith conocido como Darth Vader, discípulo del despiadado Emperador Palpatine.', 'https://image.tmdb.org/t/p/w500/mAqgFQxaBaLkcQBRQf9YnAz9sNQ.jpg', 'https://image.tmdb.org/t/p/original/6t8ES1d12OzWyCGxBeDYLHoaDrT.jpg', 'Felicity Jones, Diego Luna, Alan Tudyk, Donnie Yen, Jiang Wen, Ben Mendelsohn', 21, 133, 'Acción, Aventura, Ciencia ficción', '2016', 'Gareth Edwards', 'B (Mayores de 12)', 'https://youtu.be/jQ5lPt9edzQ?si=5DhEB7WjQQRdmT1o', 1, '2026-08-12 09:19:38');
 
 -- --------------------------------------------------------
 
@@ -275,8 +275,8 @@ CREATE TABLE `showtimes` (
 --
 
 INSERT INTO `showtimes` (`id`, `movie_id`, `room_id`, `show_date`, `show_time`, `price`, `price_adult`, `price_child`, `price_senior`, `enable_child_price`, `enable_senior_price`, `half_price_monday`, `promotions`, `language`, `format`, `is_active`, `created_at`) VALUES
-(61, 18, 14, '2026-08-10', '14:30:00', 3000.00, 3000.00, 500.00, 1500.00, 1, 1, 1, 'lunes_mitad,preventa,lunes_mitad', 'español', 'IMAX 3D', 1, '2026-08-08 08:54:40'),
-(62, 18, 13, '2026-08-10', '15:30:00', 3000.00, 3000.00, 0.00, 1500.00, 0, 1, 0, '', 'español', '2D', 1, '2026-08-08 08:55:09');
+(64, 18, 14, '2026-08-24', '14:30:00', 3000.00, 3000.00, 0.00, 0.00, 0, 1, 1, 'lunes_mitad,preventa', 'español', '3D', 1, '2026-08-11 04:12:47'),
+(65, 18, 14, '2026-08-12', '22:00:00', 3000.00, 3000.00, 0.00, 1500.00, 0, 1, 0, '', 'español', 'ScreenX', 1, '2026-08-13 01:52:11');
 
 -- --------------------------------------------------------
 
@@ -307,13 +307,13 @@ INSERT INTO `site_config` (`id`, `key_name`, `value`, `updated_at`) VALUES
 (9, 'phone', '04143601706', '2026-07-25 09:06:55'),
 (10, 'email', 'contacto@cinemapro.com', '2026-07-25 09:06:55'),
 (11, 'instagram', 'https://www.instagram.com/demavares/', '2026-07-24 21:21:46'),
-(12, 'facebook', '', '2026-07-25 05:08:49'),
+(12, 'facebook', 'https://facebook.com', '2026-08-12 13:15:17'),
 (13, 'twitter', 'https://x.com', '2026-07-24 20:26:59'),
 (14, 'telegram', 'https://t.me', '2026-07-24 20:26:59'),
 (15, 'whatsapp', 'https://wa.me/584143601706', '2026-07-24 21:25:57'),
 (16, 'footer_copyright', 'Cinema Pro. Todos los derechos reservados.', '2026-07-24 20:26:59'),
 (17, 'footer_logo', 'uploads/footer_logo.png', '2026-07-27 01:53:32'),
-(18, 'site_favicon', '', '2026-07-27 06:08:43');
+(18, 'site_favicon', 'uploads/favicon.png', '2026-08-11 05:39:24');
 
 -- --------------------------------------------------------
 
@@ -334,7 +334,7 @@ CREATE TABLE `tax_config` (
 --
 
 INSERT INTO `tax_config` (`id`, `tax_name`, `tax_rate`, `is_active`, `updated_at`) VALUES
-(1, 'IVA', 16.00, 1, '2026-08-05 15:10:12');
+(1, 'IVA', 16.00, 1, '2026-08-12 13:15:17');
 
 -- --------------------------------------------------------
 
@@ -416,8 +416,8 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `email`, `cedula_type`, `cedula_number`, `phone_prefix`, `phone_number`, `birth_date`, `password`, `role`, `is_blocked`, `created_at`, `last_login`) VALUES
-(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-09 04:51:06'),
-(8, 'Darwin Mavares', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-09 06:35:15');
+(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-12 21:51:35'),
+(8, 'Darwin Mavarez', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-10 04:07:40');
 
 --
 -- Índices para tablas volcadas
@@ -560,25 +560,25 @@ ALTER TABLE `food_items`
 -- AUTO_INCREMENT de la tabla `food_orders`
 --
 ALTER TABLE `food_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=31;
 
 --
 -- AUTO_INCREMENT de la tabla `movies`
 --
 ALTER TABLE `movies`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=49;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=65;
 
 --
 -- AUTO_INCREMENT de la tabla `purchases`
 --
 ALTER TABLE `purchases`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=370;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=439;
 
 --
 -- AUTO_INCREMENT de la tabla `purchase_tickets`
 --
 ALTER TABLE `purchase_tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=43;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=59;
 
 --
 -- AUTO_INCREMENT de la tabla `rooms`
@@ -590,7 +590,7 @@ ALTER TABLE `rooms`
 -- AUTO_INCREMENT de la tabla `showtimes`
 --
 ALTER TABLE `showtimes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=63;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=66;
 
 --
 -- AUTO_INCREMENT de la tabla `site_config`
@@ -608,7 +608,7 @@ ALTER TABLE `tax_config`
 -- AUTO_INCREMENT de la tabla `tickets`
 --
 ALTER TABLE `tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=502;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=85;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_logs`
