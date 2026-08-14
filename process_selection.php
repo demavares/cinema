@@ -58,7 +58,7 @@ if (isset($validation['error'])) {
     exit;
 }
 
-// ✅ GUARDAR EN SESIÓN CON LOGS
+//  GUARDAR EN SESIÓN CON LOGS
 $_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
 $_SESSION['total_seats_' . $showtimeId] = $validation['total_seats'];
 $_SESSION['subtotal_' . $showtimeId] = $validation['subtotal'];
@@ -67,7 +67,7 @@ $_SESSION['total_amount_' . $showtimeId] = $validation['total_amount'];
 $_SESSION['tax_rate_' . $showtimeId] = $validation['tax_rate'];
 $_SESSION['purchase_token_' . $showtimeId] = $token;
 
-// ✅ LOG DE DEPURACIÓN
+// LOG DE DEPURACIÓN
 error_log("✅ process_selection.php - Datos guardados en sesión:");
 error_log("  ticket_quantities_" . $showtimeId . " = " . json_encode($ticketsData));
 error_log("  total_seats_" . $showtimeId . " = " . $validation['total_seats']);

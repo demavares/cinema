@@ -1,4 +1,5 @@
 <?php
+
 // ============================================
 // CONFIGURACIÓN DE SESIÓN
 // ============================================
@@ -18,6 +19,7 @@ if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 
     session_destroy();
     session_start();
 }
+
 $_SESSION['last_activity'] = time();
 
 // ============================================
@@ -47,6 +49,7 @@ function getSiteConfig($pdo) {
     if ($config !== null) {
         return $config;
     }
+
     try {
         $stmt = $pdo->query("SELECT key_name, value FROM site_config");
         $rows = $stmt->fetchAll();
@@ -54,6 +57,7 @@ function getSiteConfig($pdo) {
         foreach ($rows as $row) {
             $config[$row['key_name']] = $row['value'];
         }
+
         $defaults = [
             'site_name' => 'Cinema Pro',
             'site_logo' => '',
@@ -73,11 +77,13 @@ function getSiteConfig($pdo) {
             'telegram' => '',
             'whatsapp' => ''
         ];
+
         foreach ($defaults as $key => $default_value) {
             if (!isset($config[$key])) {
                 $config[$key] = $default_value;
             }
         }
+
         return $config;
     } catch (PDOException $e) {
         return $defaults;
@@ -92,11 +98,13 @@ function formatCurrency($amount, $config = null) {
         global $pdo;
         $config = getSiteConfig($pdo);
     }
+
     $symbol = $config['currency_symbol'] ?? '$';
     $position = $config['currency_position'] ?? 'left';
     $thousands = $config['thousands_separator'] ?? '.';
     $decimal = $config['decimal_separator'] ?? ',';
     $decimals = intval($config['decimal_places'] ?? 2);
+
     $formatted = number_format($amount, $decimals, $decimal, $thousands);
     return $position === 'right' ? $formatted . ' ' . $symbol : $symbol . $formatted;
 }
@@ -108,41 +116,41 @@ function getMovieFromTMDB($title, $year = null) {
     $api_key = TMDB_API_KEY;
     $query = urlencode($title);
     $url = TMDB_API_URL . "search/movie?api_key={$api_key}&query={$query}&language=es-ES";
-    
+
     if ($year) {
         $url .= "&year={$year}";
     }
-    
+
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
     $response = curl_exec($ch);
     curl_close($ch);
-    
+
     $data = json_decode($response, true);
-    
+
     if (!empty($data['results'])) {
         $movie_data = $data['results'][0];
         $tmdb_id = $movie_data['id'];
-        
         $detail_url = TMDB_API_URL . "movie/{$tmdb_id}?api_key={$api_key}&language=es-ES&append_to_response=credits";
+
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $detail_url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
         $detail_response = curl_exec($ch);
         curl_close($ch);
-        
+
         $detail_data = json_decode($detail_response, true);
-        
+
         $genres = [];
         if (isset($detail_data['genres'])) {
             foreach ($detail_data['genres'] as $genre) {
                 $genres[] = $genre['name'];
             }
         }
-        
+
         $directors = [];
         if (isset($detail_data['credits']['crew'])) {
             foreach ($detail_data['credits']['crew'] as $crew) {
@@ -152,7 +160,7 @@ function getMovieFromTMDB($title, $year = null) {
             }
         }
         $director = !empty($directors) ? implode(' y ', $directors) : 'No disponible';
-        
+
         $cast = [];
         if (isset($detail_data['credits']['cast'])) {
             $top_cast = array_slice($detail_data['credits']['cast'], 0, 6);
@@ -161,7 +169,7 @@ function getMovieFromTMDB($title, $year = null) {
             }
         }
         $cast_members = !empty($cast) ? implode(', ', $cast) : '';
-        
+
         $country = '';
         if (isset($detail_data['production_countries']) && !empty($detail_data['production_countries'])) {
             $english_country = $detail_data['production_countries'][0]['name'];
@@ -189,7 +197,7 @@ function getMovieFromTMDB($title, $year = null) {
             ];
             $country = $country_translations[$english_country] ?? $english_country;
         }
-        
+
         return [
             'tmdb_id' => $tmdb_id,
             'description' => $movie_data['overview'] ?? '',
@@ -205,7 +213,7 @@ function getMovieFromTMDB($title, $year = null) {
             'year' => !empty($movie_data['release_date']) ? date('Y', strtotime($movie_data['release_date'])) : null
         ];
     }
-    
+
     return null;
 }
 
@@ -215,35 +223,33 @@ function getMovieFromTMDB($title, $year = null) {
 function releaseExpiredSeats($pdo) {
     $currentDateTime = date('Y-m-d H:i:s');
     $total_released = 0;
-    
+
     try {
         $pdo->beginTransaction();
-        
+
         // ============================================
         // 1. LIBERAR COMPRAS PENDIENTES EXPIRADAS
         // ============================================
         $stmt = $pdo->prepare("
-            SELECT id, seats, showtime_id 
-            FROM purchases 
+            SELECT id, seats, showtime_id
+            FROM purchases
             WHERE status = 'pending' AND expires_at < ?
             FOR UPDATE
         ");
         $stmt->execute([$currentDateTime]);
         $expired_purchases = $stmt->fetchAll();
-        
+
         foreach ($expired_purchases as $purchase) {
-            // Marcar como expirado
             $stmt = $pdo->prepare("UPDATE purchases SET status = 'expired' WHERE id = ?");
             $stmt->execute([$purchase['id']]);
-            
-            // Eliminar tickets temporales
+
             $seatsArray = explode(',', $purchase['seats']);
             $placeholders = implode(',', array_fill(0, count($seatsArray), '?'));
             $stmt = $pdo->prepare("DELETE FROM tickets WHERE showtime_id = ? AND seat_code IN ($placeholders)");
             $stmt->execute(array_merge([$purchase['showtime_id']], $seatsArray));
             $total_released += count($seatsArray);
         }
-        
+
         // ============================================
         // 2. LIBERAR SHOWTIMES QUE YA PASARON
         // ============================================
@@ -251,35 +257,141 @@ function releaseExpiredSeats($pdo) {
             SELECT DISTINCT s.id, s.show_date, s.show_time, m.duration, COUNT(t.id) as ticket_count
             FROM showtimes s
             JOIN movies m ON s.movie_id = m.id
-            JOIN tickets t ON t.showtime_id = s.id
+            LEFT JOIN tickets t ON t.showtime_id = s.id
             WHERE DATE_ADD(CONCAT(s.show_date, ' ', s.show_time), INTERVAL m.duration MINUTE) < ?
             AND s.is_active = 1
             GROUP BY s.id
         ");
         $stmt->execute([$currentDateTime]);
         $expired_showtimes = $stmt->fetchAll();
-        
+
         foreach ($expired_showtimes as $showtime) {
-            // Registrar en logs
             $stmt_log = $pdo->prepare("INSERT INTO ticket_logs (showtime_id, ticket_count) VALUES (?, ?)");
             $stmt_log->execute([$showtime['id'], $showtime['ticket_count']]);
-            
-            // Marcar showtime como inactivo
+
             $stmt_update = $pdo->prepare("UPDATE showtimes SET is_active = 0 WHERE id = ?");
             $stmt_update->execute([$showtime['id']]);
         }
-        
+
         $pdo->commit();
     } catch (Exception $e) {
         $pdo->rollBack();
         error_log("Error liberando asientos expirados: " . $e->getMessage());
     }
-    
+
     return $total_released;
+}
+
+// ============================================
+// 🧹 LIMPIEZA AUTOMÁTICA DE REGISTROS ANTIGUOS
+// Se ejecuta cada 5 días entre la 1:00 AM y 5:59 AM
+// ============================================
+function cleanupExpiredPurchasesPeriodic($pdo) {
+    try {
+        $lastCleanupKey = 'last_cleanup_expired_purchases';
+        
+        // Obtener la última fecha de limpieza
+        $stmt = $pdo->prepare("SELECT value FROM site_config WHERE key_name = ?");
+        $stmt->execute([$lastCleanupKey]);
+        $lastCleanup = $stmt->fetch();
+        
+        $now = time();
+        $fiveDaysInSeconds = 5 * 24 * 60 * 60; // 5 días
+        $currentHour = (int)date('H');
+        
+        // 🕐 Solo ejecutar entre la 1:00 AM y las 5:59 AM (ventana de baja actividad)
+        $inMaintenanceWindow = ($currentHour >= 1 && $currentHour < 6);
+        
+        if (!$inMaintenanceWindow) {
+            return; // No estamos en la ventana de mantenimiento, salir sin hacer nada
+        }
+        
+        // Verificar si han pasado 5 días desde la última limpieza
+        $shouldCleanup = false;
+        if (!$lastCleanup || empty($lastCleanup['value'])) {
+            // Nunca se ha limpiado, ejecutar limpieza
+            $shouldCleanup = true;
+        } else {
+            $lastCleanupTime = strtotime($lastCleanup['value']);
+            if (($now - $lastCleanupTime) >= $fiveDaysInSeconds) {
+                $shouldCleanup = true;
+            }
+        }
+        
+        if (!$shouldCleanup) {
+            return; // No han pasado 5 días, salir sin hacer nada
+        }
+        
+        // 🧹 EJECUTAR LIMPIEZA
+        
+        // 1. Eliminar compras expiradas con más de 30 días
+        $stmtDelete = $pdo->prepare("
+            DELETE FROM purchases 
+            WHERE status = 'expired' 
+            AND purchase_date < DATE_SUB(NOW(), INTERVAL 30 DAY)
+        ");
+        $stmtDelete->execute();
+        $deletedPurchases = $stmtDelete->rowCount();
+        
+        // 2. Eliminar tickets huérfanos con más de 30 días
+        $stmtOrphanTickets = $pdo->prepare("
+            DELETE t FROM tickets t
+            WHERE NOT EXISTS (
+                SELECT 1 FROM purchases p 
+                WHERE p.user_id = t.user_id 
+                AND p.showtime_id = t.showtime_id
+            )
+            AND t.purchase_date < DATE_SUB(NOW(), INTERVAL 30 DAY)
+        ");
+        $stmtOrphanTickets->execute();
+        $deletedOrphanTickets = $stmtOrphanTickets->rowCount();
+        
+        // 3. Eliminar pedidos de comida pendientes con más de 30 días
+        $stmtOrphanFood = $pdo->prepare("
+            DELETE FROM food_orders 
+            WHERE status = 'pending' 
+            AND order_date < DATE_SUB(NOW(), INTERVAL 30 DAY)
+        ");
+        $stmtOrphanFood->execute();
+        $deletedOrphanFood = $stmtOrphanFood->rowCount();
+        
+        // 4. Eliminar logs de tickets con más de 90 días
+        $stmtOldLogs = $pdo->prepare("
+            DELETE FROM ticket_logs 
+            WHERE released_at < DATE_SUB(NOW(), INTERVAL 90 DAY)
+        ");
+        $stmtOldLogs->execute();
+        $deletedOldLogs = $stmtOldLogs->rowCount();
+        
+        // 📊 Actualizar la fecha de última limpieza
+        if ($lastCleanup && !empty($lastCleanup['value'])) {
+            $stmtUpdate = $pdo->prepare("UPDATE site_config SET value = NOW(), updated_at = NOW() WHERE key_name = ?");
+        } else {
+            $stmtUpdate = $pdo->prepare("INSERT INTO site_config (key_name, value) VALUES (?, NOW())");
+        }
+        $stmtUpdate->execute([$lastCleanupKey]);
+        
+        // 📝 Registrar en el log
+        $logMessage = sprintf(
+            "🧹 Limpieza automática [%s]: %d compras expiradas, %d tickets huérfanos, %d pedidos comida, %d logs antiguos eliminados",
+            date('Y-m-d H:i:s'),
+            $deletedPurchases,
+            $deletedOrphanTickets,
+            $deletedOrphanFood,
+            $deletedOldLogs
+        );
+        error_log($logMessage);
+        
+    } catch (Exception $e) {
+        error_log("❌ Error en limpieza automática periódica: " . $e->getMessage());
+    }
 }
 
 // Ejecutar liberación automática al cargar cualquier página
 $released_count = releaseExpiredSeats($pdo);
+
+// 🧹 Ejecutar limpieza periódica (solo entre 1-6 AM cada 5 días)
+cleanupExpiredPurchasesPeriodic($pdo);
 
 // ============================================
 // FUNCIONES CSRF
@@ -317,16 +429,19 @@ function verifyPurchaseToken($token, $showtimeId) {
     if (empty($token) || empty($showtimeId)) {
         return false;
     }
+
     $expectedToken = $_SESSION['purchase_token_' . $showtimeId] ?? null;
     if (!$expectedToken || !hash_equals($expectedToken, $token)) {
         return false;
     }
+
     $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
     if (time() > $expiresAt) {
         unset($_SESSION['purchase_token_' . $showtimeId]);
         unset($_SESSION['purchase_expires_at_' . $showtimeId]);
         return false;
     }
+
     return true;
 }
 
@@ -334,20 +449,24 @@ function verifyPurchaseTokenWithTimeout($token, $showtimeId) {
     if (empty($token) || empty($showtimeId)) {
         return false;
     }
+
     $expectedToken = $_SESSION['purchase_token_' . $showtimeId] ?? null;
     if (!$expectedToken || !hash_equals($expectedToken, $token)) {
         return false;
     }
+
     $usedKey = 'purchase_token_used_' . $showtimeId;
     if (isset($_SESSION[$usedKey]) && $_SESSION[$usedKey] === true) {
         return false;
     }
+
     $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
     if (time() > $expiresAt) {
         unset($_SESSION['purchase_token_' . $showtimeId]);
         unset($_SESSION['purchase_expires_at_' . $showtimeId]);
         return false;
     }
+
     return true;
 }
 
@@ -384,6 +503,7 @@ function clearPurchaseSession($showtimeId) {
         'food_order_' . $showtimeId,
         'base_subtotal_' . $showtimeId
     ];
+
     foreach ($keys as $key) {
         if (isset($_SESSION[$key])) {
             unset($_SESSION[$key]);
@@ -403,7 +523,7 @@ function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration
     $start_minutes = strtotime($show_time) / 60;
     $end_minutes = $start_minutes + $duration;
     $end_minutes_with_cleanup = $end_minutes + $cleanup_time;
-    
+
     $sql = "SELECT s.*, m.duration, m.title, r.name as room_name
             FROM showtimes s
             JOIN movies m ON s.movie_id = m.id
@@ -411,9 +531,11 @@ function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration
             WHERE s.room_id = ?
             AND s.show_date = ?
             AND s.is_active = 1";
+
     if ($exclude_id) {
         $sql .= " AND s.id != ?";
     }
+
     $stmt = $pdo->prepare($sql);
     $params = [$room_id, $show_date];
     if ($exclude_id) {
@@ -421,21 +543,27 @@ function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration
     }
     $stmt->execute($params);
     $existing = $stmt->fetchAll();
+
     foreach ($existing as $e) {
         $existing_start = strtotime($e['show_time']) / 60;
         $existing_end = $existing_start + $e['duration'];
+
         $overlap_start = max($start_minutes, $existing_start);
         $overlap_end = min($end_minutes_with_cleanup, $existing_end);
         $overlap_minutes = max(0, $overlap_end - $overlap_start);
+
         $overlap = ($start_minutes < $existing_end && $end_minutes_with_cleanup > $existing_start);
+
         if ($overlap) {
             $conflict_minutes = ceil($overlap_minutes);
             $start_time_formatted = date('h:i A', strtotime($e['show_time']));
             $end_time_formatted = date('h:i A', strtotime("+{$e['duration']} minutes", strtotime($e['show_time'])));
             $room_name = $e['room_name'];
+
             $message = "Conflicto con: " . $e['title'] .
                 " (" . $start_time_formatted . " - " . $end_time_formatted . ") - " .
                 "Sala " . $room_name . " - Se superpone en " . $conflict_minutes . " minutos";
+
             return [
                 'conflict' => true,
                 'conflicting_showtime' => $e,
@@ -443,6 +571,7 @@ function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration
             ];
         }
     }
+
     return ['conflict' => false];
 }
 
@@ -451,34 +580,36 @@ function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration
 // ============================================
 function checkSessionExpired($showtimeId = null) {
     $limite_inactividad = 1800;
-    
+
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $limite_inactividad)) {
         $_SESSION = array();
+
         if (ini_get("session.use_cookies")) {
             $params = session_get_cookie_params();
             setcookie(session_name(), '', time() - 42000, $params["path"], $params["domain"], $params["secure"], $params["httponly"]);
         }
+
         session_destroy();
         header("Location: index.php?expired=1");
         exit();
     }
-    
+
     if (!isset($_SESSION['user_id'])) {
         header('Location: login.php');
         exit;
     }
-    
+
     if ($showtimeId !== null && $showtimeId > 0) {
         $sessionToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
         $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
-        
+
         if (empty($sessionToken) || time() > $expiresAt) {
             clearPurchaseSession($showtimeId);
             header('Location: index.php?expired=1');
             exit;
         }
     }
-    
+
     $_SESSION['last_activity'] = time();
 }
 
@@ -505,32 +636,40 @@ function formatDateShort($date) {
 
 function formatDateVenezuela($date) {
     if (empty($date)) return '';
+
     $months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
     $days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
     $timestamp = strtotime($date);
     $dayName = $days[date('w', $timestamp)];
     $day = date('d', $timestamp);
     $month = $months[date('n', $timestamp) - 1];
     $year = date('Y', $timestamp);
+
     return "$dayName, $day de $month de $year";
 }
 
 function getDateInSpanish($date) {
     if (empty($date)) return '';
+
     $timestamp = strtotime($date);
     $days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
     $months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
     $dayName = $days[date('w', $timestamp)];
     $day = date('d', $timestamp);
     $month = $months[date('n', $timestamp) - 1];
     $year = date('Y', $timestamp);
+
     return "$dayName, $day de $month de $year";
 }
 
 function formatDuration($minutes) {
     if ($minutes <= 0) return 'No disponible';
+
     $hours = floor($minutes / 60);
     $mins = $minutes % 60;
+
     if ($hours > 0 && $mins > 0) {
         return $hours . 'h ' . $mins . 'min';
     } elseif ($hours > 0) {
@@ -548,6 +687,7 @@ function formatDateDayMonth($date) {
     $timestamp = strtotime($date);
     $months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     $days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
     return [
         'day' => $days[date('w', $timestamp)],
         'number' => date('d', $timestamp),
@@ -560,9 +700,11 @@ function formatDateDayMonth($date) {
 // ============================================
 function getShowtimePrice($showtime) {
     $currentDay = date('N');
+
     if (isset($showtime['half_price_monday']) && $showtime['half_price_monday'] == 1 && $currentDay == 1) {
         return $showtime['price'] / 2;
     }
+
     return $showtime['price'];
 }
 
@@ -570,10 +712,12 @@ function getTicketPrice($movie) {
     if (!isset($movie['price'])) {
         return 0;
     }
+
     $currentDay = date('N');
     if (isset($movie['half_price_monday']) && $movie['half_price_monday'] == 1 && $currentDay == 1) {
         return $movie['price'] / 2;
     }
+
     return $movie['price'];
 }
 
@@ -583,13 +727,16 @@ function getTicketPriceByType($showtime, $type) {
         'child' => $showtime['price_child'] ?? 0,
         'senior' => $showtime['price_senior'] ?? 0
     ];
+
     $currentDay = date('N');
     $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
+
     if (in_array('lunes_mitad', $promotions) && $currentDay == 1) {
         $prices['adult'] = $prices['adult'] / 2;
         $prices['child'] = $prices['child'] / 2;
         $prices['senior'] = $prices['senior'] / 2;
     }
+
     return $prices[$type] ?? $prices['adult'];
 }
 
@@ -598,17 +745,22 @@ function getTicketPriceByType($showtime, $type) {
 // ============================================
 function canGenerateToken($showtimeId) {
     if (!isset($_SESSION['user_id'])) return false;
+
     $key = 'token_generations_' . $_SESSION['user_id'] . '_' . $showtimeId;
     $now = time();
+
     if (!isset($_SESSION[$key])) {
         $_SESSION[$key] = ['count' => 0, 'window_start' => $now];
     }
+
     if ($now - $_SESSION[$key]['window_start'] > 300) {
         $_SESSION[$key] = ['count' => 0, 'window_start' => $now];
     }
+
     if ($_SESSION[$key]['count'] >= 10) {
         return false;
     }
+
     $_SESSION[$key]['count']++;
     return true;
 }
@@ -616,15 +768,19 @@ function canGenerateToken($showtimeId) {
 function checkRateLimit($action, $maxAttempts = 10, $windowMinutes = 5) {
     $key = 'rate_limit_' . $action . '_' . $_SERVER['REMOTE_ADDR'];
     $now = time();
+
     if (!isset($_SESSION[$key])) {
         $_SESSION[$key] = ['count' => 0, 'window_start' => $now];
     }
+
     if ($now - $_SESSION[$key]['window_start'] > ($windowMinutes * 60)) {
         $_SESSION[$key] = ['count' => 0, 'window_start' => $now];
     }
+
     if ($_SESSION[$key]['count'] >= $maxAttempts) {
         return false;
     }
+
     $_SESSION[$key]['count']++;
     return true;
 }
@@ -641,33 +797,37 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
     ");
     $stmt->execute([$showtimeId]);
     $showtime = $stmt->fetch();
+
     if (!$showtime) {
         return ['error' => 'Función no encontrada o inactiva'];
     }
-    
+
     $stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
     $tax = $stmt->fetch();
     $taxRate = $tax ? floatval($tax['tax_rate']) : 16;
-    
+
     $priceAdult = floatval($showtime['price_adult'] ?? $showtime['price'] ?? 0);
     $priceChild = floatval($showtime['price_child'] ?? 0);
     $priceSenior = floatval($showtime['price_senior'] ?? 0);
-    
+
     $currentDay = date('N');
     $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
+
     if (in_array('lunes_mitad', $promotions) && $currentDay == 1) {
         $priceAdult = $priceAdult / 2;
         $priceChild = $priceChild / 2;
         $priceSenior = $priceSenior / 2;
     }
-    
+
     $validTypes = ['adult', 'child', 'senior'];
     $totalSeats = 0;
     $subtotal = 0;
+
     foreach ($validTypes as $type) {
         $count = intval($ticketsData[$type] ?? 0);
         if ($count < 0) $count = 0;
         $totalSeats += $count;
+
         switch ($type) {
             case 'adult':
                 $subtotal += $count * $priceAdult;
@@ -680,11 +840,11 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
                 break;
         }
     }
-    
+
     if ($totalSeats <= 0) {
         return ['error' => 'Debes seleccionar al menos un boleto'];
     }
-    
+
     $stmt = $pdo->prepare("
         SELECT r.capacity, r.seat_layout
         FROM showtimes s
@@ -693,25 +853,27 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
     ");
     $stmt->execute([$showtimeId]);
     $room = $stmt->fetch();
+
     if (!$room) {
         return ['error' => 'Sala no encontrada'];
     }
-    
+
     $stmt = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ?");
     $stmt->execute([$showtimeId]);
     $occupiedSeats = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    
+
     $layout = json_decode($room['seat_layout'], true);
     $blockedSeats = $layout['blockedSeats'] ?? [];
+
     $totalAvailable = ($layout['totalSeats'] ?? 0) - count($blockedSeats) - count($occupiedSeats);
-    
+
     if ($totalAvailable < $totalSeats) {
         return ['error' => 'No hay suficientes asientos disponibles'];
     }
-    
+
     $taxAmount = $subtotal * ($taxRate / 100);
     $totalAmount = $subtotal + $taxAmount;
-    
+
     return [
         'success' => true,
         'subtotal' => $subtotal,

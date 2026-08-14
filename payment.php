@@ -82,8 +82,8 @@ if ($ticketsData) {
         $priceAdult /= 2; $priceChild /= 2; $priceSenior /= 2;
     }
     $baseSubtotal = (intval($ticketsData['adult'] ?? 0) * $priceAdult) +
-                    (intval($ticketsData['child'] ?? 0) * $priceChild) +
-                    (intval($ticketsData['senior'] ?? 0) * $priceSenior);
+        (intval($ticketsData['child'] ?? 0) * $priceChild) +
+        (intval($ticketsData['senior'] ?? 0) * $priceSenior);
 } else {
     $baseSubtotal = $ticketCount * getShowtimePrice($showtime);
 }
@@ -104,7 +104,7 @@ if (!empty($foodOrder)) {
         $stmt = $pdo->prepare("SELECT * FROM food_items WHERE id IN ($placeholders) AND is_active = 1");
         $stmt->execute($foodIds);
         $availableFood = $stmt->fetchAll();
-        
+
         foreach ($availableFood as $item) {
             foreach ($foodOrder as $order) {
                 if ($order['id'] == $item['id']) {
@@ -139,7 +139,6 @@ $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "Método de Pago - " . $showtime['title'];
 $backUrl = 'food_menu.php?showtime_id=' . $showtimeId;
-
 $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
 $hasMondayPromo = in_array('lunes_mitad', $promotions);
 $hasPresale = in_array('preventa', $promotions);
@@ -154,15 +153,19 @@ require_once 'header.php';
 body { background-color: #ffffff !important; color: #1f2937 !important; }
 .bg-\[\#14141e\] { background-color: #ffffff !important; }
 .border-\[\#1e1e2e\] { border-color: #e2e8f0 !important; }
+
 .timeout-warning { padding: 16px 24px; border-radius: 10px; font-size: 1rem; margin-top: 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 14px; position: sticky; top: 90px; z-index: 50; backdrop-filter: blur(12px); transition: all 0.5s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
 .timeout-warning.normal { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; }
 .timeout-warning.warning { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
 .timeout-warning.danger { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; animation: pulse-danger 1s ease-in-out infinite; }
+
 @keyframes pulse-danger { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
+
 .timeout-warning .countdown { font-weight: 700; font-size: 1.3rem; min-width: 60px; text-align: center; }
 .timeout-warning.normal .countdown { color: #4338ca; }
 .timeout-warning.warning .countdown { color: #b45309; }
 .timeout-warning.danger .countdown { color: #dc2626; animation: pulse-countdown 0.5s ease-in-out infinite; }
+
 @keyframes pulse-countdown { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } }
 
 .card-summary { background: #ffffff !important; border: 1px solid #cbd5e1 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important; border-radius: 12px !important; padding: 24px; }
@@ -172,12 +175,14 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .summary-plain-row.bold-row { font-weight: 800; font-size: 1.15rem; }
 .summary-movie-poster { width: 80px; height: 120px; object-fit: cover; border-radius: 8px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 .summary-movie-title { font-weight: 700; color: #0f172a; font-size: 1.1rem; line-height: 1.3; }
+
 .promo-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; border: 1px solid; }
 .promo-tag .promo-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 .promo-tag.monday { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
 .promo-tag.monday .promo-dot { background: #15803d; }
 .promo-tag.presale { background: #fef3c7; color: #b45309; border-color: #fde68a; }
 .promo-tag.presale .promo-dot { background: #b45309; }
+
 .format-badge { display: inline-flex; align-items: center; justify-content: center; padding: 2px 10px; border-radius: 5px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.4; background: transparent !important; border: 1px solid #4f5e71; color: #4f5e71; }
 
 .payment-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
@@ -206,13 +211,30 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .cart-item:last-child { border-bottom: none; }
 .cart-item .item-name { color: #1e293b; flex: 1; word-break: break-word; font-weight: 500; }
 .cart-item .item-price { color: #16a34a; font-weight: 600; font-size: 0.95rem; }
+
 .ticket-summary-item { display: flex; justify-content: space-between; font-size: 0.9rem; color: #475569; padding: 2px 0; }
 .ticket-summary-item .ticket-type { font-weight: 500; }
 .ticket-summary-item .ticket-total { font-weight: 600; color: #16a34a; }
+
 .seats-display { font-size: 0.95rem; font-weight: 500; color: #475569; word-break: break-word; }
 
 @media (min-width: 1024px) { .card-summary { position: sticky; top: 100px; } }
-@media (max-width: 768px) { .payment-methods { grid-template-columns: 1fr 1fr; gap: 12px; } .payment-method { padding: 18px 12px; } .card-summary { padding: 18px; } .timeout-warning { top: 85px; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 16px 18px; } }
+/* ✅ CORREGIDO: Timeout warning centrado en tablet y móvil */
+@media (max-width: 768px) {
+    .payment-methods { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .payment-method { padding: 18px 12px; }
+    .card-summary { padding: 18px; }
+    .timeout-warning {
+        top: 85px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 6px;
+        padding: 16px 18px;
+    }
+    .timeout-warning .countdown { min-width: auto; }
+}
 </style>
 
 <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl">
@@ -307,7 +329,8 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
             </div>
 
             <div class="mb-3">
-                <p class="text-xs text-gray-400 font-semibold uppercase mb-1">🎫 Boletos</p>
+                <!-- ✅ CORREGIDO: Color índigo para el título "Boletos" -->
+                <p class="text-xs font-semibold uppercase mb-1" style="color: #4f46e5;">🎫 Boletos</p>
                 <?php
                 $ticketTypes = ['adult' => 'Adulto', 'child' => 'Niño', 'senior' => 'Tercera Edad'];
                 $hasTickets = false;
@@ -327,14 +350,19 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
             </div>
 
             <?php if (!empty($foodItems)): ?>
-            <div class="mb-3">
-                <p class="text-xs text-gray-400 font-semibold uppercase mb-1">🍿 Comida</p>
-                <?php foreach ($foodItems as $item): ?>
-                <div class="cart-item"><span class="item-name"><?= $item['quantity'] ?> x <?= htmlspecialchars($item['name']) ?></span><span class="item-price"><?= formatCurrency($item['total'], $siteConfig) ?></span></div>
-                <?php endforeach; ?>
-            </div>
+                <div class="mb-3">
+                    <!-- ✅ CORREGIDO: Color índigo para el título "Comida" -->
+                    <p class="text-xs font-semibold uppercase mb-1" style="color: #4f46e5;">🍿 Comida</p>
+                    <?php foreach ($foodItems as $item): ?>
+                        <div class="cart-item"><span class="item-name"><?= $item['quantity'] ?> x <?= htmlspecialchars($item['name']) ?></span><span class="item-price"><?= formatCurrency($item['total'], $siteConfig) ?></span></div>
+                    <?php endforeach; ?>
+                </div>
             <?php else: ?>
-            <div class="mb-3"><p class="text-xs text-gray-400 font-semibold uppercase mb-1">🍿 Comida</p><p class="text-sm text-gray-500">No has seleccionado comida</p></div>
+                <div class="mb-3">
+                    <!-- ✅ CORREGIDO: Color índigo para el título "Comida" -->
+                    <p class="text-xs font-semibold uppercase mb-1" style="color: #4f46e5;">🍿 Comida</p>
+                    <p class="text-sm text-gray-500">No has seleccionado comida</p>
+                </div>
             <?php endif; ?>
 
             <div class="summary-dotted-line"></div>
@@ -352,12 +380,17 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 </div>
 
 <?php require_once 'footer.php'; ?>
+
 <script src="timeout_manager.js"></script>
+
 <script>
 const showtimeId = <?= $showtimeId ?>;
 const seats = '<?= $seats ?>';
 const purchaseToken = '<?= htmlspecialchars($token) ?>';
 let selectedPayment = null;
+
+// ✅ Bandera para evitar liberar asientos al pagar
+let skipUnloadRelease = false;
 
 document.addEventListener('DOMContentLoaded', function() {
     if (window.TimeoutManager) {
@@ -375,10 +408,13 @@ document.addEventListener('DOMContentLoaded', function() {
 function selectPayment(method) {
     selectedPayment = method;
     document.getElementById('paymentMethodInput').value = method;
+
     document.querySelectorAll('.payment-method').forEach(el => el.classList.remove('selected'));
     document.getElementById('method-' + method).classList.add('selected');
+
     document.querySelectorAll('.payment-details').forEach(el => el.classList.remove('active'));
     document.getElementById('details-' + method).classList.add('active');
+
     document.getElementById('btnPay').disabled = false;
 }
 
@@ -388,8 +424,11 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
         alert('Por favor, selecciona un método de pago.');
         return false;
     }
+
+    skipUnloadRelease = true;
     return true;
 });
 </script>
+
 </body>
 </html>

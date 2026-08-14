@@ -8,16 +8,16 @@ if (isset($_GET['expired']) && $_GET['expired'] === '1') {
 }
 
 // ✅ Verificar sesión expirada
-if (isset($_GET['session_expired']) || 
+if (isset($_GET['session_expired']) ||
     (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'session_expired') !== false)) {
     $keys = array_keys($_SESSION);
     foreach ($keys as $key) {
-        if (strpos($key, 'purchase_') === 0 || 
-            strpos($key, 'food_') === 0 || 
-            strpos($key, 'ticket_') === 0 || 
-            strpos($key, 'total_') === 0 || 
-            strpos($key, 'subtotal_') === 0 || 
-            strpos($key, 'tax_') === 0 || 
+        if (strpos($key, 'purchase_') === 0 ||
+            strpos($key, 'food_') === 0 ||
+            strpos($key, 'ticket_') === 0 ||
+            strpos($key, 'total_') === 0 ||
+            strpos($key, 'subtotal_') === 0 ||
+            strpos($key, 'tax_') === 0 ||
             strpos($key, 'payment_') === 0) {
             unset($_SESSION[$key]);
         }
@@ -93,7 +93,6 @@ if (empty($seats)) {
 
 // ✅ SI LLEGAMOS AQUÍ, LA SESIÓN ES VÁLIDA
 error_log("✅ food_menu.php - Sesión válida para showtime $showtimeId, asientos: $seats");
-
 $seatsArray = explode(',', $seats);
 $ticketCount = count($seatsArray);
 
@@ -101,7 +100,6 @@ $ticketCount = count($seatsArray);
 // RECUPERAR CARRITO DE COMIDA
 // ============================================
 $fromPayment = isset($_GET['from']) && $_GET['from'] === 'payment';
-
 $foodOrder = isset($_SESSION[$sessionFoodKey]) ? json_decode($_SESSION[$sessionFoodKey], true) : [];
 $foodCart = [];
 if (!empty($foodOrder)) {
@@ -148,8 +146,8 @@ if ($ticketsData) {
         $priceSenior /= 2;
     }
     $baseSubtotal = (intval($ticketsData['adult'] ?? 0) * $priceAdult) +
-                    (intval($ticketsData['child'] ?? 0) * $priceChild) +
-                    (intval($ticketsData['senior'] ?? 0) * $priceSenior);
+        (intval($ticketsData['child'] ?? 0) * $priceChild) +
+        (intval($ticketsData['senior'] ?? 0) * $priceSenior);
 } else {
     $baseSubtotal = $ticketCount * getShowtimePrice($showtime);
 }
@@ -165,10 +163,10 @@ $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
 // OBTENER PRODUCTOS DE COMIDA
 // ============================================
 $stmt = $pdo->prepare("
-    SELECT f.*, c.name as category_name 
-    FROM food_items f 
-    LEFT JOIN food_categories c ON f.category_id = c.id 
-    WHERE f.is_active = 1 
+    SELECT f.*, c.name as category_name
+    FROM food_items f
+    LEFT JOIN food_categories c ON f.category_id = c.id
+    WHERE f.is_active = 1
     ORDER BY c.name, f.name
 ");
 $stmt->execute();
@@ -190,6 +188,7 @@ foreach ($foodItems as $item) {
         $initialFoodTotal += $item['price'] * $qty;
     }
 }
+
 $initialSubtotal = $baseSubtotal + $initialFoodTotal;
 $initialTax = $initialSubtotal * ($taxRate / 100);
 $initialTotal = $initialSubtotal + $initialTax;
@@ -201,7 +200,6 @@ $csrf_token = generateCSRFToken();
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "Comida - " . $showtime['title'];
 $backUrl = 'seats.php?showtime_id=' . $showtimeId;
-
 $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
 $hasMondayPromo = in_array('lunes_mitad', $promotions);
 $hasPresale = in_array('preventa', $promotions);
@@ -216,15 +214,19 @@ require_once 'header.php';
 body { background-color: #ffffff !important; color: #1f2937 !important; }
 .bg-\[\#14141e\] { background-color: #ffffff !important; }
 .border-\[\#1e1e2e\] { border-color: #e2e8f0 !important; }
+
 .timeout-warning { padding: 16px 24px; border-radius: 10px; font-size: 1rem; margin-top: 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 14px; position: sticky; top: 90px; z-index: 50; backdrop-filter: blur(12px); transition: all 0.5s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
 .timeout-warning.normal { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; }
 .timeout-warning.warning { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
 .timeout-warning.danger { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; animation: pulse-danger 1s ease-in-out infinite; }
+
 @keyframes pulse-danger { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
+
 .timeout-warning .countdown { font-weight: 700; font-size: 1.3rem; min-width: 60px; text-align: center; }
 .timeout-warning.normal .countdown { color: #4338ca; }
 .timeout-warning.warning .countdown { color: #b45309; }
 .timeout-warning.danger .countdown { color: #dc2626; animation: pulse-countdown 0.5s ease-in-out infinite; }
+
 @keyframes pulse-countdown { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.6; transform: scale(1.1); } }
 
 .food-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; transition: all 0.3s ease; cursor: pointer; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.04); display: flex; flex-direction: column; justify-content: space-between; }
@@ -239,6 +241,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .food-card .quantity-controls button { background: #f1f5f9; border: 1px solid #cbd5e1; color: #1e293b; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; font-weight: 700; }
 .food-card .quantity-controls button:hover { background: #4f46e5; border-color: #4f46e5; color: #ffffff; }
 .food-card .quantity-controls .qty { font-weight: 700; color: #0f172a; min-width: 24px; text-align: center; font-size: 1.1rem; }
+
 .category-title { color: #334155; font-size: 1.15rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; margin: 24px 0 14px 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
 .category-title i { margin-right: 8px; color: #4f46e5; }
 
@@ -249,32 +252,55 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .summary-plain-row.bold-row { font-weight: 800; font-size: 1.15rem; }
 .summary-movie-poster { width: 80px; height: 120px; object-fit: cover; border-radius: 8px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 .summary-movie-title { font-weight: 700; color: #0f172a; font-size: 1.1rem; line-height: 1.3; }
+
 .promo-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; border: 1px solid; }
 .promo-tag .promo-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 .promo-tag.monday { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
 .promo-tag.monday .promo-dot { background: #15803d; }
 .promo-tag.presale { background: #fef3c7; color: #b45309; border-color: #fde68a; }
 .promo-tag.presale .promo-dot { background: #b45309; }
+
 .format-badge { display: inline-flex; align-items: center; justify-content: center; padding: 2px 10px; border-radius: 5px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.4; background: transparent !important; border: 1px solid #4f5e71; color: #4f5e71; }
+
 .btn-continue { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff !important; padding: 14px 20px; border-radius: 8px; font-weight: 700; font-size: 1.1rem; border: none; cursor: pointer; transition: all 0.3s ease; width: 100%; text-align: center; display: block; }
 .btn-continue:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79,70,229,0.25); }
 .btn-continue:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
 .btn-back { background: #ffffff; border: 1px solid #cbd5e1; color: #334155 !important; padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 0.95rem; transition: all 0.3s ease; cursor: pointer; width: 100%; text-align: center; text-decoration: none; display: block; }
 .btn-back:hover { border-color: #6366f1; color: #4f46e5 !important; background: #eef2ff; }
+
 .cart-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #e2e8f0; font-size: 0.95rem; }
 .cart-item:last-child { border-bottom: none; }
 .cart-item .item-name { color: #1e293b; flex: 1; word-break: break-word; font-weight: 500; }
 .cart-item .item-price { color: #16a34a; font-weight: 600; font-size: 0.95rem; }
 .cart-item .remove-btn { color: #ef4444; cursor: pointer; transition: color 0.2s; background: none; border: none; font-size: 0.95rem; padding: 2px 4px; }
 .cart-item .remove-btn:hover { color: #b91c1c; }
+
 .cart-empty { color: #64748b; text-align: center; padding: 18px 0; font-size: 0.95rem; }
 .cart-empty i { font-size: 1.8rem; display: block; margin-bottom: 6px; color: #cbd5e1; }
+
 .ticket-summary-item { display: flex; justify-content: space-between; font-size: 0.9rem; color: #475569; padding: 2px 0; }
 .ticket-summary-item .ticket-type { font-weight: 500; }
 .ticket-summary-item .ticket-total { font-weight: 600; color: #16a34a; }
+
 .seats-display { font-size: 0.95rem; font-weight: 500; color: #475569; word-break: break-word; }
+
 @media (min-width: 1024px) { .card-summary { position: sticky; top: 100px; } }
-@media (max-width: 768px) { .food-card .food-image { height: 180px; } .card-summary { padding: 18px; } .timeout-warning { top: 85px; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 16px 18px; } }
+/* ✅ CORREGIDO: Timeout warning centrado en tablet y móvil */
+@media (max-width: 768px) {
+    .food-card .food-image { height: 180px; }
+    .card-summary { padding: 18px; }
+    .timeout-warning {
+        top: 85px;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 6px;
+        padding: 16px 18px;
+    }
+    .timeout-warning .countdown { min-width: auto; }
+}
 </style>
 
 <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl">
@@ -292,41 +318,43 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
             <p class="text-base text-gray-400 mb-6">Selecciona los productos que deseas agregar a tu pedido (opcional)</p>
 
             <?php if (empty($foodItems)): ?>
-            <div class="bg-slate-50 p-8 rounded-xl border border-slate-200 text-center">
-                <div class="text-4xl mb-3">🍿</div>
-                <p class="text-gray-500 text-base">No hay productos de comida disponibles en este momento.</p>
-            </div>
-            <?php else: ?>
-            <?php foreach ($foodByCategory as $category => $items): ?>
-            <div class="category-title"><i class="fas fa-tag"></i> <?= htmlspecialchars($category) ?></div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
-                <?php foreach ($items as $item): ?>
-                <div class="food-card <?= isset($foodCart[$item['id']]) && $foodCart[$item['id']] > 0 ? 'selected' : '' ?>" data-food-id="<?= $item['id'] ?>">
-                    <?php if (!empty($item['image_url']) && file_exists($item['image_url'])): ?>
-                    <img src="<?= htmlspecialchars($item['image_url']) ?>" alt="<?= htmlspecialchars($item['name']) ?>" class="food-image">
-                    <?php else: ?>
-                    <div class="food-image flex items-center justify-center text-5xl text-slate-400 bg-slate-100">🍿</div>
-                    <?php endif; ?>
-                    <div class="food-info">
-                        <div>
-                            <div class="flex justify-between items-start gap-2">
-                                <span class="food-name"><?= htmlspecialchars($item['name']) ?></span>
-                                <span class="food-price"><?= formatCurrency($item['price'], $siteConfig) ?></span>
-                            </div>
-                            <?php if (!empty($item['description'])): ?>
-                            <p class="food-desc"><?= htmlspecialchars($item['description']) ?></p>
-                            <?php endif; ?>
-                        </div>
-                        <div class="quantity-controls">
-                            <button type="button" class="qty-decrease" data-id="<?= $item['id'] ?>">−</button>
-                            <span class="qty" id="qty_<?= $item['id'] ?>"><?= $foodCart[$item['id']] ?? 0 ?></span>
-                            <button type="button" class="qty-increase" data-id="<?= $item['id'] ?>">+</button>
-                        </div>
-                    </div>
+                <div class="bg-slate-50 p-8 rounded-xl border border-slate-200 text-center">
+                    <div class="text-4xl mb-3">🍿</div>
+                    <p class="text-gray-500 text-base">No hay productos de comida disponibles en este momento.</p>
                 </div>
+            <?php else: ?>
+                <?php foreach ($foodByCategory as $category => $items): ?>
+                    <div class="category-title"><i class="fas fa-tag"></i> <?= htmlspecialchars($category) ?></div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+                        <?php foreach ($items as $item): ?>
+                            <div class="food-card <?= isset($foodCart[$item['id']]) && $foodCart[$item['id']] > 0 ? 'selected' : '' ?>" data-food-id="<?= $item['id'] ?>">
+                                <?php if (!empty($item['image_url']) && file_exists($item['image_url'])): ?>
+                                    <img src="<?= htmlspecialchars($item['image_url']) ?>" alt="<?= htmlspecialchars($item['name']) ?>" class="food-image">
+                                <?php else: ?>
+                                    <div class="food-image flex items-center justify-center text-5xl text-slate-400 bg-slate-100">🍿</div>
+                                <?php endif; ?>
+
+                                <div class="food-info">
+                                    <div>
+                                        <div class="flex justify-between items-start gap-2">
+                                            <span class="food-name"><?= htmlspecialchars($item['name']) ?></span>
+                                            <span class="food-price"><?= formatCurrency($item['price'], $siteConfig) ?></span>
+                                        </div>
+                                        <?php if (!empty($item['description'])): ?>
+                                            <p class="food-desc"><?= htmlspecialchars($item['description']) ?></p>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="quantity-controls">
+                                        <button type="button" class="qty-decrease" data-id="<?= $item['id'] ?>">−</button>
+                                        <span class="qty" id="qty_<?= $item['id'] ?>"><?= $foodCart[$item['id']] ?? 0 ?></span>
+                                        <button type="button" class="qty-increase" data-id="<?= $item['id'] ?>">+</button>
+                                    </div>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
                 <?php endforeach; ?>
-            </div>
-            <?php endforeach; ?>
             <?php endif; ?>
         </div>
 
@@ -346,7 +374,8 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
             </div>
 
             <div class="mb-3">
-                <p class="text-xs text-gray-400 font-semibold uppercase mb-1">🎫 Boletos</p>
+                <!-- ✅ CORREGIDO: Color índigo para el título "Boletos" -->
+                <p class="text-xs font-semibold uppercase mb-1" style="color: #4f46e5;">🎫 Boletos</p>
                 <?php
                 $ticketTypes = ['adult' => 'Adulto', 'child' => 'Niño', 'senior' => 'Tercera Edad'];
                 $hasTickets = false;
@@ -367,19 +396,19 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 
             <div id="cartItems" class="mt-4">
                 <?php if (empty($foodCart)): ?>
-                <div class="cart-empty" id="cartEmpty"><i class="fas fa-shopping-cart"></i> No has seleccionado comida</div>
+                    <div class="cart-empty" id="cartEmpty"><i class="fas fa-shopping-cart"></i> No has seleccionado comida</div>
                 <?php else: ?>
-                <div id="cartItemsList">
-                    <?php foreach ($foodItems as $item): $qty = $foodCart[$item['id']] ?? 0; if ($qty > 0): ?>
-                    <div class="cart-item" data-food-id="<?= $item['id'] ?>">
-                        <span class="item-name"><?= $qty ?> x <?= htmlspecialchars($item['name']) ?></span>
-                        <div class="item-details">
-                            <span class="item-price"><?= formatCurrency($item['price'] * $qty, $siteConfig) ?></span>
-                            <button type="button" class="remove-btn" onclick="removeFromCart(<?= $item['id'] ?>)"><i class="fas fa-times"></i></button>
-                        </div>
+                    <div id="cartItemsList">
+                        <?php foreach ($foodItems as $item): $qty = $foodCart[$item['id']] ?? 0; if ($qty > 0): ?>
+                            <div class="cart-item" data-food-id="<?= $item['id'] ?>">
+                                <span class="item-name"><?= $qty ?> x <?= htmlspecialchars($item['name']) ?></span>
+                                <div class="item-details">
+                                    <span class="item-price"><?= formatCurrency($item['price'] * $qty, $siteConfig) ?></span>
+                                    <button type="button" class="remove-btn" onclick="removeFromCart(<?= $item['id'] ?>)"><i class="fas fa-times"></i></button>
+                                </div>
+                            </div>
+                        <?php endif; endforeach; ?>
                     </div>
-                    <?php endif; endforeach; ?>
-                </div>
                 <?php endif; ?>
             </div>
 
@@ -405,7 +434,9 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 </div>
 
 <?php require_once 'footer.php'; ?>
+
 <script src="timeout_manager.js"></script>
+
 <script>
 const baseSubtotal = <?= $baseSubtotal ?>;
 const taxRate = <?= $taxRate ?>;
@@ -423,7 +454,11 @@ const currencyConfig = {
 
 let cart = {};
 <?php foreach ($foodCart as $id => $qty): ?>cart[<?= $id ?>] = { id: <?= $id ?>, quantity: <?= $qty ?> };<?php endforeach; ?>
+
 let totalFoodPrice = 0;
+
+// ✅ Bandera para evitar liberar asientos al navegar hacia pagar
+let skipUnloadRelease = false;
 
 function formatCurrency(amount) {
     const formatted = Number(amount).toFixed(currencyConfig.decimals)
@@ -443,9 +478,14 @@ function liberarAsientos(callback) {
 
 document.getElementById('btnBackToTickets').addEventListener('click', function() {
     if (!confirm('¿Estás seguro? Se liberarán los asientos seleccionados y perderás tu selección de comida.')) return;
+
     liberarAsientos(function(success) {
-        if (success) window.location.href = 'price_selection.php?showtime_id=' + showtimeId;
-        else alert('Error al liberar asientos. Intenta nuevamente.');
+        if (success) {
+            skipUnloadRelease = true;
+            window.location.href = 'price_selection.php?showtime_id=' + showtimeId;
+        } else {
+            alert('Error al liberar asientos. Intenta nuevamente.');
+        }
     });
 });
 
@@ -456,6 +496,8 @@ window.addEventListener('pageshow', function(event) {
 });
 
 window.addEventListener('beforeunload', function() {
+    if (skipUnloadRelease) return;
+
     const formData = new FormData();
     formData.append('showtime_id', showtimeId);
     navigator.sendBeacon('liberar_asientos.php', formData);
@@ -468,21 +510,21 @@ function updateCartUI() {
         const foodItem = foodItems.find(f => f.id == item.id);
         if (foodItem) totalFoodPrice += foodItem.price * item.quantity;
     });
-    
+
     const subtotal = baseSubtotal + totalFoodPrice;
     const tax = subtotal * (taxRate / 100);
     const total = subtotal + tax;
-    
+
     document.querySelectorAll('.food-card').forEach(card => {
         const id = card.dataset.foodId;
         card.classList.toggle('selected', cart[id] && cart[id].quantity > 0);
     });
-    
+
     document.querySelectorAll('.qty').forEach(el => {
         const id = el.id.replace('qty_', '');
         el.textContent = cart[id] ? cart[id].quantity : 0;
     });
-    
+
     const container = document.getElementById('cartItems');
     if (items.length === 0) {
         container.innerHTML = '<div class="cart-empty"><i class="fas fa-shopping-cart"></i> No has seleccionado comida</div>';
@@ -502,11 +544,11 @@ function updateCartUI() {
         html += '</div>';
         container.innerHTML = html;
     }
-    
+
     document.getElementById('subtotalAmount').textContent = formatCurrency(subtotal);
     document.getElementById('taxAmount').textContent = formatCurrency(tax);
     document.getElementById('totalAmount').textContent = formatCurrency(total);
-    
+
     const foodOrderInput = document.getElementById('foodOrderInput');
     if (foodOrderInput) {
         foodOrderInput.value = JSON.stringify(items.map(item => ({ id: parseInt(item.id), quantity: item.quantity })));
@@ -570,10 +612,15 @@ document.querySelectorAll('.food-card').forEach(card => {
 
 document.getElementById('foodForm').addEventListener('submit', function(e) {
     e.preventDefault();
+
+    skipUnloadRelease = true;
+
     const items = Object.values(cart);
     document.getElementById('foodOrderInput').value = JSON.stringify(items.map(item => ({ id: parseInt(item.id), quantity: item.quantity })));
+
     const tokenInput = document.getElementById('purchaseTokenInput');
     if (tokenInput) tokenInput.value = purchaseToken;
+
     this.submit();
 });
 
@@ -592,5 +639,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
 </body>
 </html>

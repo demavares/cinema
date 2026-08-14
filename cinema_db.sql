@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: datame
--- Tiempo de generación: 13-08-2026 a las 02:53:39
+-- Tiempo de generación: 14-08-2026 a las 09:39:18
 -- Versión del servidor: 10.11.18-MariaDB-ubu2204
 -- Versión de PHP: 8.3.26
 
@@ -168,8 +168,8 @@ CREATE TABLE `movies` (
 
 INSERT INTO `movies` (`id`, `title`, `description`, `poster_url`, `banner_url`, `cast_members`, `country_id`, `duration`, `genre`, `year`, `director`, `classification`, `trailer_url`, `is_active`, `created_at`) VALUES
 (18, 'Aliens', 'Alien es un organismo perfecto, una máquina de matar cuya superioridad física sólo puede competir con su agresividad. La oficial Ripley y la tripulación de la nave «Nostromo» se habían enfrentado, en el pasado, a esa monstruosa criatura. Y sólo Ripley sobrevivió a la masacre. Después de vagar por el espacio durante varios años, Ripley fue rescatada. Durante ese tiempo, el planeta de Alien ha sido colonizado. Pero, de repente, se pierde la comunicación con la colonia y, para investigar los motivos, se envía una expedición de marines espaciales, capitaneados por Ripley. Allí les esperan miles de espeluznantes criaturas. Alien se ha reproducido y esta vez la lucha es por la supervivencia de la Humanidad.', 'https://image.tmdb.org/t/p/w500/3QU9EP8BFLnTh6w9ycDSCvhqbRU.jpg', 'https://image.tmdb.org/t/p/original/4kix6fAblJIH6eMs0Ku2loyZJXK.jpg', 'Sigourney Weaver, Carrie Henn, Michael Biehn, Paul Reiser, Lance Henriksen, Bill Paxton', 21, 150, 'Acción, Suspense, Ciencia ficción', '1986', 'James Cameron', 'C (Mayores de 18)', 'https://youtu.be/gOnNP4ONTtI?si=VQ2YbkdpPoA_mGPG', 1, '2026-07-20 01:06:32'),
-(22, 'Spider-Man: Brand New Day', 'Han pasado cuatro años desde los acontecimientos de No Way Home, y Peter Parker ahora es un adulto que vive completamente solo, ha desaparecido voluntariamente de las vidas y recuerdos de quienes ama. Combatiendo el crimen en una Nueva York que ya no conoce su nombre, se ha dedicado por completo a proteger su ciudad, pero a medida que aumentan las exigencias sobre él, la presión desencadena una evolución física que amenaza su existencia, al mismo tiempo que un extraño nuevo patrón de crímenes da lugar a una de las amenazas más poderosas a las que se ha enfrentado.', 'https://image.tmdb.org/t/p/w500/tluwRNA7k0XfTtDkdLYKX1KOSCJ.jpg', 'https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg', 'Tom Holland, Zendaya, Mark Ruffalo, Jon Bernthal, Jacob Batalon, Sadie Sink', 21, 144, 'Ciencia ficción, Acción, Aventura', '2026', 'Destin Daniel Cretton', 'B (Mayores de 12)', 'https://youtu.be/lBU9_kIJI9U?si=p76bf5PItFGwTUI_', 1, '2026-07-21 03:58:04'),
-(35, 'Babymetal', 'Babymetal es un grupo idol japonés de kawaii metal formada en Tokio en 2010.', 'https://image.tmdb.org/t/p/w500/36J5ZBPg4i7BqDjnHevwqA6QBuO.jpg', 'https://image.tmdb.org/t/p/original/7VYLNFvdt5R5yCAJWVYZmOPx6aw.jpg', '中元すず香, 菊地最愛, 岡崎百々子', 27, 120, 'Música', '2026', 'No disponible', 'A (Todo público)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-07-27 03:25:09'),
+(22, 'Spider-Man: Brand New Day', 'Han pasado cuatro años desde los acontecimientos de No Way Home, y Peter Parker ahora es un adulto que vive completamente solo, ha desaparecido voluntariamente de las vidas y recuerdos de quienes ama. Combatiendo el crimen en una Nueva York que ya no conoce su nombre, se ha dedicado por completo a proteger su ciudad, pero a medida que aumentan las exigencias sobre él, la presión desencadena una evolución física que amenaza su existencia, al mismo tiempo que un extraño nuevo patrón de crímenes da lugar a una de las amenazas más poderosas a las que se ha enfrentado.', 'https://image.tmdb.org/t/p/w500/9g0sEFhmvmK4nGhXj8DHuv2noYI.jpg', 'https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg', 'Tom Holland, Zendaya, Mark Ruffalo, Jon Bernthal, Jacob Batalon, Sadie Sink', 21, 144, 'Ciencia ficción, Acción, Aventura', '2026', 'Destin Daniel Cretton', 'B (Mayores de 12)', 'https://youtu.be/lBU9_kIJI9U?si=p76bf5PItFGwTUI_', 1, '2026-07-21 03:58:04'),
+(35, 'Babymetal', 'Babymetal es un grupo idol japonés de kawaii metal formada en Tokio en 2010.', 'https://i.pinimg.com/originals/86/a3/a8/86a3a83128ec8089e613922bcdbfa99d.jpg', 'https://gritaradio.com/wp-content/uploads/2026/04/BM26-Anuncio_General_16x9-scaled.jpg', 'Suzuka Nakamoto (Su-metal), Moa Kikuchi (Moametal) y Momoko Okazaki (Momometal).', 27, 120, 'Música, Concierto', '2026', 'No disponible', 'A (Todo público)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-07-27 03:25:09'),
 (47, 'He-Man y los Masters del Universo', 'En las regiones más lejanas del espacio, el reino de Eternia está amenazado por el villano Skeletor y sus traviesos ejércitos de oscuridad. Para salvar el reino de su padre y proteger las vidas de sus seres queridos, el joven príncipe Adam tiene que recuperar una espada mítica y convertirse en el legendario guerrero conocido como He-Man.', 'https://image.tmdb.org/t/p/w500/A6kqScyPEsn6akDS5HyPf9jE4Od.jpg', 'https://image.tmdb.org/t/p/original/yQIdU11DYQQp0neGtGtGxbGfRer.jpg', 'Nicholas Galitzine, Camila Mendes, Idris Elba, Jared Leto, Alison Brie, Jóhannes Haukur Jóhannesson', 21, 140, 'Acción, Fantasía, Ciencia ficción', '2026', 'Travis Knight', 'A (Todo público)', 'https://youtu.be/LjLamj-b0I8?si=lALDYK1Vkjt42iZ9', 1, '2026-08-07 04:42:39'),
 (54, 'Minions & Monsters', 'Narra la historia de cómo los minions conquistaron la industria de Hollywood, se convirtieron en estrellas de cine, lo perdieron todo, desataron monstruos en el mundo y luego se unieron para intentar salvar al planeta del caos que acababan de crear.', 'https://image.tmdb.org/t/p/w500/7DUzo8Ys7BfmZpqnzIwG4qA0egl.jpg', 'https://image.tmdb.org/t/p/original/kkcwhgSFd81QDlXo8ytrpHPQjhy.jpg', 'Pierre Coffin, Trey Parker, Christoph Waltz, Allison Janney, Jesse Eisenberg, Jeff Bridges', 21, 90, 'Aventura, Animación, Comedia, Familia, Fantasía', '2026', 'Pierre Coffin', 'A (Todo público)', 'https://youtu.be/lBU9_kIJI9U?si=p76bf5PItFGwTUI_', 1, '2026-08-11 13:26:41'),
 (55, 'La casa del fin de los tiempos', 'La casa del fin de los tiempos es el primer thriller de suspenso y terror venezolano. Narra la historia de Dulce, Ruddy Rodríguez, una madre de familia que tiene encuentros con Apariciones dentro de su vieja casa, lugar donde debe descifrar un misterio que podría desencadenar una profecía: la muerte de su familia.', 'https://image.tmdb.org/t/p/w500/weNI3TFmC2JGYwEX4YKvYIKbGme.jpg', 'https://image.tmdb.org/t/p/original/ZIwr7usYLrVodguqdosMiXzJc5.jpg', 'Ruddy Rodriguez, Gonzalo Cubero, Guillermo García, Adriana Calzadilla, Rosmel Bustamante, Hector Mercado', 20, 100, 'Terror, Drama, Fantasía', '2013', 'Alejandro Hidalgo', 'C (Mayores de 18)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-08-11 13:53:18'),
@@ -200,6 +200,17 @@ CREATE TABLE `purchases` (
   `session_token` varchar(64) NOT NULL,
   `expires_at` datetime NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `purchases`
+--
+
+INSERT INTO `purchases` (`id`, `user_id`, `showtime_id`, `seats`, `total_tickets`, `total_food`, `total_amount`, `subtotal`, `tax_amount`, `tax_rate`, `purchase_date`, `status`, `payment_method`, `payment_data`, `session_token`, `expires_at`) VALUES
+(461, 1, 66, 'A12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 00:07:32', 'expired', NULL, NULL, '2b16e2fc05cc55dc2d77a96a918a8b6ea535a2a5c46a55230ddf4d3eb72be928', '2026-08-13 20:07:56'),
+(462, 1, 66, 'B1,B2', 2, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 02:30:30', 'expired', NULL, NULL, 'dd0419dce9d6a4bf0902c0533f889b95b4bcf497f789277b6a9f63e5ea818150', '2026-08-13 22:30:51'),
+(463, 1, 66, 'A12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 03:15:47', 'expired', NULL, NULL, '4e6c6c2f2163944963faf651613195afa936f60c978caf833fea02bffff5f182', '2026-08-13 23:25:47'),
+(464, 1, 64, 'A1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 03:59:18', 'expired', NULL, NULL, 'f27662183a1ab9e711073a772e301cfa2ba99b4fe5763f2c5d1d1890c67bd5e9', '2026-08-14 00:00:22'),
+(465, 1, 64, 'A1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 04:00:36', 'expired', NULL, NULL, '061fb6c59dbd4d83cab8aad1870f165a8ae3223e1fd586a3327ce3d3e5ce9422', '2026-08-14 00:03:42');
 
 -- --------------------------------------------------------
 
@@ -275,8 +286,8 @@ CREATE TABLE `showtimes` (
 --
 
 INSERT INTO `showtimes` (`id`, `movie_id`, `room_id`, `show_date`, `show_time`, `price`, `price_adult`, `price_child`, `price_senior`, `enable_child_price`, `enable_senior_price`, `half_price_monday`, `promotions`, `language`, `format`, `is_active`, `created_at`) VALUES
-(64, 18, 14, '2026-08-24', '14:30:00', 3000.00, 3000.00, 0.00, 0.00, 0, 1, 1, 'lunes_mitad,preventa', 'español', '3D', 1, '2026-08-11 04:12:47'),
-(65, 18, 14, '2026-08-12', '22:00:00', 3000.00, 3000.00, 0.00, 1500.00, 0, 1, 0, '', 'español', 'ScreenX', 1, '2026-08-13 01:52:11');
+(64, 18, 14, '2026-08-24', '14:30:00', 3000.00, 3000.00, 500.00, 1500.00, 1, 1, 1, 'lunes_mitad,preventa', 'español', '3D', 1, '2026-08-11 04:12:47'),
+(66, 18, 14, '2026-08-13', '22:00:00', 3000.00, 3000.00, 0.00, 1500.00, 0, 1, 0, '', 'español', 'ScreenX', 0, '2026-08-13 23:56:05');
 
 -- --------------------------------------------------------
 
@@ -313,7 +324,8 @@ INSERT INTO `site_config` (`id`, `key_name`, `value`, `updated_at`) VALUES
 (15, 'whatsapp', 'https://wa.me/584143601706', '2026-07-24 21:25:57'),
 (16, 'footer_copyright', 'Cinema Pro. Todos los derechos reservados.', '2026-07-24 20:26:59'),
 (17, 'footer_logo', 'uploads/footer_logo.png', '2026-07-27 01:53:32'),
-(18, 'site_favicon', 'uploads/favicon.png', '2026-08-11 05:39:24');
+(18, 'site_favicon', 'uploads/favicon.png', '2026-08-11 05:39:24'),
+(20, 'last_cleanup_expired_purchases', '2026-08-14 05:14:26', '2026-08-14 09:14:26');
 
 -- --------------------------------------------------------
 
@@ -363,6 +375,13 @@ CREATE TABLE `ticket_logs` (
   `ticket_count` int(11) NOT NULL,
   `released_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `ticket_logs`
+--
+
+INSERT INTO `ticket_logs` (`id`, `showtime_id`, `ticket_count`, `released_at`) VALUES
+(20, 66, 0, '2026-08-14 04:31:56');
 
 -- --------------------------------------------------------
 
@@ -416,8 +435,8 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `email`, `cedula_type`, `cedula_number`, `phone_prefix`, `phone_number`, `birth_date`, `password`, `role`, `is_blocked`, `created_at`, `last_login`) VALUES
-(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-12 21:51:35'),
-(8, 'Darwin Mavarez', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-10 04:07:40');
+(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-13 22:12:38'),
+(8, 'Darwin Mavarez', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-14 05:36:24');
 
 --
 -- Índices para tablas volcadas
@@ -467,7 +486,8 @@ ALTER TABLE `movies`
 ALTER TABLE `purchases`
   ADD PRIMARY KEY (`id`),
   ADD KEY `user_id` (`user_id`),
-  ADD KEY `showtime_id` (`showtime_id`);
+  ADD KEY `showtime_id` (`showtime_id`),
+  ADD KEY `idx_status_fecha` (`status`,`purchase_date`);
 
 --
 -- Indices de la tabla `purchase_tickets`
@@ -560,7 +580,7 @@ ALTER TABLE `food_items`
 -- AUTO_INCREMENT de la tabla `food_orders`
 --
 ALTER TABLE `food_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=31;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
 
 --
 -- AUTO_INCREMENT de la tabla `movies`
@@ -572,13 +592,13 @@ ALTER TABLE `movies`
 -- AUTO_INCREMENT de la tabla `purchases`
 --
 ALTER TABLE `purchases`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=439;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=466;
 
 --
 -- AUTO_INCREMENT de la tabla `purchase_tickets`
 --
 ALTER TABLE `purchase_tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=59;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=63;
 
 --
 -- AUTO_INCREMENT de la tabla `rooms`
@@ -590,13 +610,13 @@ ALTER TABLE `rooms`
 -- AUTO_INCREMENT de la tabla `showtimes`
 --
 ALTER TABLE `showtimes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=66;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=67;
 
 --
 -- AUTO_INCREMENT de la tabla `site_config`
 --
 ALTER TABLE `site_config`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT de la tabla `tax_config`
@@ -608,13 +628,13 @@ ALTER TABLE `tax_config`
 -- AUTO_INCREMENT de la tabla `tickets`
 --
 ALTER TABLE `tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=85;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=116;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_logs`
 --
 ALTER TABLE `ticket_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=20;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_types`

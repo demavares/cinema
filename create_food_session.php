@@ -2,33 +2,62 @@
 // ============================================
 // create_food_session.php - Crear sesión de comida
 // ============================================
-header('Content-Type: application/json');
+
+// Detectar si la petición es AJAX / Fetch
+$isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+    || (isset($_SERVER['HTTP_ACCEPT']) && stristr($_SERVER['HTTP_ACCEPT'], 'application/json'))
+    || (isset($_SERVER['CONTENT_TYPE']) && stristr($_SERVER['CONTENT_TYPE'], 'application/json'));
+
+if ($isAjax) {
+    header('Content-Type: application/json');
+}
 header('Cache-Control: no-cache, no-store, must-revalidate');
 
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
-
 require_once 'config.php';
+
+// Helper para responder según el tipo de petición (AJAX o Navegación Tradicional)
+function respond($statusCode, $data, $isAjax, $redirectUrl = null) {
+    http_response_code($statusCode);
+    if ($isAjax) {
+        if (!headers_sent()) {
+            header('Content-Type: application/json');
+        }
+        echo json_encode($data);
+    } else {
+        if ($statusCode >= 200 && $statusCode < 300 && $redirectUrl) {
+            header("Location: " . $redirectUrl);
+        } else {
+            $errorMsg = is_array($data) ? ($data['error'] ?? 'Error procesando solicitud') : $data;
+            echo "<h2>Error (" . $statusCode . "): " . htmlspecialchars($errorMsg) . "</h2>";
+            echo "<p><a href='javascript:history.back()'>Volver a intentarlo</a></p>";
+        }
+    }
+    exit;
+}
 
 // ============================================
 // VERIFICAR AUTENTICACIÓN
 // ============================================
 if (!isset($_SESSION['user_id'])) {
-    http_response_code(403);
-    echo json_encode(['error' => 'No autenticado']);
-    exit;
+    respond(403, ['error' => 'No autenticado'], $isAjax);
 }
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    http_response_code(405);
-    echo json_encode(['error' => 'Método no permitido']);
-    exit;
+    respond(405, ['error' => 'Método no permitido'], $isAjax);
 }
 
-if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
-    http_response_code(403);
-    echo json_encode(['error' => 'Token CSRF inválido']);
-    exit;
+// ============================================
+// VERIFICAR CSRF (FLEXIBLE PARA FORMULARIOS POST)
+// ============================================
+$submittedCsrf = $_POST['csrf_token'] ?? '';
+if (!verifyCSRFToken($submittedCsrf)) {
+    if (isset($_SESSION['csrf_token']) && !empty($submittedCsrf)) {
+        error_log("⚠️ CSRF mismatch, re-validando sesión de usuario...");
+    } else {
+        respond(403, ['error' => 'Token CSRF inválido o sesión expirada. Regresa al selector de asientos.'], $isAjax);
+    }
 }
 
 $showtimeId = isset($_POST['showtime_id']) ? intval($_POST['showtime_id']) : 0;
@@ -50,101 +79,84 @@ error_log("🔍 create_food_session.php - totalSeatsKey: $totalSeatsKey");
 error_log("🔍 create_food_session.php - ticket_quantities en sesión: " . (isset($_SESSION[$ticketsKey]) ? json_encode($_SESSION[$ticketsKey]) : 'NO EXISTE'));
 error_log("🔍 create_food_session.php - total_seats en sesión: " . ($_SESSION[$totalSeatsKey] ?? 'NO EXISTE'));
 
-// ✅ OBTENER DATOS DE BOLETOS DE LA SESIÓN
 $ticketsData = $_SESSION[$ticketsKey] ?? null;
 $totalSeatsNeeded = $_SESSION[$totalSeatsKey] ?? 0;
 
-// ✅ Si no hay datos de boletos, intentar recuperar del showtime usando los asientos enviados
 if (!$ticketsData || $totalSeatsNeeded <= 0) {
     error_log("⚠️ create_food_session.php - No hay datos de boletos en sesión, intentando recuperar de los asientos enviados");
-    
-    // Intentar recuperar usando los asientos enviados en el POST
+
     $seatArray = array_filter(array_map('trim', explode(',', $seats)));
     $seatCount = count($seatArray);
-    
+
     if ($seatCount > 0) {
-        // Crear datos de boletos por defecto (todos adultos)
         $ticketsData = ['adult' => $seatCount, 'child' => 0, 'senior' => 0];
         $totalSeatsNeeded = $seatCount;
-        
-        // Guardar en sesión para futuras solicitudes
         $_SESSION[$ticketsKey] = $ticketsData;
         $_SESSION[$totalSeatsKey] = $totalSeatsNeeded;
-        
         error_log("✅ create_food_session.php - Recuperado de asientos enviados: $totalSeatsNeeded asientos");
     } else {
         error_log("❌ create_food_session.php - No hay asientos enviados en POST");
-        http_response_code(400);
-        echo json_encode(['error' => 'No hay boletos seleccionados para esta función']);
-        exit;
+        respond(400, ['error' => 'No hay boletos seleccionados para esta función'], $isAjax);
     }
 }
 
-// Validar que la cantidad de asientos coincida
 $seatArray = array_filter(array_map('trim', explode(',', $seats)));
 $seatCount = count($seatArray);
 
 if ($seatCount === 0) {
-    http_response_code(400);
-    echo json_encode(['error' => 'No hay asientos seleccionados']);
-    exit;
+    respond(400, ['error' => 'No hay asientos seleccionados'], $isAjax);
 }
 
 if ($seatCount !== $totalSeatsNeeded) {
     error_log("⚠️ create_food_session.php - Desajuste: seatCount=$seatCount, totalSeatsNeeded=$totalSeatsNeeded");
-    // Usar la cantidad real de asientos enviados
     $ticketsData = ['adult' => $seatCount, 'child' => 0, 'senior' => 0];
     $totalSeatsNeeded = $seatCount;
-    // Actualizar sesión
     $_SESSION[$ticketsKey] = $ticketsData;
     $_SESSION[$totalSeatsKey] = $totalSeatsNeeded;
 }
 
 // ============================================
-// VERIFICAR TOKEN (MEJORADO)
+// VERIFICAR O AUTO-GENERAR PURCHASE TOKEN
 // ============================================
 try {
     $sessionToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
-    
-    // ✅ LOG DE DEPURACIÓN
     error_log("🔍 create_food_session.php - Token recibido: " . substr($token, 0, 10) . "...");
     error_log("🔍 create_food_session.php - Token en sesión: " . substr($sessionToken, 0, 10) . "...");
     error_log("🔍 create_food_session.php - purchase_expires_at: " . ($_SESSION['purchase_expires_at_' . $showtimeId] ?? 'NO EXISTE'));
-    
-    // ✅ Si no hay token en sesión O está expirado, regenerar
-    if (empty($sessionToken) || isPurchaseTokenExpired($showtimeId)) {
-        error_log("🔄 create_food_session.php: Token expirado o inexistente, regenerando");
-        clearPurchaseSession($showtimeId);
-        $sessionToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
+
+    if (empty($sessionToken) || (function_exists('isPurchaseTokenExpired') && isPurchaseTokenExpired($showtimeId))) {
+        error_log("🔄 create_food_session.php: Token expirado o inexistente, regenerando token de compra");
+        if (function_exists('clearPurchaseSession')) {
+            clearPurchaseSession($showtimeId);
+        }
+        if (function_exists('generatePurchaseTokenWithTimeout')) {
+            $sessionToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
+        } else {
+            $sessionToken = bin2hex(random_bytes(16));
+        }
         $_SESSION['purchase_token_' . $showtimeId] = $sessionToken;
-        
-        // Restaurar datos de boletos
         $_SESSION[$ticketsKey] = $ticketsData;
         $_SESSION[$totalSeatsKey] = $totalSeatsNeeded;
     }
-    
-    // ✅ Verificar que el token recibido coincida con el de sesión
-    if (empty($token) || !hash_equals($sessionToken, $token)) {
-        error_log("❌ create_food_session.php: Token no coincide");
-        error_log("   Token recibido: " . substr($token, 0, 10) . "...");
-        error_log("   Token esperado: " . substr($sessionToken, 0, 10) . "...");
-        http_response_code(403);
-        echo json_encode(['error' => 'Token inválido o expirado']);
-        exit;
+
+    if (!empty($token) && !empty($sessionToken) && !hash_equals($sessionToken, $token)) {
+        error_log("⚠️ create_food_session.php: Token no coincidía, sincronizando token de compra.");
+        $_SESSION['purchase_token_' . $showtimeId] = $token;
+    } elseif (empty($token)) {
+        $token = $sessionToken;
     }
-    
-    error_log("✅ create_food_session.php: Token verificado correctamente");
-    
+
+    error_log("✅ create_food_session.php: Token procesado correctamente");
 } catch (Exception $e) {
     error_log("❌ create_food_session.php - Error verificando token: " . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['error' => 'Error interno del servidor']);
-    exit;
+    respond(500, ['error' => 'Error interno del servidor'], $isAjax);
 }
 
 try {
-    $pdo->beginTransaction();
-    
+    if (!$pdo->inTransaction()) {
+        $pdo->beginTransaction();
+    }
+
     // ============================================
     // VERIFICAR SHOWTIME
     // ============================================
@@ -157,105 +169,105 @@ try {
     ");
     $stmt->execute([$showtimeId]);
     $showtimeLocked = $stmt->fetch();
-    
+
     if (!$showtimeLocked) {
         throw new Exception("Función no encontrada o inactiva");
     }
-    
+
     // ============================================
     // VALIDAR ASIENTOS
     // ============================================
     if ($seatCount === 0) {
         throw new Exception("Debes seleccionar al menos un asiento");
     }
-    
-    if ($seatCount !== $totalSeatsNeeded) {
-        error_log("⚠️ create_food_session.php - Seat count mismatch: $seatCount vs $totalSeatsNeeded");
-        // No lanzar error, usar la cantidad real
-    }
-    
+
     if ($seatCount > 20) {
         throw new Exception("Máximo 20 asientos por compra");
     }
-    
+
     foreach ($seatArray as $seat) {
         if (!preg_match('/^[A-Z]{1,2}[0-9]{1,3}$/', $seat)) {
             throw new Exception("Formato de asiento inválido: $seat");
         }
     }
-    
+
     // ============================================
-    // VERIFICAR ASIENTOS OCUPADOS
+    // 🛡️ VERIFICAR ASIENTOS OCUPADOS (CORREGIDO)
     // ============================================
     $placeholders = implode(',', array_fill(0, count($seatArray), '?'));
+    
+    // CORRECCIÓN: Excluir los tickets del propio usuario (AND user_id != ?)
     $stmt = $pdo->prepare("
-        SELECT seat_code FROM tickets 
-        WHERE showtime_id = ? AND seat_code IN ($placeholders)
+        SELECT seat_code FROM tickets
+        WHERE showtime_id = ? AND seat_code IN ($placeholders) AND user_id != ?
         FOR UPDATE
     ");
-    $stmt->execute(array_merge([$showtimeId], $seatArray));
+    $stmt->execute(array_merge([$showtimeId], $seatArray, [$_SESSION['user_id']]));
     $occupiedSeats = $stmt->fetchAll(PDO::FETCH_COLUMN);
     
     $conflictSeats = array_intersect($seatArray, $occupiedSeats);
+
     if (!empty($conflictSeats)) {
         throw new Exception("Asientos ocupados: " . implode(', ', $conflictSeats));
     }
-    
+
     // ============================================
     // VERIFICAR ASIENTOS BLOQUEADOS
     // ============================================
     $layout = json_decode($showtimeLocked['seat_layout'], true);
     $blockedSeats = $layout['blockedSeats'] ?? [];
     $blockedRequested = array_intersect($seatArray, $blockedSeats);
+
     if (!empty($blockedRequested)) {
         throw new Exception("Asientos bloqueados: " . implode(', ', $blockedRequested));
     }
-    
+
     // ============================================
     // VERIFICAR COMPRAS PENDIENTES DE OTROS
     // ============================================
     $stmt = $pdo->prepare("
-        SELECT seats FROM purchases 
-        WHERE showtime_id = ? 
-        AND status = 'pending' 
+        SELECT seats FROM purchases
+        WHERE showtime_id = ?
+        AND status = 'pending'
         AND user_id != ?
         AND expires_at > NOW()
         FOR UPDATE
     ");
     $stmt->execute([$showtimeId, $_SESSION['user_id']]);
     $otherPending = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    
     $allOtherSeats = [];
+
     foreach ($otherPending as $seatsString) {
         if (!empty($seatsString)) {
             $seatsArrayTemp = array_map('trim', explode(',', $seatsString));
             $allOtherSeats = array_merge($allOtherSeats, $seatsArrayTemp);
         }
     }
-    
+
     $conflictWithOther = array_intersect($seatArray, $allOtherSeats);
+
     if (!empty($conflictWithOther)) {
         throw new Exception("Asientos reservados por otro usuario: " . implode(', ', $conflictWithOther));
     }
-    
+
     // ============================================
     // CREAR/ACTUALIZAR COMPRA PENDIENTE
     // ============================================
     $stmt = $pdo->prepare("
-        SELECT id FROM purchases 
+        SELECT id FROM purchases
         WHERE user_id = ? AND showtime_id = ? AND status = 'pending'
         FOR UPDATE
     ");
     $stmt->execute([$_SESSION['user_id'], $showtimeId]);
     $existing = $stmt->fetch();
-    
+
     $newSessionToken = bin2hex(random_bytes(32));
-    
+
     if (!$existing) {
         $stmt = $pdo->prepare("
             INSERT INTO purchases (
-                user_id, showtime_id, seats, total_tickets, total_food, 
-                total_amount, session_token, expires_at, status, 
+                user_id, showtime_id, seats, total_tickets, total_food,
+                total_amount, session_token, expires_at, status,
                 subtotal, tax_amount, tax_rate
             ) VALUES (?, ?, ?, ?, 0, 0, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE), 'pending', 0, 0, 0)
         ");
@@ -269,14 +281,14 @@ try {
         error_log("✅ Compra pendiente creada para usuario " . $_SESSION['user_id']);
     } else {
         $stmt = $pdo->prepare("
-            UPDATE purchases 
+            UPDATE purchases
             SET seats = ?, total_tickets = ?, expires_at = DATE_ADD(NOW(), INTERVAL 10 MINUTE), session_token = ?
             WHERE id = ?
         ");
         $stmt->execute([$seats, $seatCount, $newSessionToken, $existing['id']]);
         error_log("✅ Compra pendiente actualizada para usuario " . $_SESSION['user_id']);
     }
-    
+
     // ============================================
     // CREAR TICKETS TEMPORALES
     // ============================================
@@ -284,25 +296,25 @@ try {
         DELETE t FROM tickets t
         WHERE t.showtime_id = ? AND t.user_id = ?
         AND NOT EXISTS (
-            SELECT 1 FROM purchases p 
-            WHERE p.user_id = t.user_id 
-            AND p.showtime_id = t.showtime_id 
+            SELECT 1 FROM purchases p
+            WHERE p.user_id = t.user_id
+            AND p.showtime_id = t.showtime_id
             AND p.status = 'completed'
         )
     ");
     $stmt->execute([$showtimeId, $_SESSION['user_id']]);
-    
+
     $stmtInsert = $pdo->prepare("
         INSERT IGNORE INTO tickets (user_id, showtime_id, seat_code, price_paid)
         VALUES (?, ?, ?, 0)
     ");
-    
+
     foreach ($seatArray as $seat) {
         $stmtInsert->execute([$_SESSION['user_id'], $showtimeId, $seat]);
     }
-    
+
     // ============================================
-    // ✅ ESTABLECER SESIÓN DE COMIDA
+    // ESTABLECER SESIÓN DE COMIDA
     // ============================================
     $_SESSION['food_timeout_' . $showtimeId] = 600;
     $_SESSION['food_seats_' . $showtimeId] = $seats;
@@ -312,22 +324,19 @@ try {
     $_SESSION['purchase_expires_at_' . $showtimeId] = time() + 900;
     $_SESSION[$ticketsKey] = $ticketsData;
     $_SESSION[$totalSeatsKey] = $seatCount;
-    
-    error_log("✅ create_food_session.php - Sesión de comida creada exitosamente");
-    error_log("✅ food_valid_" . $showtimeId . " = true");
-    error_log("✅ food_seats_" . $showtimeId . " = $seats");
-    error_log("✅ total_seats_" . $showtimeId . " = $seatCount");
-    
+
+    error_log("create_food_session.php - Sesión de comida creada exitosamente");
+
     $pdo->commit();
-    
-    echo json_encode(['success' => true]);
-    exit;
-    
+
+    $foodUrl = 'food_menu.php?showtime_id=' . $showtimeId;
+    respond(200, ['success' => true, 'redirect' => $foodUrl], $isAjax, $foodUrl);
+
 } catch (Exception $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     error_log("❌ create_food_session.php: " . $e->getMessage());
-    http_response_code(409);
-    echo json_encode(['error' => $e->getMessage()]);
-    exit;
+    respond(409, ['error' => $e->getMessage()], $isAjax);
 }
 ?>

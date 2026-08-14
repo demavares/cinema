@@ -2,12 +2,12 @@
 require_once 'config.php';
 
 // ============================================
-// ✅ DETECTAR SESIÓN EXPIRADA
+// DETECTAR SESIÓN EXPIRADA
 // ============================================
 $mostrar_alerta = isset($_GET['expired']) && $_GET['expired'] === '1';
 
 // ============================================
-// ✅ DETECTAR LOGOUT RECIENTE
+// DETECTAR LOGOUT RECIENTE
 // ============================================
 $showLogoutMessage = false;
 if (isset($_GET['logout']) && $_GET['logout'] == 1) {
@@ -19,7 +19,7 @@ if (isset($_GET['logout']) && $_GET['logout'] == 1) {
 }
 
 // ============================================
-// ✅ LIMPIAR SESSIONSTORAGE AL CERRAR SESIÓN O TIMEOUT
+// LIMPIAR SESSIONSTORAGE AL CERRAR SESIÓN O TIMEOUT
 // ============================================
 $shouldClearStorage = isset($_GET['logout']) || isset($_GET['timeout']) || isset($_GET['nocache']) || isset($_GET['expired']);
 
@@ -32,11 +32,11 @@ $showTimeoutModal = isset($_GET['timeout']) && $_GET['timeout'] == 1;
 $stmt = $pdo->query("SELECT * FROM movies WHERE is_active = 1 ORDER BY title ASC");
 $movies = $stmt->fetchAll();
 
-// Obtener fecha actual de Venezuela
+// Obtener fecha actual
 $currentDate = getCurrentDate();
 $currentDateTime = getCurrentDateTime();
 
-// ✅ PROCESAR PELÍCULAS Y USAR IMÁGENES DE LA BD
+// PROCESAR PELÍCULAS Y USAR IMÁGENES DE LA BD
 foreach ($movies as $key => $movie) {
     $stmtShowtimes = $pdo->prepare("
         SELECT * FROM showtimes
@@ -57,7 +57,7 @@ require_once 'header.php';
 ?>
 
 <!-- ============================================ -->
-<!-- ✅ ALERTA DE SESIÓN EXPIRADA -->
+<!-- ALERTA DE SESIÓN EXPIRADA -->
 <!-- ============================================ -->
 <?php if ($mostrar_alerta): ?>
 <div class="session-expired-alert">
@@ -67,7 +67,7 @@ require_once 'header.php';
     </div>
 </div>
 
-<!-- ✅ CÓDIGO CLAVE: Remueve ?expired=1 de la URL para romper el bucle -->
+<!-- CÓDIGO CLAVE: Remueve ?expired=1 de la URL para romper el bucle -->
 <script>
     if (window.history.replaceState) {
         const urlLimpia = window.location.protocol + "//" + window.location.host + window.location.pathname;
@@ -784,7 +784,7 @@ main.container {
 
 <script>
 // ============================================
-// ✅ LIMPIAR SESSIONSTORAGE SI ES NECESARIO
+// LIMPIAR SESSIONSTORAGE SI ES NECESARIO
 // ============================================
 <?php if ($shouldClearStorage): ?>
 (function() {
