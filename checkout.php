@@ -44,6 +44,25 @@ if (!$showtime) {
     exit;
 }
 
+// ============================================
+// ✅ CORREGIDO: VALIDAR QUE EL SHOWTIME NO HAYA PASADO
+// ============================================
+$showtimeDateTime = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']);
+$currentDateTime = time();
+
+if ($showtimeDateTime < $currentDateTime) {
+    error_log("❌ checkout.php: Intento de comprar showtime pasado");
+    header('Location: index.php?error=Este+horario+ya+no+está+disponible');
+    exit;
+}
+
+// Validar con margen de seguridad (15 minutos antes del inicio)
+$safetyMargin = 15 * 60;
+if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Este+horario+está+por+iniciar.+Selecciona+otro');
+    exit;
+}
+
 // Obtener datos de boletos
 $ticketQuantities = $_SESSION['ticket_quantities_' . $showtimeId] ?? null;
 if (!$ticketQuantities) {
@@ -51,6 +70,7 @@ if (!$ticketQuantities) {
     exit;
 }
 
+// ✅ RECALCULAR PRECIOS DESDE LA BD (FUENTE DE VERDAD)
 $validation = validateAndRecalculatePrices($pdo, $showtimeId, $ticketQuantities);
 if (isset($validation['error'])) {
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=' . urlencode($validation['error']));
@@ -68,6 +88,9 @@ if (count($seatsArray) != $totalSeats) {
     header('Location: seats.php?showtime_id=' . $showtimeId . '&error=La+cantidad+de+asientos+no+coincide');
     exit;
 }
+
+// ✅ ELIMINADO: Validación de precios del cliente (redundante)
+// El servidor ya recalcula los precios desde la BD usando validateAndRecalculatePrices()
 
 // Procesar comida
 $foodOrder = isset($_POST['food_order']) ? $_POST['food_order'] : '[]';
@@ -121,7 +144,7 @@ try {
 
     if (!$showtimeLocked) throw new Exception("Función no encontrada");
 
-    // 🛡️ CORRECCIÓN: Verificar asientos ocupados (EXCLUYENDO los del propio usuario)
+    // ✅ Verificar asientos ocupados (EXCLUYENDO los del propio usuario)
     $placeholders = implode(',', array_fill(0, count($seatsArray), '?'));
     $stmtCheck = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ? AND seat_code IN ($placeholders) AND user_id != ? FOR UPDATE");
     $stmtCheck->execute(array_merge([$showtimeId], $seatsArray, [$userId]));
@@ -165,7 +188,7 @@ try {
     $ticketIds = [];
 
     foreach ($seatsArray as $index => $seat) {
-        if ($index < $totalAdults = intval($ticketQuantities['adult'] ?? 0)) {
+        if ($index < ($totalAdults = intval($ticketQuantities['adult'] ?? 0))) {
             $price = $pricesByType['adult'];
         } elseif ($index < ($totalAdults + intval($ticketQuantities['child'] ?? 0))) {
             $price = $pricesByType['child'];

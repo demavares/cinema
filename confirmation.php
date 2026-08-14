@@ -2,10 +2,33 @@
 require_once 'config.php';
 
 // ============================================
+// ✅ CORREGIDO: VERIFICAR SESIÓN DEL USUARIO
+// ============================================
+checkSessionExpired();
+
+// ============================================
 // VERIFICAR QUE EL USUARIO TENGA SESIÓN
 // ============================================
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
+    exit;
+}
+
+// ============================================
+// ✅ CORREGIDO: VERIFICAR QUE EL USUARIO NO ESTÉ BLOQUEADO
+// ============================================
+$stmtUser = $pdo->prepare("SELECT is_blocked FROM users WHERE id = ?");
+$stmtUser->execute([$_SESSION['user_id']]);
+$userData = $stmtUser->fetch();
+
+if (!$userData) {
+    header('Location: login.php');
+    exit;
+}
+
+if ($userData['is_blocked'] == 1) {
+    error_log("🚫 Usuario bloqueado intentó acceder a confirmation.php: user_id " . $_SESSION['user_id']);
+    header('Location: index.php?error=Cuenta+bloqueada');
     exit;
 }
 
@@ -51,7 +74,7 @@ clearPurchaseSession($showtimeId);
 // OBTENER DATOS DE LA COMPRA
 // ============================================
 $stmt = $pdo->prepare("
-    SELECT * FROM purchases 
+    SELECT * FROM purchases
     WHERE id = ? AND user_id = ? AND status = 'completed'
 ");
 $stmt->execute([$purchaseId, $_SESSION['user_id']]);
@@ -106,7 +129,7 @@ $cleanSeatsArray = [];
 foreach ($seatsArray as $seat) {
     $seat = trim($seat);
     if (empty($seat)) continue;
-    
+
     if (strpos($seat, '♿') !== false) {
         $cleanSeat = str_replace('♿', '', $seat);
         $accessibleSeats[] = $cleanSeat;
@@ -153,7 +176,7 @@ foreach ($purchaseTickets as $pt) {
     $code = $pt['ticket_type_code'] ?? 'adult';
     $name = $pt['ticket_type_name'] ?? ucfirst($code);
     $price = floatval($pt['price']);
-    
+
     if (!isset($ticketTypes[$code])) {
         $ticketTypes[$code] = [
             'count' => 0,
@@ -162,6 +185,7 @@ foreach ($purchaseTickets as $pt) {
             'total' => 0
         ];
     }
+
     $ticketTypes[$code]['count']++;
     $ticketTypes[$code]['total'] += $price;
     $ticketTotal += $price;
@@ -177,6 +201,7 @@ $hasFood = !empty($foodOrders);
 if ($hasFood) {
     foreach ($foodOrders as $food) {
         $key = $food['food_name'];
+
         if (!isset($groupedFood[$key])) {
             $groupedFood[$key] = [
                 'name' => $food['food_name'],
@@ -185,6 +210,7 @@ if ($hasFood) {
                 'unit_price' => floatval($food['unit_price'])
             ];
         }
+
         $groupedFood[$key]['quantity'] += intval($food['quantity']);
         $groupedFood[$key]['total'] += floatval($food['total_price']);
         $foodTotal += floatval($food['total_price']);
@@ -279,9 +305,9 @@ $displayTotalAmount = $calculatedTotalAmount;
 if (!$dataIntegrity) {
     try {
         $stmt = $pdo->prepare("
-            UPDATE purchases 
-            SET data_integrity_check = 0, 
-                integrity_issues = ? 
+            UPDATE purchases
+            SET data_integrity_check = 0,
+                integrity_issues = ?
             WHERE id = ?
         ");
         $issuesJson = json_encode($integrityIssues);
@@ -293,8 +319,8 @@ if (!$dataIntegrity) {
 } else {
     try {
         $stmt = $pdo->prepare("
-            UPDATE purchases 
-            SET data_integrity_check = 1 
+            UPDATE purchases
+            SET data_integrity_check = 1
             WHERE id = ? AND (data_integrity_check = 0 OR data_integrity_check IS NULL)
         ");
         $stmt->execute([$purchaseId]);
@@ -315,7 +341,6 @@ $display_poster = !empty($showtime['poster_url']) ? $showtime['poster_url'] : ''
 $promotions = !empty($showtime['promotions']) ? explode(',', $showtime['promotions']) : [];
 $hasMondayPromo = in_array('lunes_mitad', $promotions);
 $hasPresale = in_array('preventa', $promotions);
-
 $language = $showtime['language'] ?? 'español';
 $languageLabel = $language == 'español' ? 'Español' : 'Subtítulos en Español';
 
@@ -369,6 +394,7 @@ body {
 .bg-\[\#14141e\] {
     background-color: #ffffff !important;
 }
+
 .border-\[\#1e1e2e\] {
     border-color: #e2e8f0 !important;
 }
@@ -427,10 +453,12 @@ body {
     border-top: 2px dashed #94a3b8;
     margin: 14px 0;
 }
+
 .summary-solid-line {
     border-top: 2px solid #6366f1;
     margin: 14px 0;
 }
+
 .summary-plain-row {
     display: flex;
     justify-content: space-between;
@@ -438,6 +466,7 @@ body {
     color: #1f2937;
     margin-bottom: 8px;
 }
+
 .summary-plain-row.bold-row {
     font-weight: 800;
     font-size: 1.15rem;
@@ -451,6 +480,7 @@ body {
     flex-shrink: 0;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
+
 .summary-movie-title {
     font-weight: 700;
     color: #0f172a;
@@ -469,6 +499,7 @@ body {
     font-weight: 600;
     border: 1px solid;
 }
+
 .promo-tag .promo-dot {
     width: 6px;
     height: 6px;
@@ -476,19 +507,23 @@ body {
     display: inline-block;
     flex-shrink: 0;
 }
+
 .promo-tag.monday {
     background: #dcfce7;
     color: #15803d;
     border-color: #bbf7d0;
 }
+
 .promo-tag.monday .promo-dot {
     background: #15803d;
 }
+
 .promo-tag.presale {
     background: #fef3c7;
     color: #b45309;
     border-color: #fde68a;
 }
+
 .promo-tag.presale .promo-dot {
     background: #b45309;
 }
@@ -509,6 +544,7 @@ body {
     border: 1px solid #4f5e71;
     color: #4f5e71;
 }
+
 .format-badge.format-2d,
 .format-badge.format-3d,
 .format-badge.format-imax,
@@ -528,10 +564,12 @@ body {
     color: #1f2937;
     padding: 2px 0;
 }
+
 .ticket-summary-item .ticket-type {
     font-weight: 500;
     color: #1f2937;
 }
+
 .ticket-summary-item .ticket-total {
     font-weight: 600;
     color: #16a34a;
@@ -545,15 +583,18 @@ body {
     border-bottom: 1px solid #e2e8f0;
     font-size: 0.95rem;
 }
+
 .cart-item:last-child {
     border-bottom: none;
 }
+
 .cart-item .item-name {
     color: #1f2937;
     flex: 1;
     word-break: break-word;
     font-weight: 500;
 }
+
 .cart-item .item-price {
     color: #16a34a;
     font-weight: 600;
@@ -573,6 +614,7 @@ body {
     gap: 6px 12px;
     margin-top: 4px;
 }
+
 .seat-item {
     display: inline-flex;
     align-items: center;
@@ -585,14 +627,17 @@ body {
     border: 1px solid #e2e8f0;
     font-size: 0.85rem;
 }
+
 .seat-item.accessible {
     color: #1d4ed8;
     border-color: #bfdbfe;
     background: #dbeafe;
 }
+
 .seat-item .accessible-icon {
     font-size: 0.8rem;
 }
+
 .seat-item .seat-label {
     font-weight: 700;
 }
@@ -604,6 +649,7 @@ body {
     border: 1px solid #e2e8f0;
     margin-top: 16px;
 }
+
 .payment-box .payment-header {
     display: flex;
     justify-content: space-between;
@@ -611,16 +657,19 @@ body {
     padding-bottom: 8px;
     border-bottom: 1px solid #e2e8f0;
 }
+
 .payment-box .payment-header .payment-label {
     color: #1f2937;
     font-size: 0.9rem;
     font-weight: 600;
 }
+
 .payment-box .payment-header .payment-value {
     color: #0f172a;
     font-weight: 700;
     font-size: 0.95rem;
 }
+
 .payment-box .payment-detail {
     display: flex;
     justify-content: space-between;
@@ -629,13 +678,16 @@ body {
     color: #1f2937;
     border-bottom: 1px solid #f1f5f9;
 }
+
 .payment-box .payment-detail:last-child {
     border-bottom: none;
 }
+
 .payment-box .payment-detail .detail-label {
     color: #4b5563;
     font-weight: 500;
 }
+
 .payment-box .payment-detail .detail-value {
     color: #0f172a;
     font-weight: 600;
@@ -647,6 +699,7 @@ body {
     gap: 10px;
     margin-top: 24px;
 }
+
 .btn-actions .btn-primary {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: #ffffff !important;
@@ -661,10 +714,12 @@ body {
     text-decoration: none;
     display: block;
 }
+
 .btn-actions .btn-primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
 }
+
 .btn-actions .btn-secondary {
     background: #ffffff;
     border: 1px solid #cbd5e1;
@@ -678,6 +733,7 @@ body {
     text-decoration: none;
     display: block;
 }
+
 .btn-actions .btn-secondary:hover {
     border-color: #6366f1;
     color: #4f46e5 !important;
@@ -703,9 +759,11 @@ body {
     font-size: 0.8rem;
     color: #3730a3;
 }
+
 .info-box strong {
     color: #1e1b4b;
 }
+
 .info-box .text-sky-400 {
     color: #0369a1;
 }
@@ -726,6 +784,7 @@ body {
     justify-content: center;
     gap: 8px;
 }
+
 .print-btn:hover {
     border-color: #6366f1;
     color: #4f46e5 !important;
@@ -754,14 +813,17 @@ body {
     align-items: flex-start;
     gap: 10px;
 }
+
 .integrity-warning .warning-icon {
     font-size: 1.2rem;
     flex-shrink: 0;
     margin-top: 1px;
 }
+
 .integrity-warning .warning-text {
     flex: 1;
 }
+
 .integrity-warning .warning-text strong {
     color: #78350f;
 }
@@ -772,56 +834,70 @@ body {
         margin: 0 8px;
         border-radius: 12px;
     }
+
     .success-icon {
         width: 56px;
         height: 56px;
         font-size: 24px;
         margin-bottom: 14px;
     }
+
     .confirmation-title {
         font-size: 1.3rem;
     }
+
     .confirmation-subtitle {
         font-size: 0.85rem;
         margin-bottom: 18px;
     }
+
     .card-summary {
         padding: 16px;
     }
+
     .summary-movie-poster {
         width: 60px;
         height: 90px;
     }
+
     .summary-movie-title {
         font-size: 0.95rem;
     }
+
     .payment-box {
         padding: 12px;
         margin-top: 12px;
     }
+
     .btn-actions {
         gap: 8px;
         margin-top: 18px;
     }
+
     .btn-actions .btn-primary,
     .btn-actions .btn-secondary,
     .print-btn {
         padding: 10px;
         font-size: 0.85rem;
     }
+
     .seat-list {
         gap: 4px 8px;
     }
+
     .seat-item {
         padding: 1px 8px 1px 6px;
         font-size: 0.75rem;
     }
+
     .ticket-summary-item {
         font-size: 0.8rem;
     }
+
     .payment-box .payment-detail {
         font-size: 0.75rem;
     }
+
     .integrity-warning {
         font-size: 0.75rem;
         padding: 10px 12px;
@@ -835,21 +911,25 @@ body {
     body {
         background: white !important;
     }
+
     .btn-actions,
     .print-btn,
     header,
     footer {
         display: none !important;
     }
+
     .confirmation-card {
         box-shadow: none !important;
         border: 1px solid #000 !important;
         max-width: 100% !important;
     }
+
     .card-summary {
         box-shadow: none !important;
         border: 1px solid #ccc !important;
     }
+
     .integrity-warning {
         display: none !important;
     }
@@ -876,17 +956,17 @@ body {
 
         <!-- ✅ ADVERTENCIA DE INTEGRIDAD (si hay problemas) -->
         <?php if ($showIntegrityWarning): ?>
-        <div class="integrity-warning">
-            <span class="warning-icon">⚠️</span>
-            <div class="warning-text">
-                <strong>Advertencia de integridad:</strong> 
-                Se detectaron discrepancias en los datos de esta compra. 
-                Por favor, contacta con soporte si tienes dudas.
-                <?php if (!empty($integrityMessage)): ?>
-                <br><small>Detalles: <?= htmlspecialchars($integrityMessage) ?></small>
-                <?php endif; ?>
+            <div class="integrity-warning">
+                <span class="warning-icon">⚠️</span>
+                <div class="warning-text">
+                    <strong>Advertencia de integridad:</strong>
+                    Se detectaron discrepancias en los datos de esta compra.
+                    Por favor, contacta con soporte si tienes dudas.
+                    <?php if (!empty($integrityMessage)): ?>
+                        <br><small>Detalles: <?= htmlspecialchars($integrityMessage) ?></small>
+                    <?php endif; ?>
+                </div>
             </div>
-        </div>
         <?php endif; ?>
 
         <!-- ============================================
@@ -921,8 +1001,8 @@ body {
 
                     <!-- Sala · Fecha · Hora -->
                     <div class="text-sm text-gray-700 font-medium mt-1 whitespace-nowrap">
-                        <?= htmlspecialchars($showtime['room_name']) ?> · 
-                        <?= formatDateShort($showtime['show_date']) ?> · 
+                        <?= htmlspecialchars($showtime['room_name']) ?> ·
+                        <?= formatDateShort($showtime['show_date']) ?> ·
                         <?= formatTimeVenezuela($showtime['show_time']) ?>
                     </div>
 
@@ -985,15 +1065,15 @@ body {
 
             <!-- COMIDA SELECCIONADA (SOLO SI HAY) -->
             <?php if ($hasFood && !empty($groupedFood)): ?>
-            <div class="mb-3">
-                <p class="section-label">🍿 Comida</p>
-                <?php foreach ($groupedFood as $item): ?>
-                <div class="cart-item">
-                    <span class="item-name"><?= $item['quantity'] ?> x <?= htmlspecialchars($item['name']) ?></span>
-                    <span class="item-price"><?= formatCurrency($item['total'], $siteConfig) ?></span>
+                <div class="mb-3">
+                    <p class="section-label">🍿 Comida</p>
+                    <?php foreach ($groupedFood as $item): ?>
+                        <div class="cart-item">
+                            <span class="item-name"><?= $item['quantity'] ?> x <?= htmlspecialchars($item['name']) ?></span>
+                            <span class="item-price"><?= formatCurrency($item['total'], $siteConfig) ?></span>
+                        </div>
+                    <?php endforeach; ?>
                 </div>
-                <?php endforeach; ?>
-            </div>
             <?php endif; ?>
 
             <!-- LÍNEA PUNTEADA -->
@@ -1017,7 +1097,7 @@ body {
                 <span>💰 Total Pagado</span>
                 <span><?= formatCurrency($displayTotalAmount, $siteConfig) ?></span>
             </div>
-            
+
             <!-- ✅ INDICADOR DE VERIFICACIÓN DE INTEGRIDAD -->
             <div class="mt-3 text-xs text-gray-400 text-right">
                 <?php if ($dataIntegrity): ?>
@@ -1154,5 +1234,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 </script>
+
 </body>
 </html>

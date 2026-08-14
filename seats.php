@@ -70,7 +70,7 @@ if (empty($purchaseToken) || !verifyPurchaseTokenWithTimeout($purchaseToken, $sh
     }
 }
 
-// VERIFICAR QUE HAYA DATOS DE BOLETOS EN SESIÓN
+// ✅ VERIFICAR QUE HAYA DATOS DE BOLETOS EN SESIÓN
 $ticketsData = isset($_SESSION['ticket_quantities_' . $showtimeId]) ? $_SESSION['ticket_quantities_' . $showtimeId] : null;
 $totalSeats = isset($_SESSION['total_seats_' . $showtimeId]) ? intval($_SESSION['total_seats_' . $showtimeId]) : 0;
 $subtotal = isset($_SESSION['subtotal_' . $showtimeId]) ? floatval($_SESSION['subtotal_' . $showtimeId]) : 0;
@@ -78,20 +78,10 @@ $taxAmount = isset($_SESSION['tax_amount_' . $showtimeId]) ? floatval($_SESSION[
 $totalAmount = isset($_SESSION['total_amount_' . $showtimeId]) ? floatval($_SESSION['total_amount_' . $showtimeId]) : 0;
 $taxRate = isset($_SESSION['tax_rate_' . $showtimeId]) ? floatval($_SESSION['tax_rate_' . $showtimeId]) : 16;
 
-// LOG DE DEPURACIÓN
-error_log("=== SESIÓN EN SEATS.PHP ===");
-error_log("showtimeId: " . $showtimeId);
-error_log("ticket_quantities_" . $showtimeId . " = " . (isset($_SESSION['ticket_quantities_' . $showtimeId]) ? json_encode($_SESSION['ticket_quantities_' . $showtimeId]) : 'NO EXISTE'));
-error_log("total_seats_" . $showtimeId . " = " . ($_SESSION['total_seats_' . $showtimeId] ?? 'NO EXISTE'));
-error_log("purchase_token_" . $showtimeId . " = " . ($_SESSION['purchase_token_' . $showtimeId] ?? 'NO EXISTE'));
-error_log("food_seats_" . $showtimeId . " = " . ($_SESSION['food_seats_' . $showtimeId] ?? 'NO EXISTE'));
-error_log("food_valid_" . $showtimeId . " = " . (isset($_SESSION['food_valid_' . $showtimeId]) ? ($_SESSION['food_valid_' . $showtimeId] ? 'true' : 'false') : 'NO EXISTE'));
-error_log("============================");
-
 $foodSeatsKey = 'food_seats_' . $showtimeId;
 $foodTimeoutKey = 'food_timeout_' . $showtimeId;
 
-// Si no hay datos de boletos en sesión, intentar recuperar de food_seats
+// ✅ Si no hay datos de boletos en sesión, intentar recuperar de food_seats
 if (!$ticketsData || $totalSeats <= 0) {
     if ($hasFoodSession && isset($_SESSION[$foodSeatsKey]) && !empty($_SESSION[$foodSeatsKey])) {
         $foodSeats = $_SESSION[$foodSeatsKey];
@@ -128,14 +118,12 @@ if (!$ticketsData || $totalSeats <= 0) {
                 $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
                 $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
                 $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
-
-                error_log("✅ seats.php - Recuperado de food_seats: $totalSeats asientos");
             }
         }
     }
 }
 
-// Si aún no hay datos, redirigir a price_selection
+// ✅ Si aún no hay datos, redirigir a price_selection
 if (!$ticketsData || $totalSeats <= 0) {
     if ($hasFoodSession) {
         unset($_SESSION[$foodValidKey]);
@@ -144,7 +132,6 @@ if (!$ticketsData || $totalSeats <= 0) {
     }
 
     if (!$fromFood) {
-        error_log("❌ seats.php - No hay datos de boletos, redirigiendo a price_selection");
         header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+de+boletos+no+encontrados');
         exit;
     }
@@ -163,6 +150,26 @@ $showtime = $stmt->fetch();
 
 if (!$showtime) {
     header('Location: index.php');
+    exit;
+}
+
+// ============================================
+// ✅ CORREGIDO: VALIDAR QUE EL SHOWTIME NO HAYA PASADO
+// ============================================
+$showtimeDateTime = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']);
+$currentDateTime = time();
+
+if ($showtimeDateTime < $currentDateTime) {
+    error_log("❌ seats.php: Intento de acceder a showtime pasado");
+    header('Location: index.php?error=Este+horario+ya+no+está+disponible');
+    exit;
+}
+
+// Validar con margen de seguridad (15 minutos antes del inicio)
+$safetyMargin = 15 * 60;
+if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
+    error_log("⚠️ seats.php: Showtime muy próximo a iniciar");
+    header('Location: index.php?error=Este+horario+está+por+iniciar.+Selecciona+otro');
     exit;
 }
 
@@ -335,7 +342,6 @@ if (!isset($_SESSION['purchase_token_' . $showtimeId]) || isPurchaseTokenExpired
 // ✅ Si el token está por expirar (menos de 60 segundos), regenerar
 $timeLeft = getPurchaseTokenTimeLeft($showtimeId);
 if ($timeLeft < 60 && $timeLeft > 0) {
-    error_log("🔄 seats.php: Token por expirar ($timeLeft segundos), regenerando");
     clearPurchaseSession($showtimeId);
 
     $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
@@ -375,7 +381,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .seat-label { font-size: calc(var(--seat-size) * 0.35); color: #0f172a; text-align: center; position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); font-weight: bold; white-space: nowrap; }
 .seat-selected .seat-label, .seat-occupied .seat-label { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
 
-/* CORREGIDO: Pantalla en negro mate para no confundir con botón */
+/* ✅ CORREGIDO: Pantalla en negro mate para no confundir con botón */
 .cinema-screen { background: #1a1a1a !important; color: #6b7280; text-align: center; padding: 3px; border-radius: 8px; margin-top: 28px; font-weight: bold; letter-spacing: 4px; font-size: clamp(0.7rem, 2vw, 1rem); width: 100%; cursor: default; }
 
 .legend { display: flex; gap: clamp(8px, 2vw, 20px); justify-content: center; flex-wrap: wrap; margin-top: 20px; }
@@ -443,7 +449,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                     <h2 class="text-xl font-bold section-title">🎫 Selecciona tus asientos</h2>
                     <p class="text-sm section-subtitle"><?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?></p>
                 </div>
-                <!-- CORREGIDO: Texto plano sin estilos de badge -->
+                <!-- ✅ CORREGIDO: Texto plano sin estilos de badge -->
                 <span><?= $realAvailable + count($userPendingSeats) ?> asientos disponibles</span>
             </div>
 
@@ -489,7 +495,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
             </div>
 
             <div class="legend">
-                <!-- CORREGIDO: Color Disponible = #cbd5e1 (igual que los asientos) -->
+                <!-- ✅ CORREGIDO: Color Disponible = #cbd5e1 (igual que los asientos) -->
                 <div class="legend-item"><div class="color-box" style="background-color: #cbd5e1;"></div> Disponible</div>
                 <div class="legend-item"><div class="color-box bg-sky-600">♿</div> Discapacidad</div>
                 <div class="legend-item"><div class="color-box bg-indigo-500"></div> Seleccionado</div>
@@ -571,7 +577,7 @@ const currencyConfig = {
 let selectedSeats = [...userPendingSeats];
 const maxSeats = totalSeatsNeeded;
 
-// Bandera para evitar liberar asientos cuando la navegación es hacia food_menu.php
+// ✅ Bandera para evitar liberar asientos cuando la navegación es hacia food_menu.php
 let skipUnloadRelease = false;
 
 // ============================================
@@ -677,26 +683,6 @@ function updateSummary() {
     saveSeatsToStorage();
 }
 
-function validateSeats() {
-    if (selectedSeats.length === 0) {
-        showNotification('⚠️ Por favor, selecciona al menos un asiento.', 'warning');
-        return false;
-    }
-
-    if (selectedSeats.length < maxSeats) {
-        showNotification(`⚠️ Debes seleccionar ${maxSeats} asientos. Has seleccionado ${selectedSeats.length}.`, 'warning');
-        return false;
-    }
-
-    const stillOccupied = selectedSeats.filter(seat => occupiedSeats.includes(seat) && !userPendingSeats.includes(seat));
-    if (stillOccupied.length > 0) {
-        showNotification(`❌ Asientos no disponibles: ${stillOccupied.join(', ')}`, 'error');
-        return false;
-    }
-
-    return true;
-}
-
 // ============================================
 // EVENT LISTENERS
 // ============================================
@@ -719,7 +705,7 @@ window.addEventListener('pageshow', function(event) {
     }
 });
 
-// CORREGIDO: beforeunload con protección
+// ✅ CORREGIDO: beforeunload con protección
 window.addEventListener('beforeunload', function() {
     if (skipUnloadRelease) return;
 
@@ -734,7 +720,6 @@ window.addEventListener('beforeunload', function() {
 document.getElementById('foodForm').addEventListener('submit', function(e) {
     e.preventDefault();
 
-    // Verificar que hay asientos seleccionados
     const count = selectedSeats.length;
     if (count === 0) {
         showNotification('⚠️ Por favor, selecciona al menos un asiento.', 'warning');
@@ -751,12 +736,10 @@ document.getElementById('foodForm').addEventListener('submit', function(e) {
     const tokenInput = document.getElementById('purchaseTokenInput');
     const seatsInput = document.getElementById('seats-input');
 
-    // Actualizar campo de asientos
     if (seatsInput) {
         seatsInput.value = selectedSeats.join(',');
     }
 
-    // OBTENER TOKEN FRESCO DESDE EL SERVIDOR
     btnContinue.disabled = true;
     btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Obteniendo token...';
 
@@ -764,16 +747,14 @@ document.getElementById('foodForm').addEventListener('submit', function(e) {
         .then(response => response.json())
         .then(data => {
             if (data.success && data.token) {
-                // Actualizar token en el formulario
                 if (tokenInput) {
                     tokenInput.value = data.token;
                 }
 
-                // También actualizar la variable local
                 purchaseToken = data.token;
                 btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Reservando asientos...';
 
-                // ENVÍO POR AJAX PARA MEJOR MANEJO DE ERRORES
+                // 🚀 ENVÍO POR AJAX PARA MEJOR MANEJO DE ERRORES
                 const formData = new FormData(form);
 
                 fetch('create_food_session.php', {
@@ -853,7 +834,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.classList.add(isAccessible ? 'seat-accessible' : 'seat-available');
             } else {
                 if (selectedSeats.length >= maxSeats) {
-                    showNotification(`Ya tienes ${maxSeats} asientos seleccionados.`, 'warning', 4000);
+                    showNotification(`⚠️ Ya tienes ${maxSeats} asientos seleccionados.`, 'warning', 4000);
                     return;
                 }
 
@@ -882,7 +863,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             const index = selectedSeats.indexOf(seatId);
                             if (index > -1) {
                                 selectedSeats.splice(index, 1);
-                                showNotification('El asiento ' + seatId + ' acaba de ser reservado.', 'warning');
+                                showNotification('⚠️ El asiento ' + seatId + ' acaba de ser reservado.', 'warning');
                             }
                         }
                     });

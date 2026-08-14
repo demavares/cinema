@@ -49,15 +49,14 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // ============================================
-// VERIFICAR CSRF (FLEXIBLE PARA FORMULARIOS POST)
+// ✅ CORREGIDO: VERIFICAR CSRF (ESTRICTO)
 // ============================================
 $submittedCsrf = $_POST['csrf_token'] ?? '';
+
 if (!verifyCSRFToken($submittedCsrf)) {
-    if (isset($_SESSION['csrf_token']) && !empty($submittedCsrf)) {
-        error_log("⚠️ CSRF mismatch, re-validando sesión de usuario...");
-    } else {
-        respond(403, ['error' => 'Token CSRF inválido o sesión expirada. Regresa al selector de asientos.'], $isAjax);
-    }
+    // ❌ RECHAZAR SIEMPRE, sin excepciones
+    error_log("❌ CSRF inválido en create_food_session.php para usuario " . ($_SESSION['user_id'] ?? 'desconocido'));
+    respond(403, ['error' => 'Token CSRF inválido o sesión expirada. Recarga la página e intenta nuevamente.'], $isAjax);
 }
 
 $showtimeId = isset($_POST['showtime_id']) ? intval($_POST['showtime_id']) : 0;
@@ -79,9 +78,11 @@ error_log("🔍 create_food_session.php - totalSeatsKey: $totalSeatsKey");
 error_log("🔍 create_food_session.php - ticket_quantities en sesión: " . (isset($_SESSION[$ticketsKey]) ? json_encode($_SESSION[$ticketsKey]) : 'NO EXISTE'));
 error_log("🔍 create_food_session.php - total_seats en sesión: " . ($_SESSION[$totalSeatsKey] ?? 'NO EXISTE'));
 
+// ✅ OBTENER DATOS DE BOLETOS DE LA SESIÓN
 $ticketsData = $_SESSION[$ticketsKey] ?? null;
 $totalSeatsNeeded = $_SESSION[$totalSeatsKey] ?? 0;
 
+// ✅ Si no hay datos de boletos, intentar recuperar del showtime usando los asientos enviados
 if (!$ticketsData || $totalSeatsNeeded <= 0) {
     error_log("⚠️ create_food_session.php - No hay datos de boletos en sesión, intentando recuperar de los asientos enviados");
 
@@ -100,6 +101,7 @@ if (!$ticketsData || $totalSeatsNeeded <= 0) {
     }
 }
 
+// Validar que la cantidad de asientos coincida
 $seatArray = array_filter(array_map('trim', explode(',', $seats)));
 $seatCount = count($seatArray);
 
@@ -116,37 +118,51 @@ if ($seatCount !== $totalSeatsNeeded) {
 }
 
 // ============================================
-// VERIFICAR O AUTO-GENERAR PURCHASE TOKEN
+// ✅ CORREGIDO: VERIFICAR O AUTO-GENERAR PURCHASE TOKEN (SEGURO)
 // ============================================
 try {
     $sessionToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
+
     error_log("🔍 create_food_session.php - Token recibido: " . substr($token, 0, 10) . "...");
     error_log("🔍 create_food_session.php - Token en sesión: " . substr($sessionToken, 0, 10) . "...");
     error_log("🔍 create_food_session.php - purchase_expires_at: " . ($_SESSION['purchase_expires_at_' . $showtimeId] ?? 'NO EXISTE'));
 
+    // Si no hay token en la sesión o expiró, generamos uno nuevo
     if (empty($sessionToken) || (function_exists('isPurchaseTokenExpired') && isPurchaseTokenExpired($showtimeId))) {
         error_log("🔄 create_food_session.php: Token expirado o inexistente, regenerando token de compra");
+
         if (function_exists('clearPurchaseSession')) {
             clearPurchaseSession($showtimeId);
         }
+
         if (function_exists('generatePurchaseTokenWithTimeout')) {
             $sessionToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
         } else {
             $sessionToken = bin2hex(random_bytes(16));
         }
+
         $_SESSION['purchase_token_' . $showtimeId] = $sessionToken;
         $_SESSION[$ticketsKey] = $ticketsData;
         $_SESSION[$totalSeatsKey] = $totalSeatsNeeded;
     }
 
-    if (!empty($token) && !empty($sessionToken) && !hash_equals($sessionToken, $token)) {
-        error_log("⚠️ create_food_session.php: Token no coincidía, sincronizando token de compra.");
-        $_SESSION['purchase_token_' . $showtimeId] = $token;
-    } elseif (empty($token)) {
+    // ✅ CORREGIDO: VALIDACIÓN ESTRICTA - El token enviado DEBE coincidir con el de sesión
+    if (!empty($token) && !hash_equals($sessionToken, $token)) {
+        error_log("❌ create_food_session.php: Token enviado no coincide con el de sesión");
+        error_log("   Token enviado: " . substr($token, 0, 10));
+        error_log("   Token sesión: " . substr($sessionToken, 0, 10));
+
+        // ❌ RECHAZAR la solicitud
+        respond(403, ['error' => 'Token de compra inválido. Recarga la página e intenta nuevamente.'], $isAjax);
+    }
+
+    // Si no se envió token, usar el de sesión
+    if (empty($token)) {
         $token = $sessionToken;
     }
 
     error_log("✅ create_food_session.php: Token procesado correctamente");
+
 } catch (Exception $e) {
     error_log("❌ create_food_session.php - Error verificando token: " . $e->getMessage());
     respond(500, ['error' => 'Error interno del servidor'], $isAjax);
@@ -175,6 +191,22 @@ try {
     }
 
     // ============================================
+    // ✅ CORREGIDO: VALIDAR QUE EL SHOWTIME NO HAYA PASADO
+    // ============================================
+    $showtimeDateTime = strtotime($showtimeLocked['show_date'] . ' ' . $showtimeLocked['show_time']);
+    $currentDateTime = time();
+
+    if ($showtimeDateTime < $currentDateTime) {
+        throw new Exception("Este horario ya no está disponible");
+    }
+
+    // Validar con margen de seguridad (15 minutos antes del inicio)
+    $safetyMargin = 15 * 60; // 15 minutos en segundos
+    if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
+        throw new Exception("Este horario está por iniciar. Selecciona otro");
+    }
+
+    // ============================================
     // VALIDAR ASIENTOS
     // ============================================
     if ($seatCount === 0) {
@@ -192,10 +224,10 @@ try {
     }
 
     // ============================================
-    // 🛡️ VERIFICAR ASIENTOS OCUPADOS (CORREGIDO)
+    // ✅ CORREGIDO: VERIFICAR ASIENTOS OCUPADOS CON BLOQUEO
     // ============================================
     $placeholders = implode(',', array_fill(0, count($seatArray), '?'));
-    
+
     // CORRECCIÓN: Excluir los tickets del propio usuario (AND user_id != ?)
     $stmt = $pdo->prepare("
         SELECT seat_code FROM tickets
@@ -204,7 +236,7 @@ try {
     ");
     $stmt->execute(array_merge([$showtimeId], $seatArray, [$_SESSION['user_id']]));
     $occupiedSeats = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    
+
     $conflictSeats = array_intersect($seatArray, $occupiedSeats);
 
     if (!empty($conflictSeats)) {
@@ -290,7 +322,7 @@ try {
     }
 
     // ============================================
-    // CREAR TICKETS TEMPORALES
+    // CREAR TICKETS TEMPORALES CON MANEJO DE DUPLICADOS
     // ============================================
     $stmt = $pdo->prepare("
         DELETE t FROM tickets t
@@ -310,11 +342,19 @@ try {
     ");
 
     foreach ($seatArray as $seat) {
-        $stmtInsert->execute([$_SESSION['user_id'], $showtimeId, $seat]);
+        try {
+            $stmtInsert->execute([$_SESSION['user_id'], $showtimeId, $seat]);
+        } catch (PDOException $e) {
+            // Si falla por duplicado, el asiento ya fue tomado por otro usuario
+            if ($e->errorInfo[1] == 1062) {
+                throw new Exception("El asiento $seat acaba de ser reservado por otro usuario");
+            }
+            throw $e;
+        }
     }
 
     // ============================================
-    // ESTABLECER SESIÓN DE COMIDA
+    // ✅ ESTABLECER SESIÓN DE COMIDA
     // ============================================
     $_SESSION['food_timeout_' . $showtimeId] = 600;
     $_SESSION['food_seats_' . $showtimeId] = $seats;
@@ -325,10 +365,11 @@ try {
     $_SESSION[$ticketsKey] = $ticketsData;
     $_SESSION[$totalSeatsKey] = $seatCount;
 
-    error_log("create_food_session.php - Sesión de comida creada exitosamente");
+    error_log("✅ create_food_session.php - Sesión de comida creada exitosamente");
 
     $pdo->commit();
 
+    // Redirección directa a food_menu.php
     $foodUrl = 'food_menu.php?showtime_id=' . $showtimeId;
     respond(200, ['success' => true, 'redirect' => $foodUrl], $isAjax, $foodUrl);
 

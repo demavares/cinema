@@ -49,11 +49,6 @@ $sessionSeatsKey = 'food_seats_' . $showtimeId;
 $sessionTimeoutKey = 'food_timeout_' . $showtimeId;
 $sessionFoodKey = 'food_order_' . $showtimeId;
 
-// ✅ LOG DE DEPURACIÓN
-error_log("🔍 food_menu.php - Verificando sesión para showtime $showtimeId");
-error_log("🔍 food_valid_" . $showtimeId . " = " . (isset($_SESSION[$sessionValidKey]) ? ($_SESSION[$sessionValidKey] ? 'true' : 'false') : 'NO EXISTE'));
-error_log("🔍 food_seats_" . $showtimeId . " = " . (isset($_SESSION[$sessionSeatsKey]) ? $_SESSION[$sessionSeatsKey] : 'NO EXISTE'));
-
 // ✅ VERIFICAR QUE LA SESIÓN DE COMIDA EXISTA
 if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true) {
     error_log("❌ food_menu.php - Sesión de comida NO válida para showtime $showtimeId");
@@ -92,7 +87,6 @@ if (empty($seats)) {
 }
 
 // ✅ SI LLEGAMOS AQUÍ, LA SESIÓN ES VÁLIDA
-error_log("✅ food_menu.php - Sesión válida para showtime $showtimeId, asientos: $seats");
 $seatsArray = explode(',', $seats);
 $ticketCount = count($seatsArray);
 
@@ -123,6 +117,26 @@ $showtime = $stmt->fetch();
 
 if (!$showtime) {
     header('Location: index.php');
+    exit;
+}
+
+// ============================================
+// ✅ CORREGIDO: VALIDAR QUE EL SHOWTIME NO HAYA PASADO
+// ============================================
+$showtimeDateTime = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']);
+$currentDateTime = time();
+
+if ($showtimeDateTime < $currentDateTime) {
+    error_log("❌ food_menu.php: Intento de acceder a showtime pasado");
+    header('Location: index.php?error=Este+horario+ya+no+está+disponible');
+    exit;
+}
+
+// Validar con margen de seguridad (15 minutos antes del inicio)
+$safetyMargin = 15 * 60;
+if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
+    error_log("⚠️ food_menu.php: Showtime muy próximo a iniciar");
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Este+horario+está+por+iniciar.+Selecciona+otro');
     exit;
 }
 
@@ -286,7 +300,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .seats-display { font-size: 0.95rem; font-weight: 500; color: #475569; word-break: break-word; }
 
 @media (min-width: 1024px) { .card-summary { position: sticky; top: 100px; } }
-/* ✅ CORREGIDO: Timeout warning centrado en tablet y móvil */
 @media (max-width: 768px) {
     .food-card .food-image { height: 180px; }
     .card-summary { padding: 18px; }
@@ -374,7 +387,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
             </div>
 
             <div class="mb-3">
-                <!-- ✅ CORREGIDO: Color índigo para el título "Boletos" -->
                 <p class="text-xs font-semibold uppercase mb-1" style="color: #4f46e5;">🎫 Boletos</p>
                 <?php
                 $ticketTypes = ['adult' => 'Adulto', 'child' => 'Niño', 'senior' => 'Tercera Edad'];

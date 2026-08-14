@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: datame
--- Tiempo de generación: 14-08-2026 a las 09:39:18
+-- Tiempo de generación: 14-08-2026 a las 14:28:17
 -- Versión del servidor: 10.11.18-MariaDB-ubu2204
 -- Versión de PHP: 8.3.26
 
@@ -138,6 +138,14 @@ CREATE TABLE `food_orders` (
   `status` enum('pending','completed','cancelled') DEFAULT 'pending'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Volcado de datos para la tabla `food_orders`
+--
+
+INSERT INTO `food_orders` (`id`, `user_id`, `ticket_id`, `showtime_id`, `purchase_id`, `food_item_id`, `quantity`, `unit_price`, `total_price`, `order_date`, `status`) VALUES
+(1, 8, NULL, 64, 486, 3, 1, 15.00, 15.00, '2026-08-14 13:57:04', 'completed'),
+(2, 8, NULL, 64, 488, 4, 1, 1500.00, 1500.00, '2026-08-14 14:26:28', 'completed');
+
 -- --------------------------------------------------------
 
 --
@@ -206,11 +214,16 @@ CREATE TABLE `purchases` (
 --
 
 INSERT INTO `purchases` (`id`, `user_id`, `showtime_id`, `seats`, `total_tickets`, `total_food`, `total_amount`, `subtotal`, `tax_amount`, `tax_rate`, `purchase_date`, `status`, `payment_method`, `payment_data`, `session_token`, `expires_at`) VALUES
-(461, 1, 66, 'A12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 00:07:32', 'expired', NULL, NULL, '2b16e2fc05cc55dc2d77a96a918a8b6ea535a2a5c46a55230ddf4d3eb72be928', '2026-08-13 20:07:56'),
-(462, 1, 66, 'B1,B2', 2, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 02:30:30', 'expired', NULL, NULL, 'dd0419dce9d6a4bf0902c0533f889b95b4bcf497f789277b6a9f63e5ea818150', '2026-08-13 22:30:51'),
-(463, 1, 66, 'A12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 03:15:47', 'expired', NULL, NULL, '4e6c6c2f2163944963faf651613195afa936f60c978caf833fea02bffff5f182', '2026-08-13 23:25:47'),
-(464, 1, 64, 'A1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 03:59:18', 'expired', NULL, NULL, 'f27662183a1ab9e711073a772e301cfa2ba99b4fe5763f2c5d1d1890c67bd5e9', '2026-08-14 00:00:22'),
-(465, 1, 64, 'A1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 04:00:36', 'expired', NULL, NULL, '061fb6c59dbd4d83cab8aad1870f165a8ae3223e1fd586a3327ce3d3e5ce9422', '2026-08-14 00:03:42');
+(479, 8, 64, 'A1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 12:44:17', 'expired', NULL, NULL, 'c680f348b049932d0cee2d89650226296d0cdcbfea337a59fe69a96ae0983358', '2026-08-14 08:54:17'),
+(480, 8, 64, 'A1', 1, 1215.00, 4889.40, 4215.00, 674.40, 16.00, '2026-08-14 12:44:25', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-DA98ACA2\",\"method\":\"movil\",\"reference\":\"CMP-20260814-98BADC\",\"date\":\"2026-08-14 08:44:25\",\"ip\":\"172.22.0.1\"}', '590aabae692f4e7956018063ac80901620ecbdb5aa9c76adb5b4f73d95ce3914', '2026-08-14 08:54:25'),
+(481, 8, 64, 'B1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 13:38:53', 'expired', NULL, NULL, 'cd0af9b838292b2c9eb5b3c36afcdd2850b1706f96d5e530031a952f4d19ed90', '2026-08-14 09:50:15'),
+(482, 8, 64, 'A1', 1, 3000.00, 6960.00, 6000.00, 960.00, 16.00, '2026-08-14 13:39:02', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-A7690770\",\"method\":\"movil\",\"reference\":\"CMP-20260814-69155A\",\"date\":\"2026-08-14 09:39:02\",\"ip\":\"172.22.0.1\"}', 'd06c2d99b87684170702bad7add9a2b62a4d9f6c6039cd26191f83de5c94708e', '2026-08-14 09:49:02'),
+(483, 8, 64, 'A2', 1, 0.00, 3480.00, 3000.00, 480.00, 16.00, '2026-08-14 13:39:55', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-AAB02F26\",\"method\":\"movil\",\"reference\":\"CMP-20260814-B03197\",\"date\":\"2026-08-14 09:39:55\",\"ip\":\"172.22.0.1\"}', 'f7e3c833a63fcb335d68324472b06058c29bead106ee35bd8c7d4764ba17f02e', '2026-08-14 09:49:55'),
+(484, 8, 64, 'B1', 1, 0.00, 1740.00, 1500.00, 240.00, 16.00, '2026-08-14 13:40:23', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-AC71CEA7\",\"method\":\"movil\",\"reference\":\"CMP-20260814-71DD8F\",\"date\":\"2026-08-14 09:40:23\",\"ip\":\"172.22.0.1\"}', '4e6f4500f354f6c189f5f109cd5af7868d2665f1a26b2c213e7500bca90eeceb', '2026-08-14 09:50:23'),
+(485, 8, 64, 'A11', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 13:56:56', 'expired', NULL, NULL, '45ba3acf2a136f955d4eaf09520e60389328722bf63f5a7e95291b9fa218d194', '2026-08-14 10:06:56'),
+(486, 8, 64, 'A11', 1, 15.00, 3497.40, 3015.00, 482.40, 16.00, '2026-08-14 13:57:04', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-EB0CD052\",\"method\":\"movil\",\"reference\":\"CMP-20260814-0CE3DD\",\"date\":\"2026-08-14 09:57:04\",\"ip\":\"172.22.0.1\"}', 'c05eb836f7154bf5d95933c7c50ef5223eff5367f47f02860607ad7a9479dc12', '2026-08-14 10:07:04'),
+(487, 8, 64, 'A11', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 14:25:54', 'pending', NULL, NULL, '5e9c88d89f9d390ae07862e9d78998eb423389931d15e2cc39c884d8f775f9fc', '2026-08-14 10:35:54'),
+(488, 8, 64, 'A11', 1, 1500.00, 5220.00, 4500.00, 720.00, 16.00, '2026-08-14 14:26:28', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-5943E24E\",\"method\":\"movil\",\"reference\":\"CMP-20260814-43F0A4\",\"date\":\"2026-08-14 10:26:28\",\"ip\":\"172.22.0.1\"}', '29d0c0f47f9f9ef70be4330303d077ac3ef737ce4b85d8987be6960d66ca5cda', '2026-08-14 10:36:28');
 
 -- --------------------------------------------------------
 
@@ -226,6 +239,29 @@ CREATE TABLE `purchase_tickets` (
   `seat_code` varchar(10) NOT NULL,
   `price` decimal(10,2) NOT NULL,
   `created_at` timestamp NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `purchase_tickets`
+--
+
+INSERT INTO `purchase_tickets` (`id`, `purchase_id`, `showtime_id`, `ticket_type_id`, `seat_code`, `price`, `created_at`) VALUES
+(1, 486, 64, 1, 'A11', 3000.00, '2026-08-14 13:57:04'),
+(2, 488, 64, 1, 'A11', 3000.00, '2026-08-14 14:26:28');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `rate_limits`
+--
+
+CREATE TABLE `rate_limits` (
+  `id` int(11) NOT NULL,
+  `ip_address` varchar(45) NOT NULL,
+  `action` varchar(50) NOT NULL,
+  `attempts` int(11) NOT NULL DEFAULT 1,
+  `window_start` timestamp NOT NULL DEFAULT current_timestamp(),
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -363,6 +399,15 @@ CREATE TABLE `tickets` (
   `price_paid` decimal(10,2) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Volcado de datos para la tabla `tickets`
+--
+
+INSERT INTO `tickets` (`id`, `user_id`, `showtime_id`, `seat_code`, `purchase_date`, `price_paid`) VALUES
+(133, 8, 64, 'A1', '2026-08-14 13:39:02', 3000.00),
+(135, 8, 64, 'A2', '2026-08-14 13:39:55', 3000.00),
+(141, 8, 64, 'A11', '2026-08-14 14:26:28', 3000.00);
+
 -- --------------------------------------------------------
 
 --
@@ -436,7 +481,7 @@ CREATE TABLE `users` (
 
 INSERT INTO `users` (`id`, `name`, `email`, `cedula_type`, `cedula_number`, `phone_prefix`, `phone_number`, `birth_date`, `password`, `role`, `is_blocked`, `created_at`, `last_login`) VALUES
 (1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-13 22:12:38'),
-(8, 'Darwin Mavarez', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-14 05:36:24');
+(8, 'Darwin Mavarez', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-14 07:50:24');
 
 --
 -- Índices para tablas volcadas
@@ -485,9 +530,10 @@ ALTER TABLE `movies`
 --
 ALTER TABLE `purchases`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `user_id` (`user_id`),
   ADD KEY `showtime_id` (`showtime_id`),
-  ADD KEY `idx_status_fecha` (`status`,`purchase_date`);
+  ADD KEY `idx_status_fecha` (`status`,`purchase_date`),
+  ADD KEY `idx_user_showtime` (`user_id`,`showtime_id`),
+  ADD KEY `idx_status_expires` (`status`,`expires_at`);
 
 --
 -- Indices de la tabla `purchase_tickets`
@@ -497,6 +543,14 @@ ALTER TABLE `purchase_tickets`
   ADD KEY `purchase_id` (`purchase_id`),
   ADD KEY `showtime_id` (`showtime_id`),
   ADD KEY `ticket_type_id` (`ticket_type_id`);
+
+--
+-- Indices de la tabla `rate_limits`
+--
+ALTER TABLE `rate_limits`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `unique_ip_action` (`ip_address`,`action`),
+  ADD KEY `idx_window_start` (`window_start`);
 
 --
 -- Indices de la tabla `rooms`
@@ -532,7 +586,8 @@ ALTER TABLE `tax_config`
 ALTER TABLE `tickets`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `unique_seat_showtime` (`showtime_id`,`seat_code`),
-  ADD KEY `user_id` (`user_id`);
+  ADD KEY `user_id` (`user_id`),
+  ADD KEY `idx_showtime_seat` (`showtime_id`,`seat_code`);
 
 --
 -- Indices de la tabla `ticket_logs`
@@ -580,7 +635,7 @@ ALTER TABLE `food_items`
 -- AUTO_INCREMENT de la tabla `food_orders`
 --
 ALTER TABLE `food_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=35;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT de la tabla `movies`
@@ -592,13 +647,19 @@ ALTER TABLE `movies`
 -- AUTO_INCREMENT de la tabla `purchases`
 --
 ALTER TABLE `purchases`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=466;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=489;
 
 --
 -- AUTO_INCREMENT de la tabla `purchase_tickets`
 --
 ALTER TABLE `purchase_tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=63;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+
+--
+-- AUTO_INCREMENT de la tabla `rate_limits`
+--
+ALTER TABLE `rate_limits`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `rooms`
@@ -628,7 +689,7 @@ ALTER TABLE `tax_config`
 -- AUTO_INCREMENT de la tabla `tickets`
 --
 ALTER TABLE `tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=116;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=142;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_logs`

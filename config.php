@@ -1,19 +1,26 @@
 <?php
-
 // ============================================
-// CONFIGURACIÓN DE SESIÓN
+// CONFIGURACIÓN DE SESIÓN (MEJORADA)
 // ============================================
 date_default_timezone_set('America/Caracas');
 
 if (session_status() === PHP_SESSION_NONE) {
+    // Configuración segura de cookies
     ini_set('session.cookie_lifetime', 0);
     ini_set('session.gc_maxlifetime', 3600);
     ini_set('session.cookie_httponly', 1);
     ini_set('session.use_only_cookies', 1);
     ini_set('session.cookie_samesite', 'Lax');
+    
+    // ✅ HABILITAR SECURE FLAG SI ES HTTPS
+    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+        ini_set('session.cookie_secure', 1);
+    }
+    
     session_start();
 }
 
+// Verificar expiración de sesión
 if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 3600)) {
     session_unset();
     session_destroy();
@@ -21,6 +28,16 @@ if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 
 }
 
 $_SESSION['last_activity'] = time();
+
+// ✅ AGREGAR HEADERS DE SEGURIDAD
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('X-XSS-Protection: 1; mode=block');
+header('Referrer-Policy: strict-origin-when-cross-origin');
+
+if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+    header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+}
 
 // ============================================
 // CONFIGURACIÓN DE BASE DE DATOS
@@ -38,7 +55,8 @@ try {
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     $pdo->exec("SET time_zone = '-04:00'");
 } catch (PDOException $e) {
-    die("Error de conexión: " . $e->getMessage());
+    error_log("Error de conexión: " . $e->getMessage());
+    die("Error de conexión a la base de datos. Por favor, contacte al administrador.");
 }
 
 // ============================================
@@ -227,9 +245,7 @@ function releaseExpiredSeats($pdo) {
     try {
         $pdo->beginTransaction();
 
-        // ============================================
         // 1. LIBERAR COMPRAS PENDIENTES EXPIRADAS
-        // ============================================
         $stmt = $pdo->prepare("
             SELECT id, seats, showtime_id
             FROM purchases
@@ -250,9 +266,7 @@ function releaseExpiredSeats($pdo) {
             $total_released += count($seatsArray);
         }
 
-        // ============================================
         // 2. LIBERAR SHOWTIMES QUE YA PASARON
-        // ============================================
         $stmt = $pdo->prepare("
             SELECT DISTINCT s.id, s.show_date, s.show_time, m.duration, COUNT(t.id) as ticket_count
             FROM showtimes s
@@ -283,33 +297,56 @@ function releaseExpiredSeats($pdo) {
 }
 
 // ============================================
+// LIBERACIÓN OPTIMIZADA CON CACHÉ
+// ============================================
+function releaseExpiredSeatsOptimized($pdo) {
+    // Usar caché de sesión para evitar ejecuciones frecuentes
+    $cacheKey = 'last_seat_release_time';
+    $cacheInterval = 60; // Ejecutar cada 60 segundos
+    
+    $lastRelease = $_SESSION[$cacheKey] ?? 0;
+    $currentTime = time();
+    
+    // Solo ejecutar si han pasado más de 60 segundos
+    if (($currentTime - $lastRelease) < $cacheInterval) {
+        return 0; // No ejecutar, usar caché
+    }
+    
+    // Ejecutar liberación
+    $released = releaseExpiredSeats($pdo);
+    
+    // Actualizar timestamp
+    $_SESSION[$cacheKey] = $currentTime;
+    
+    return $released;
+}
+
+// Ejecutar liberación automática optimizada
+$released_count = releaseExpiredSeatsOptimized($pdo);
+
+// ============================================
 // 🧹 LIMPIEZA AUTOMÁTICA DE REGISTROS ANTIGUOS
-// Se ejecuta cada 5 días entre la 1:00 AM y 5:59 AM
 // ============================================
 function cleanupExpiredPurchasesPeriodic($pdo) {
     try {
         $lastCleanupKey = 'last_cleanup_expired_purchases';
         
-        // Obtener la última fecha de limpieza
         $stmt = $pdo->prepare("SELECT value FROM site_config WHERE key_name = ?");
         $stmt->execute([$lastCleanupKey]);
         $lastCleanup = $stmt->fetch();
         
         $now = time();
-        $fiveDaysInSeconds = 5 * 24 * 60 * 60; // 5 días
+        $fiveDaysInSeconds = 5 * 24 * 60 * 60;
         $currentHour = (int)date('H');
         
-        // 🕐 Solo ejecutar entre la 1:00 AM y las 5:59 AM (ventana de baja actividad)
         $inMaintenanceWindow = ($currentHour >= 1 && $currentHour < 6);
         
         if (!$inMaintenanceWindow) {
-            return; // No estamos en la ventana de mantenimiento, salir sin hacer nada
+            return;
         }
         
-        // Verificar si han pasado 5 días desde la última limpieza
         $shouldCleanup = false;
         if (!$lastCleanup || empty($lastCleanup['value'])) {
-            // Nunca se ha limpiado, ejecutar limpieza
             $shouldCleanup = true;
         } else {
             $lastCleanupTime = strtotime($lastCleanup['value']);
@@ -319,12 +356,9 @@ function cleanupExpiredPurchasesPeriodic($pdo) {
         }
         
         if (!$shouldCleanup) {
-            return; // No han pasado 5 días, salir sin hacer nada
+            return;
         }
         
-        // 🧹 EJECUTAR LIMPIEZA
-        
-        // 1. Eliminar compras expiradas con más de 30 días
         $stmtDelete = $pdo->prepare("
             DELETE FROM purchases 
             WHERE status = 'expired' 
@@ -333,7 +367,6 @@ function cleanupExpiredPurchasesPeriodic($pdo) {
         $stmtDelete->execute();
         $deletedPurchases = $stmtDelete->rowCount();
         
-        // 2. Eliminar tickets huérfanos con más de 30 días
         $stmtOrphanTickets = $pdo->prepare("
             DELETE t FROM tickets t
             WHERE NOT EXISTS (
@@ -346,7 +379,6 @@ function cleanupExpiredPurchasesPeriodic($pdo) {
         $stmtOrphanTickets->execute();
         $deletedOrphanTickets = $stmtOrphanTickets->rowCount();
         
-        // 3. Eliminar pedidos de comida pendientes con más de 30 días
         $stmtOrphanFood = $pdo->prepare("
             DELETE FROM food_orders 
             WHERE status = 'pending' 
@@ -355,7 +387,6 @@ function cleanupExpiredPurchasesPeriodic($pdo) {
         $stmtOrphanFood->execute();
         $deletedOrphanFood = $stmtOrphanFood->rowCount();
         
-        // 4. Eliminar logs de tickets con más de 90 días
         $stmtOldLogs = $pdo->prepare("
             DELETE FROM ticket_logs 
             WHERE released_at < DATE_SUB(NOW(), INTERVAL 90 DAY)
@@ -363,7 +394,6 @@ function cleanupExpiredPurchasesPeriodic($pdo) {
         $stmtOldLogs->execute();
         $deletedOldLogs = $stmtOldLogs->rowCount();
         
-        // 📊 Actualizar la fecha de última limpieza
         if ($lastCleanup && !empty($lastCleanup['value'])) {
             $stmtUpdate = $pdo->prepare("UPDATE site_config SET value = NOW(), updated_at = NOW() WHERE key_name = ?");
         } else {
@@ -371,7 +401,6 @@ function cleanupExpiredPurchasesPeriodic($pdo) {
         }
         $stmtUpdate->execute([$lastCleanupKey]);
         
-        // 📝 Registrar en el log
         $logMessage = sprintf(
             "🧹 Limpieza automática [%s]: %d compras expiradas, %d tickets huérfanos, %d pedidos comida, %d logs antiguos eliminados",
             date('Y-m-d H:i:s'),
@@ -387,14 +416,10 @@ function cleanupExpiredPurchasesPeriodic($pdo) {
     }
 }
 
-// Ejecutar liberación automática al cargar cualquier página
-$released_count = releaseExpiredSeats($pdo);
-
-// 🧹 Ejecutar limpieza periódica (solo entre 1-6 AM cada 5 días)
 cleanupExpiredPurchasesPeriodic($pdo);
 
 // ============================================
-// FUNCIONES CSRF
+// FUNCIONES CSRF (MEJORADAS CON ROTATION)
 // ============================================
 function generateCSRFToken() {
     if (empty($_SESSION['csrf_token'])) {
@@ -408,7 +433,20 @@ function verifyCSRFToken($token) {
     if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
         return false;
     }
+    
+    // ✅ REGENERAR TOKEN DESPUÉS DE USO EXITOSO
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    $_SESSION['csrf_token_created'] = time();
+    
     return true;
+}
+
+function isCSRFTokenExpired() {
+    if (!isset($_SESSION['csrf_token_created'])) {
+        return true;
+    }
+    $maxAge = 3600; // 1 hora
+    return (time() - $_SESSION['csrf_token_created']) > $maxAge;
 }
 
 // ============================================

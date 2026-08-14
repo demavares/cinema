@@ -68,6 +68,26 @@ if (!$showtime) {
     exit;
 }
 
+// ============================================
+// ✅ CORREGIDO: VALIDAR QUE EL SHOWTIME NO HAYA PASADO
+// ============================================
+$showtimeDateTime = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']);
+$currentDateTime = time();
+
+if ($showtimeDateTime < $currentDateTime) {
+    error_log("❌ payment.php: Intento de acceder a showtime pasado");
+    header('Location: index.php?error=Este+horario+ya+no+está+disponible');
+    exit;
+}
+
+// Validar con margen de seguridad (15 minutos antes del inicio)
+$safetyMargin = 15 * 60;
+if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
+    error_log("⚠️ payment.php: Showtime muy próximo a iniciar");
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Este+horario+está+por+iniciar.+Selecciona+otro');
+    exit;
+}
+
 // Obtener datos de boletos
 $ticketsData = $_SESSION['ticket_quantities_' . $showtimeId] ?? null;
 
@@ -219,7 +239,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .seats-display { font-size: 0.95rem; font-weight: 500; color: #475569; word-break: break-word; }
 
 @media (min-width: 1024px) { .card-summary { position: sticky; top: 100px; } }
-/* ✅ CORREGIDO: Timeout warning centrado en tablet y móvil */
 @media (max-width: 768px) {
     .payment-methods { grid-template-columns: 1fr 1fr; gap: 12px; }
     .payment-method { padding: 18px 12px; }
@@ -258,6 +277,11 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                 <input type="hidden" name="payment_method" id="paymentMethodInput" value="">
                 <input type="hidden" name="food_order" id="foodOrderInput" value='<?= json_encode($foodOrder) ?>'>
                 <input type="hidden" name="purchase_token" value="<?= htmlspecialchars($token) ?>">
+
+                <!-- ✅ CORREGIDO: AGREGAR PRECIOS CALCULADOS POR EL SERVIDOR PARA VALIDACIÓN -->
+                <input type="hidden" name="client_subtotal" value="<?= $subtotalWithFood ?>">
+                <input type="hidden" name="client_tax" value="<?= $taxAmountWithFood ?>">
+                <input type="hidden" name="client_total" value="<?= $totalAmountWithFood ?>">
 
                 <div class="payment-methods">
                     <div class="payment-method" onclick="selectPayment('movil')" id="method-movil">
@@ -329,7 +353,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
             </div>
 
             <div class="mb-3">
-                <!-- ✅ CORREGIDO: Color índigo para el título "Boletos" -->
                 <p class="text-xs font-semibold uppercase mb-1" style="color: #4f46e5;">🎫 Boletos</p>
                 <?php
                 $ticketTypes = ['adult' => 'Adulto', 'child' => 'Niño', 'senior' => 'Tercera Edad'];
@@ -351,7 +374,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 
             <?php if (!empty($foodItems)): ?>
                 <div class="mb-3">
-                    <!-- ✅ CORREGIDO: Color índigo para el título "Comida" -->
                     <p class="text-xs font-semibold uppercase mb-1" style="color: #4f46e5;">🍿 Comida</p>
                     <?php foreach ($foodItems as $item): ?>
                         <div class="cart-item"><span class="item-name"><?= $item['quantity'] ?> x <?= htmlspecialchars($item['name']) ?></span><span class="item-price"><?= formatCurrency($item['total'], $siteConfig) ?></span></div>
@@ -359,7 +381,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                 </div>
             <?php else: ?>
                 <div class="mb-3">
-                    <!-- ✅ CORREGIDO: Color índigo para el título "Comida" -->
                     <p class="text-xs font-semibold uppercase mb-1" style="color: #4f46e5;">🍿 Comida</p>
                     <p class="text-sm text-gray-500">No has seleccionado comida</p>
                 </div>
@@ -425,6 +446,7 @@ document.getElementById('paymentForm').addEventListener('submit', function(e) {
         return false;
     }
 
+    // ✅ Activar bandera para evitar liberar asientos al pagar
     skipUnloadRelease = true;
     return true;
 });
