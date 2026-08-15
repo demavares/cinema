@@ -1,38 +1,13 @@
 <?php
 require_once 'config.php';
 
-// ✅ Verificar si viene con expired
-if (isset($_GET['expired']) && $_GET['expired'] === '1') {
-    header('Location: index.php?expired=1');
-    exit;
-}
-
-if (isset($_GET['session_expired']) ||
-    (isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'session_expired') !== false)) {
-    $keys = array_keys($_SESSION);
-    foreach ($keys as $key) {
-        if (strpos($key, 'purchase_') === 0 ||
-            strpos($key, 'food_') === 0 ||
-            strpos($key, 'ticket_') === 0 ||
-            strpos($key, 'total_') === 0 ||
-            strpos($key, 'subtotal_') === 0 ||
-            strpos($key, 'tax_') === 0 ||
-            strpos($key, 'payment_') === 0) {
-            unset($_SESSION[$key]);
-        }
-    }
-    header('Location: index.php?expired=1');
-    exit;
-}
-
-checkSessionExpired();
-
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
 }
 
 $showtimeId = isset($_GET['showtime_id']) ? intval($_GET['showtime_id']) : 0;
+
 if ($showtimeId <= 0) {
     header('Location: index.php');
     exit;
@@ -41,105 +16,25 @@ if ($showtimeId <= 0) {
 checkSessionExpired($showtimeId);
 
 $fromFood = isset($_GET['from']) && $_GET['from'] === 'food';
-$fromIndex = isset($_SERVER['HTTP_REFERER']) && strpos($_SERVER['HTTP_REFERER'], 'index.php') !== false;
 
-if ($fromIndex) {
-    clearPurchaseSession($showtimeId);
-    unset($_SESSION['food_valid_' . $showtimeId]);
-    unset($_SESSION['food_seats_' . $showtimeId]);
-    unset($_SESSION['food_timeout_' . $showtimeId]);
-    unset($_SESSION['food_order_' . $showtimeId]);
+$ticketsKey = 'ticket_quantities_' . $showtimeId;
+$totalSeatsKey = 'total_seats_' . $showtimeId;
 
-    $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
-    $_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
-}
+$ticketsData = $_SESSION[$ticketsKey] ?? null;
+$totalSeats = $_SESSION[$totalSeatsKey] ?? 0;
 
-$purchaseToken = $_SESSION['purchase_token_' . $showtimeId] ?? '';
-$foodValidKey = 'food_valid_' . $showtimeId;
-$hasFoodSession = isset($_SESSION[$foodValidKey]) && $_SESSION[$foodValidKey] === true;
-
-if (empty($purchaseToken) || !verifyPurchaseTokenWithTimeout($purchaseToken, $showtimeId)) {
-    if (!$hasFoodSession && !$fromFood) {
-        header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
-        exit;
-    }
-
-    if ($fromFood) {
-        $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
-        $_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
-    }
-}
-
-// ✅ VERIFICAR QUE HAYA DATOS DE BOLETOS EN SESIÓN
-$ticketsData = isset($_SESSION['ticket_quantities_' . $showtimeId]) ? $_SESSION['ticket_quantities_' . $showtimeId] : null;
-$totalSeats = isset($_SESSION['total_seats_' . $showtimeId]) ? intval($_SESSION['total_seats_' . $showtimeId]) : 0;
-$subtotal = isset($_SESSION['subtotal_' . $showtimeId]) ? floatval($_SESSION['subtotal_' . $showtimeId]) : 0;
-$taxAmount = isset($_SESSION['tax_amount_' . $showtimeId]) ? floatval($_SESSION['tax_amount_' . $showtimeId]) : 0;
-$totalAmount = isset($_SESSION['total_amount_' . $showtimeId]) ? floatval($_SESSION['total_amount_' . $showtimeId]) : 0;
-$taxRate = isset($_SESSION['tax_rate_' . $showtimeId]) ? floatval($_SESSION['tax_rate_' . $showtimeId]) : 16;
-
-$foodSeatsKey = 'food_seats_' . $showtimeId;
-$foodTimeoutKey = 'food_timeout_' . $showtimeId;
-
-// ✅ Si no hay datos de boletos en sesión, intentar recuperar de food_seats
 if (!$ticketsData || $totalSeats <= 0) {
-    if ($hasFoodSession && isset($_SESSION[$foodSeatsKey]) && !empty($_SESSION[$foodSeatsKey])) {
-        $foodSeats = $_SESSION[$foodSeatsKey];
-        $seatsArrayTemp = array_filter(array_map('trim', explode(',', $foodSeats)));
-        $totalSeatsFromFood = count($seatsArrayTemp);
-
-        if ($totalSeatsFromFood > 0) {
-            $stmtTemp = $pdo->prepare("
-                SELECT s.*, m.title, m.poster_url, m.description, m.duration,
-                       r.name as room_name, r.capacity, r.seat_layout, r.aisle_config
-                FROM showtimes s
-                JOIN movies m ON s.movie_id = m.id
-                JOIN rooms r ON s.room_id = r.id
-                WHERE s.id = ? AND s.is_active = 1
-            ");
-            $stmtTemp->execute([$showtimeId]);
-            $showtimeTemp = $stmtTemp->fetch();
-
-            if ($showtimeTemp) {
-                $ticketsData = ['adult' => $totalSeatsFromFood, 'child' => 0, 'senior' => 0];
-                $priceTemp = getShowtimePrice($showtimeTemp);
-                $subtotal = $totalSeatsFromFood * $priceTemp;
-
-                $stmtTax = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
-                $taxTemp = $stmtTax->fetch();
-                $taxRate = $taxTemp ? floatval($taxTemp['tax_rate']) : 16;
-                $taxAmount = $subtotal * ($taxRate / 100);
-                $totalAmount = $subtotal + $taxAmount;
-                $totalSeats = $totalSeatsFromFood;
-
-                $_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
-                $_SESSION['total_seats_' . $showtimeId] = $totalSeats;
-                $_SESSION['subtotal_' . $showtimeId] = $subtotal;
-                $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
-                $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
-                $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
-            }
-        }
-    }
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=No+hay+boletos+seleccionados');
+    exit;
 }
 
-// ✅ Si aún no hay datos, redirigir a price_selection
-if (!$ticketsData || $totalSeats <= 0) {
-    if ($hasFoodSession) {
-        unset($_SESSION[$foodValidKey]);
-        unset($_SESSION[$foodSeatsKey]);
-        unset($_SESSION[$foodTimeoutKey]);
-    }
-
-    if (!$fromFood) {
-        header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+de+boletos+no+encontrados');
-        exit;
-    }
-}
+$subtotal = $_SESSION['subtotal_' . $showtimeId] ?? 0;
+$taxAmount = $_SESSION['tax_amount_' . $showtimeId] ?? 0;
+$totalAmount = $_SESSION['total_amount_' . $showtimeId] ?? 0;
+$taxRate = $_SESSION['tax_rate_' . $showtimeId] ?? 16;
 
 $stmt = $pdo->prepare("
-    SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.description, m.duration,
-           r.name as room_name, r.capacity, r.seat_layout, r.aisle_config
+    SELECT s.*, m.title, m.poster_url, r.name as room_name, r.seat_layout
     FROM showtimes s
     JOIN movies m ON s.movie_id = m.id
     JOIN rooms r ON s.room_id = r.id
@@ -149,98 +44,55 @@ $stmt->execute([$showtimeId]);
 $showtime = $stmt->fetch();
 
 if (!$showtime) {
-    header('Location: index.php');
+    header('Location: index.php?error=Función+no+encontrada');
     exit;
 }
 
-// ============================================
-// ✅ CORREGIDO: VALIDAR QUE EL SHOWTIME NO HAYA PASADO
-// ============================================
 $showtimeDateTime = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']);
 $currentDateTime = time();
-
-if ($showtimeDateTime < $currentDateTime) {
-    error_log("❌ seats.php: Intento de acceder a showtime pasado");
-    header('Location: index.php?error=Este+horario+ya+no+está+disponible');
-    exit;
-}
-
-// Validar con margen de seguridad (15 minutos antes del inicio)
 $safetyMargin = 15 * 60;
+
 if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
-    error_log("⚠️ seats.php: Showtime muy próximo a iniciar");
-    header('Location: index.php?error=Este+horario+está+por+iniciar.+Selecciona+otro');
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Este+horario+está+por+iniciar.+Selecciona+otro');
     exit;
 }
 
-$finalPrice = getShowtimePrice($showtime);
+// ✅ CORRECCIÓN: Query mejorada para excluir tickets temporales sin compra válida
+// Solo considerar ocupados los tickets que:
+// 1. Tienen precio pagado > 0 (definitivos)
+// 2. O pertenecen a una compra pending que aún no ha expirado
+$stmtOccupied = $pdo->prepare("
+    SELECT DISTINCT t.seat_code FROM tickets t
+    WHERE t.showtime_id = ?
+    AND t.user_id != ?
+    AND (
+        t.price_paid > 0
+        OR EXISTS (
+            SELECT 1 FROM purchases p
+            WHERE p.user_id = t.user_id
+            AND p.showtime_id = t.showtime_id
+            AND p.status IN ('completed', 'pending')
+            AND p.expires_at > NOW()
+        )
+    )
+");
+$stmtOccupied->execute([$showtimeId, $_SESSION['user_id']]);
+$occupiedSeats = $stmtOccupied->fetchAll(PDO::FETCH_COLUMN);
 
 $stmtCompleted = $pdo->prepare("
-    SELECT DISTINCT t.seat_code
+    SELECT DISTINCT t.seat_code 
     FROM tickets t
-    INNER JOIN purchases p ON t.user_id = p.user_id
-        AND t.showtime_id = p.showtime_id
-        AND t.seat_code IS NOT NULL
-    WHERE t.showtime_id = ?
-      AND p.status = 'completed'
+    INNER JOIN purchases p ON t.user_id = p.user_id AND t.showtime_id = p.showtime_id
+    WHERE t.showtime_id = ? AND p.status = 'completed'
 ");
 $stmtCompleted->execute([$showtimeId]);
-$completedSeats = $stmtCompleted->fetchAll(PDO::FETCH_COLUMN);
+$userCompletedSeats = $stmtCompleted->fetchAll(PDO::FETCH_COLUMN);
+$occupiedSeats = array_unique(array_merge($occupiedSeats, $userCompletedSeats));
 
-$userCompletedSeats = [];
-$stmtUserCompleted = $pdo->prepare("
-    SELECT DISTINCT t.seat_code
-    FROM tickets t
-    INNER JOIN purchases p ON t.user_id = p.user_id
-        AND t.showtime_id = p.showtime_id
-    WHERE t.showtime_id = ?
-      AND p.user_id = ?
-      AND p.status = 'completed'
-");
-$stmtUserCompleted->execute([$showtimeId, $_SESSION['user_id']]);
-$userCompletedSeats = $stmtUserCompleted->fetchAll(PDO::FETCH_COLUMN);
-
-$stmtPending = $pdo->prepare("
-    SELECT seats
-    FROM purchases
-    WHERE showtime_id = ?
-      AND status = 'pending'
-      AND user_id != ?
-      AND expires_at > NOW()
-");
-$stmtPending->execute([$showtimeId, $_SESSION['user_id']]);
-$pendingPurchases = $stmtPending->fetchAll(PDO::FETCH_COLUMN);
-
-$occupiedSeats = $completedSeats;
-foreach ($pendingPurchases as $seatsString) {
-    if (!empty($seatsString)) {
-        $seatsArray = array_map('trim', explode(',', $seatsString));
-        $seatsArray = array_map(function($seat) { return str_replace('♿', '', $seat); }, $seatsArray);
-        $occupiedSeats = array_merge($occupiedSeats, $seatsArray);
-    }
-}
-$occupiedSeats = array_unique($occupiedSeats);
-$occupiedSeats = array_values($occupiedSeats);
-
-$stmtUserSeats = $pdo->prepare("
-    SELECT t.seat_code
-    FROM tickets t
-    JOIN purchases p ON t.user_id = p.user_id AND t.showtime_id = p.showtime_id
-    WHERE t.showtime_id = ?
-      AND t.user_id = ?
-      AND p.status = 'pending'
-      AND p.expires_at > NOW()
-");
-$stmtUserSeats->execute([$showtimeId, $_SESSION['user_id']]);
-$userPendingSeats = $stmtUserSeats->fetchAll(PDO::FETCH_COLUMN);
-
+$userPendingSeats = [];
 $stmtUserPendingPurchases = $pdo->prepare("
-    SELECT seats
-    FROM purchases
-    WHERE showtime_id = ?
-      AND user_id = ?
-      AND status = 'pending'
-      AND expires_at > NOW()
+    SELECT seats FROM purchases 
+    WHERE showtime_id = ? AND user_id = ? AND status = 'pending' AND expires_at > NOW()
 ");
 $stmtUserPendingPurchases->execute([$showtimeId, $_SESSION['user_id']]);
 $userPendingPurchases = $stmtUserPendingPurchases->fetchAll(PDO::FETCH_COLUMN);
@@ -331,7 +183,6 @@ $pageTitle = "Selección de Asientos - " . $showtime['title'];
 $backUrl = 'price_selection.php?showtime_id=' . $showtimeId;
 $siteConfig = getSiteConfig($pdo);
 
-// ✅ Asegurar que el token esté actualizado antes de mostrar la página
 if (!isset($_SESSION['purchase_token_' . $showtimeId]) || isPurchaseTokenExpired($showtimeId)) {
     $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
     $_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
@@ -339,7 +190,6 @@ if (!isset($_SESSION['purchase_token_' . $showtimeId]) || isPurchaseTokenExpired
     $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
 }
 
-// ✅ Si el token está por expirar (menos de 60 segundos), regenerar
 $timeLeft = getPurchaseTokenTimeLeft($showtimeId);
 if ($timeLeft < 60 && $timeLeft > 0) {
     clearPurchaseSession($showtimeId);
@@ -347,7 +197,6 @@ if ($timeLeft < 60 && $timeLeft > 0) {
     $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
     $_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
 
-    // Restaurar datos de boletos
     $_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
     $_SESSION['total_seats_' . $showtimeId] = $totalSeats;
     $_SESSION['subtotal_' . $showtimeId] = $subtotal;
@@ -381,7 +230,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .seat-label { font-size: calc(var(--seat-size) * 0.35); color: #0f172a; text-align: center; position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); font-weight: bold; white-space: nowrap; }
 .seat-selected .seat-label, .seat-occupied .seat-label { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
 
-/* ✅ CORREGIDO: Pantalla en negro mate para no confundir con botón */
 .cinema-screen { background: #1a1a1a !important; color: #6b7280; text-align: center; padding: 3px; border-radius: 8px; margin-top: 28px; font-weight: bold; letter-spacing: 4px; font-size: clamp(0.7rem, 2vw, 1rem); width: 100%; cursor: default; }
 
 .legend { display: flex; gap: clamp(8px, 2vw, 20px); justify-content: center; flex-wrap: wrap; margin-top: 20px; }
@@ -449,7 +297,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                     <h2 class="text-xl font-bold section-title">🎫 Selecciona tus asientos</h2>
                     <p class="text-sm section-subtitle"><?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?></p>
                 </div>
-                <!-- ✅ CORREGIDO: Texto plano sin estilos de badge -->
                 <span><?= $realAvailable + count($userPendingSeats) ?> asientos disponibles</span>
             </div>
 
@@ -495,7 +342,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
             </div>
 
             <div class="legend">
-                <!-- ✅ CORREGIDO: Color Disponible = #cbd5e1 (igual que los asientos) -->
                 <div class="legend-item"><div class="color-box" style="background-color: #cbd5e1;"></div> Disponible</div>
                 <div class="legend-item"><div class="color-box bg-sky-600">♿</div> Discapacidad</div>
                 <div class="legend-item"><div class="color-box bg-indigo-500"></div> Seleccionado</div>
@@ -550,9 +396,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 <?php require_once 'footer.php'; ?>
 
 <script>
-// ============================================
-// CONFIGURACIÓN DESDE PHP
-// ============================================
 const totalSeatsNeeded = <?= $totalSeats ?>;
 const showtimeId = <?= $showtime['id'] ?>;
 const totalAmount = <?= $totalAmount ?>;
@@ -577,12 +420,8 @@ const currencyConfig = {
 let selectedSeats = [...userPendingSeats];
 const maxSeats = totalSeatsNeeded;
 
-// ✅ Bandera para evitar liberar asientos cuando la navegación es hacia food_menu.php
 let skipUnloadRelease = false;
 
-// ============================================
-// FUNCIONES
-// ============================================
 function formatCurrency(amount) {
     if (typeof amount !== 'number' || isNaN(amount)) amount = 0;
     const formatted = amount.toFixed(currencyConfig.decimals)
@@ -683,9 +522,6 @@ function updateSummary() {
     saveSeatsToStorage();
 }
 
-// ============================================
-// EVENT LISTENERS
-// ============================================
 document.getElementById('btnBackToPrices').addEventListener('click', function() {
     if (!confirm('¿Estás seguro? Se liberarán los asientos seleccionados.')) return;
 
@@ -705,7 +541,6 @@ window.addEventListener('pageshow', function(event) {
     }
 });
 
-// ✅ CORREGIDO: beforeunload con protección
 window.addEventListener('beforeunload', function() {
     if (skipUnloadRelease) return;
 
@@ -714,9 +549,6 @@ window.addEventListener('beforeunload', function() {
     navigator.sendBeacon('liberar_asientos.php', formData);
 });
 
-// ============================================
-// ENVIAR FORMULARIO CON OBTENCIÓN DE TOKEN FRESCO
-// ============================================
 document.getElementById('foodForm').addEventListener('submit', function(e) {
     e.preventDefault();
 
@@ -754,7 +586,6 @@ document.getElementById('foodForm').addEventListener('submit', function(e) {
                 purchaseToken = data.token;
                 btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Reservando asientos...';
 
-                // 🚀 ENVÍO POR AJAX PARA MEJOR MANEJO DE ERRORES
                 const formData = new FormData(form);
 
                 fetch('create_food_session.php', {
@@ -793,9 +624,6 @@ document.getElementById('foodForm').addEventListener('submit', function(e) {
         });
 });
 
-// ============================================
-// INICIALIZACIÓN DE ASIENTOS
-// ============================================
 document.addEventListener('DOMContentLoaded', function() {
     const seats = document.querySelectorAll('.seat:not(.seat-blocked)');
 
@@ -847,7 +675,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Verificar asientos en tiempo real
     setInterval(function() {
         fetch('check_seats.php?showtime_id=' + showtimeId)
             .then(response => response.json())

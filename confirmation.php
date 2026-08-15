@@ -1,22 +1,13 @@
 <?php
 require_once 'config.php';
 
-// ============================================
-// ✅ CORREGIDO: VERIFICAR SESIÓN DEL USUARIO
-// ============================================
 checkSessionExpired();
 
-// ============================================
-// VERIFICAR QUE EL USUARIO TENGA SESIÓN
-// ============================================
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
 }
 
-// ============================================
-// ✅ CORREGIDO: VERIFICAR QUE EL USUARIO NO ESTÉ BLOQUEADO
-// ============================================
 $stmtUser = $pdo->prepare("SELECT is_blocked FROM users WHERE id = ?");
 $stmtUser->execute([$_SESSION['user_id']]);
 $userData = $stmtUser->fetch();
@@ -43,9 +34,6 @@ if ($purchaseId <= 0) {
     exit;
 }
 
-// ============================================
-// ✅ VERIFICAR QUE LA COMPRA PERTENECE AL USUARIO
-// ============================================
 $stmt = $pdo->prepare("SELECT showtime_id, status FROM purchases WHERE id = ? AND user_id = ?");
 $stmt->execute([$purchaseId, $_SESSION['user_id']]);
 $purchaseData = $stmt->fetch();
@@ -56,7 +44,6 @@ if (!$purchaseData) {
     exit;
 }
 
-// ✅ Verificar que la compra esté completada
 if ($purchaseData['status'] !== 'completed') {
     error_log("Intento de ver purchase #$purchaseId con status: " . $purchaseData['status']);
     header('Location: index.php?error=purchase_not_completed');
@@ -65,14 +52,8 @@ if ($purchaseData['status'] !== 'completed') {
 
 $showtimeId = $purchaseData['showtime_id'];
 
-// ============================================
-// ✅ LIMPIAR SESIONES DE COMPRA
-// ============================================
 clearPurchaseSession($showtimeId);
 
-// ============================================
-// OBTENER DATOS DE LA COMPRA
-// ============================================
 $stmt = $pdo->prepare("
     SELECT * FROM purchases
     WHERE id = ? AND user_id = ? AND status = 'completed'
@@ -85,11 +66,8 @@ if (!$purchase) {
     exit;
 }
 
-// ============================================
-// OBTENER DATOS DEL SHOWTIME
-// ============================================
 $stmt = $pdo->prepare("
-    SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.duration, r.name as room_name
+    SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.duration, r.name as room_name, r.seat_layout
     FROM showtimes s
     JOIN movies m ON s.movie_id = m.id
     JOIN rooms r ON s.room_id = r.id
@@ -104,9 +82,6 @@ if (!$showtime) {
     exit;
 }
 
-// ============================================
-// ✅ OBTENER TICKET TYPES DESDE purchase_tickets
-// ============================================
 $stmt = $pdo->prepare("
     SELECT pt.*, tt.name as ticket_type_name, tt.code as ticket_type_code
     FROM purchase_tickets pt
@@ -117,11 +92,13 @@ $stmt = $pdo->prepare("
 $stmt->execute([$purchaseId]);
 $purchaseTickets = $stmt->fetchAll();
 
-// ============================================
-// ✅ PROCESAR ASIENTOS Y DETECTAR ACCESIBLES
-// ============================================
+// ✅ CORREGIDO: PROCESAR ASIENTOS Y DETECTAR ACCESIBLES
 $seatsFromDB = $purchase['seats'] ?? '';
 $seatsArray = !empty($seatsFromDB) ? explode(',', $seatsFromDB) : [];
+
+// Obtener asientos accesibles desde el layout de la sala
+$seatLayout = json_decode($showtime['seat_layout'] ?? '{}', true);
+$accessibleSeatsFromLayout = $seatLayout['wheelchairSeats'] ?? ($seatLayout['accessibleSeats'] ?? []);
 
 $accessibleSeats = [];
 $cleanSeatsArray = [];
@@ -130,20 +107,16 @@ foreach ($seatsArray as $seat) {
     $seat = trim($seat);
     if (empty($seat)) continue;
 
-    if (strpos($seat, '♿') !== false) {
-        $cleanSeat = str_replace('♿', '', $seat);
+    $cleanSeat = str_replace('♿', '', $seat);
+    $cleanSeatsArray[] = $cleanSeat;
+    
+    if (in_array($cleanSeat, $accessibleSeatsFromLayout)) {
         $accessibleSeats[] = $cleanSeat;
-        $cleanSeatsArray[] = $cleanSeat;
-    } else {
-        $cleanSeatsArray[] = $seat;
     }
 }
 
 $ticketCount = count($cleanSeatsArray);
 
-// ============================================
-// ✅ OBTENER PEDIDOS DE COMIDA FILTRADOS POR purchase_id
-// ============================================
 $foodOrders = [];
 $totalFood = 0;
 
@@ -161,14 +134,8 @@ foreach ($foodOrders as $food) {
     $totalFood += floatval($food['total_price']);
 }
 
-// ============================================
-// ✅ OBTENER TASA DE IVA DESDE LA COMPRA
-// ============================================
 $taxRate = floatval($purchase['tax_rate'] ?? 16);
 
-// ============================================
-// ✅ CALCULAR DESGLOSE DE BOLETOS POR TIPO
-// ============================================
 $ticketTypes = [];
 $ticketTotal = 0;
 
@@ -191,9 +158,6 @@ foreach ($purchaseTickets as $pt) {
     $ticketTotal += $price;
 }
 
-// ============================================
-// ✅ CALCULAR DESGLOSE DE COMIDA AGRUPADA (solo si hay comida)
-// ============================================
 $groupedFood = [];
 $foodTotal = 0;
 $hasFood = !empty($foodOrders);
@@ -217,31 +181,21 @@ if ($hasFood) {
     }
 }
 
-// ============================================
-// ✅ CALCULAR SUBTOTAL SIN IVA Y TOTAL CON IVA (FUENTE DE VERDAD)
-// ============================================
 $calculatedSubtotal = $ticketTotal + $foodTotal;
 $calculatedTaxAmount = $calculatedSubtotal * ($taxRate / 100);
 $calculatedTotalAmount = $calculatedSubtotal + $calculatedTaxAmount;
 
-// ============================================
-// ✅ OBTENER VALORES GUARDADOS EN BD PARA VALIDACIÓN
-// ============================================
 $savedSubtotal = floatval($purchase['subtotal'] ?? 0);
 $savedTaxAmount = floatval($purchase['tax_amount'] ?? 0);
 $savedTotalAmount = floatval($purchase['total_amount'] ?? 0);
 $savedDataHash = $purchase['data_hash'] ?? null;
 
-// ============================================
-// ✅ VALIDAR INTEGRIDAD CON HASH
-// ============================================
 $dataString = $calculatedSubtotal . '|' . $calculatedTaxAmount . '|' . $calculatedTotalAmount . '|' . $seatsFromDB . '|' . $ticketCount . '|' . $foodTotal;
 $currentHash = hash('sha256', $dataString);
 
 $dataIntegrity = true;
 $integrityIssues = [];
 
-// 1. Validar hash de integridad (si existe)
 if ($savedDataHash !== null && $savedDataHash !== $currentHash) {
     $dataIntegrity = false;
     $integrityIssues[] = "Hash de integridad no coincide";
@@ -253,7 +207,6 @@ if ($savedDataHash !== null && $savedDataHash !== $currentHash) {
     ));
 }
 
-// 2. Validar consistencia de totales (solo logging, NO sobrescribir)
 $subtotalDiff = abs($calculatedSubtotal - $savedSubtotal);
 $taxDiff = abs($calculatedTaxAmount - $savedTaxAmount);
 $totalDiff = abs($calculatedTotalAmount - $savedTotalAmount);
@@ -294,14 +247,10 @@ if ($totalDiff > 0.01) {
     ));
 }
 
-// ============================================
-// ✅ DECISIÓN: USAR VALORES CALCULADOS (FUENTE DE VERDAD)
-// ============================================
 $displaySubtotal = $calculatedSubtotal;
 $displayTaxAmount = $calculatedTaxAmount;
 $displayTotalAmount = $calculatedTotalAmount;
 
-// Si hay problemas de integridad, loggear y marcar en BD
 if (!$dataIntegrity) {
     try {
         $stmt = $pdo->prepare("
@@ -329,13 +278,9 @@ if (!$dataIntegrity) {
     }
 }
 
-// ============================================
-// CONFIGURACIÓN DEL SITIO Y DATOS ADICIONALES
-// ============================================
 $siteConfig = getSiteConfig($pdo);
 $pageTitle = "¡Compra Exitosa! - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
 
-// ✅ USAR POSTER DESDE LA BD (NO TMDb)
 $display_poster = !empty($showtime['poster_url']) ? $showtime['poster_url'] : '';
 
 $promotions = !empty($showtime['promotions']) ? explode(',', $showtime['promotions']) : [];
@@ -362,9 +307,6 @@ if (!empty($purchase['payment_data'])) {
     }
 }
 
-// ============================================
-// ✅ FORMATO Y PROMOCIONES PARA CARD-SUMMARY
-// ============================================
 $movieFormat = $showtime['format'] ?? '2D';
 $formatClass = 'format-2d';
 if (!empty($movieFormat)) {
@@ -372,9 +314,6 @@ if (!empty($movieFormat)) {
     $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
 }
 
-// ============================================
-// ✅ VARIABLES PARA LA VISTA
-// ============================================
 $totalTickets = intval($purchase['total_tickets'] ?? 0);
 $showIntegrityWarning = !$dataIntegrity;
 $integrityMessage = $showIntegrityWarning ? implode(', ', $integrityIssues) : '';
@@ -383,9 +322,6 @@ require_once 'header.php';
 ?>
 
 <style>
-/* ============================================
-   ESTILOS UNIFICADOS - Fondo blanco y texto oscuro
-   ============================================ */
 body {
     background-color: #ffffff !important;
     color: #1f2937 !important;
@@ -437,9 +373,6 @@ body {
     margin-bottom: 24px;
 }
 
-/* ============================================
-   CARD SUMMARY - MISMO ESTILO QUE PRICE_SELECTION
-   ============================================ */
 .card-summary {
     background: #ffffff !important;
     border: 1px solid #cbd5e1 !important;
@@ -488,7 +421,6 @@ body {
     line-height: 1.3;
 }
 
-/* ✅ PROMOCIONES - BADGES BORDER AND DOT */
 .promo-tag {
     display: inline-flex;
     align-items: center;
@@ -528,7 +460,6 @@ body {
     background: #b45309;
 }
 
-/* FORMATO BADGE */
 .format-badge {
     display: inline-flex;
     align-items: center;
@@ -545,18 +476,6 @@ body {
     color: #4f5e71;
 }
 
-.format-badge.format-2d,
-.format-badge.format-3d,
-.format-badge.format-imax,
-.format-badge.format-imax-3d,
-.format-badge.format-4dx,
-.format-badge.format-screenx,
-.format-badge.format-d-box {
-    border-color: #4f5e71;
-    color: #4f5e71;
-}
-
-/* Ticket summary items - COLOR OSCURO */
 .ticket-summary-item {
     display: flex;
     justify-content: space-between;
@@ -791,7 +710,6 @@ body {
     background: #eef2ff;
 }
 
-/* ✅ TÍTULOS DE SECCIÓN CON COLOR MÁS OSCURO */
 .section-label {
     color: #1f2937 !important;
     font-weight: 700 !important;
@@ -800,7 +718,6 @@ body {
     letter-spacing: 0.05em;
 }
 
-/* ✅ ADVERTENCIA DE INTEGRIDAD */
 .integrity-warning {
     background: #fef3c7;
     border: 1px solid #f59e0b;
@@ -904,9 +821,6 @@ body {
     }
 }
 
-/* ============================================
-   ✅ ESTILOS DE IMPRESIÓN
-   ============================================ */
 @media print {
     body {
         background: white !important;
@@ -938,7 +852,6 @@ body {
 
 <div class="container mx-auto px-4 py-6 sm:py-10 max-w-4xl">
     <div class="confirmation-card" id="confirmationCard">
-        <!-- Icono de éxito -->
         <div class="success-icon">
             <i class="fas fa-check"></i>
         </div>
@@ -948,13 +861,11 @@ body {
             Tu compra se ha realizado con éxito. Revisa los detalles a continuación.
         </p>
 
-        <!-- ID de Compra -->
         <div class="text-center mb-4">
             <span class="text-xs text-gray-500 font-semibold uppercase tracking-wider">ID de Compra</span>
             <div class="purchase-id inline-block mt-1">#<?= str_pad($purchase['id'], 8, '0', STR_PAD_LEFT) ?></div>
         </div>
 
-        <!-- ✅ ADVERTENCIA DE INTEGRIDAD (si hay problemas) -->
         <?php if ($showIntegrityWarning): ?>
             <div class="integrity-warning">
                 <span class="warning-icon">⚠️</span>
@@ -969,11 +880,7 @@ body {
             </div>
         <?php endif; ?>
 
-        <!-- ============================================
-             ✅ CARD SUMMARY - MISMO ESTILO QUE PRICE_SELECTION
-             ============================================ -->
         <div class="card-summary">
-            <!-- SECCIÓN DE PELÍCULA -->
             <div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
                 <?php if (!empty($display_poster)): ?>
                     <img src="<?= htmlspecialchars($display_poster) ?>"
@@ -994,24 +901,20 @@ body {
                         <?= htmlspecialchars($showtime['title']) ?>
                     </div>
 
-                    <!-- Idioma - texto plano -->
                     <div class="text-sm text-gray-700 font-medium mt-1.5">
                         Idioma: <?= htmlspecialchars($languageLabel) ?>
                     </div>
 
-                    <!-- Sala · Fecha · Hora -->
                     <div class="text-sm text-gray-700 font-medium mt-1 whitespace-nowrap">
                         <?= htmlspecialchars($showtime['room_name']) ?> ·
                         <?= formatDateShort($showtime['show_date']) ?> ·
                         <?= formatTimeVenezuela($showtime['show_time']) ?>
                     </div>
 
-                    <!-- FORMATO -->
                     <div class="mt-1.5">
                         <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
                     </div>
 
-                    <!-- PROMOCIONES - BADGES BORDER AND DOT -->
                     <div class="flex flex-col gap-2 mt-3 items-start">
                         <?php if ($hasMondayPromo): ?>
                             <span class="promo-tag monday">
@@ -1029,7 +932,6 @@ body {
                 </div>
             </div>
 
-            <!-- RESUMEN DE BOLETOS POR TIPO (SIN ICONOS) -->
             <div class="mb-3">
                 <p class="section-label">🎫 Boletos</p>
                 <?php if (!empty($ticketTypes)): ?>
@@ -1044,7 +946,6 @@ body {
                 <?php endif; ?>
             </div>
 
-            <!-- ASIENTOS -->
             <div class="mb-3">
                 <p class="section-label">Asientos</p>
                 <div class="seats-display">
@@ -1055,7 +956,7 @@ body {
                             <span class="seat-item <?= $isAccessible ? 'accessible' : '' ?>">
                                 <span class="seat-label"><?= htmlspecialchars($seat) ?></span>
                                 <?php if ($isAccessible): ?>
-                                    <span class="accessible-icon">♿</span>
+                                    <span class="accessible-icon" title="Asiento accesible para silla de ruedas">♿</span>
                                 <?php endif; ?>
                             </span>
                         <?php endforeach; ?>
@@ -1063,7 +964,6 @@ body {
                 </div>
             </div>
 
-            <!-- COMIDA SELECCIONADA (SOLO SI HAY) -->
             <?php if ($hasFood && !empty($groupedFood)): ?>
                 <div class="mb-3">
                     <p class="section-label">🍿 Comida</p>
@@ -1076,10 +976,8 @@ body {
                 </div>
             <?php endif; ?>
 
-            <!-- LÍNEA PUNTEADA -->
             <div class="summary-dotted-line"></div>
 
-            <!-- ✅ CÁLCULOS CORRECTOS: Subtotal (sin IVA) + IVA = Total -->
             <div class="summary-plain-row">
                 <span>Subtotal</span>
                 <span><?= formatCurrency($displaySubtotal, $siteConfig) ?></span>
@@ -1089,16 +987,13 @@ body {
                 <span><?= formatCurrency($displayTaxAmount, $siteConfig) ?></span>
             </div>
 
-            <!-- LÍNEA SOLIDA MORADA -->
             <div class="summary-solid-line"></div>
 
-            <!-- TOTAL -->
             <div class="summary-plain-row bold-row">
                 <span>💰 Total Pagado</span>
                 <span><?= formatCurrency($displayTotalAmount, $siteConfig) ?></span>
             </div>
 
-            <!-- ✅ INDICADOR DE VERIFICACIÓN DE INTEGRIDAD -->
             <div class="mt-3 text-xs text-gray-400 text-right">
                 <?php if ($dataIntegrity): ?>
                     <span class="text-green-600">✓ Datos verificados</span>
@@ -1110,7 +1005,6 @@ body {
             </div>
         </div>
 
-        <!-- Método de Pago -->
         <div class="payment-box">
             <div class="payment-header">
                 <span class="payment-label">💳 Método de Pago</span>
@@ -1152,7 +1046,6 @@ body {
             </div>
         </div>
 
-        <!-- Información adicional -->
         <div class="info-box mt-4">
             <p class="flex items-center gap-2">
                 <i class="fas fa-info-circle text-indigo-400"></i>
@@ -1187,15 +1080,11 @@ body {
 <?php require_once 'footer.php'; ?>
 
 <script>
-// ============================================
-// ✅ LIMPIAR SESSIONSTORAGE AL CARGAR CONFIRMACIÓN
-// ============================================
 document.addEventListener('DOMContentLoaded', function() {
     const showtimeId = <?= intval($showtimeId) ?>;
 
     console.log('🗑️ Limpiando sessionStorage para showtime:', showtimeId);
 
-    // Limpiar todas las claves relacionadas con este showtime
     const keysToRemove = [];
     for (let i = 0; i < sessionStorage.length; i++) {
         const key = sessionStorage.key(i);
@@ -1223,7 +1112,6 @@ document.addEventListener('DOMContentLoaded', function() {
         console.log('✅ SessionStorage limpiado correctamente (' + keysToRemove.length + ' claves)');
     }
 
-    // ✅ Limpiar también el parámetro de la URL si existe (seguridad: evitar reutilización del ID)
     if (window.history && window.history.replaceState) {
         const url = new URL(window.location.href);
         if (url.searchParams.has('purchase_id')) {

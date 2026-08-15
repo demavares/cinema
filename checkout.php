@@ -28,13 +28,11 @@ if (empty($seats) || $showtimeId <= 0) {
 
 $seatsArray = array_map('trim', explode(',', $seats));
 
-// Verificar token
 if (!verifyPurchaseToken($token, $showtimeId)) {
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
     exit;
 }
 
-// Obtener datos del showtime
 $stmt = $pdo->prepare("SELECT s.*, m.title, m.duration FROM showtimes s JOIN movies m ON s.movie_id = m.id WHERE s.id = ? AND s.is_active = 1");
 $stmt->execute([$showtimeId]);
 $showtime = $stmt->fetch();
@@ -44,33 +42,12 @@ if (!$showtime) {
     exit;
 }
 
-// ============================================
-// ✅ CORREGIDO: VALIDAR QUE EL SHOWTIME NO HAYA PASADO
-// ============================================
-$showtimeDateTime = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']);
-$currentDateTime = time();
-
-if ($showtimeDateTime < $currentDateTime) {
-    error_log("❌ checkout.php: Intento de comprar showtime pasado");
-    header('Location: index.php?error=Este+horario+ya+no+está+disponible');
-    exit;
-}
-
-// Validar con margen de seguridad (15 minutos antes del inicio)
-$safetyMargin = 15 * 60;
-if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
-    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Este+horario+está+por+iniciar.+Selecciona+otro');
-    exit;
-}
-
-// Obtener datos de boletos
 $ticketQuantities = $_SESSION['ticket_quantities_' . $showtimeId] ?? null;
 if (!$ticketQuantities) {
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Datos+de+boletos+no+encontrados');
     exit;
 }
 
-// ✅ RECALCULAR PRECIOS DESDE LA BD (FUENTE DE VERDAD)
 $validation = validateAndRecalculatePrices($pdo, $showtimeId, $ticketQuantities);
 if (isset($validation['error'])) {
     header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=' . urlencode($validation['error']));
@@ -89,10 +66,6 @@ if (count($seatsArray) != $totalSeats) {
     exit;
 }
 
-// ✅ ELIMINADO: Validación de precios del cliente (redundante)
-// El servidor ya recalcula los precios desde la BD usando validateAndRecalculatePrices()
-
-// Procesar comida
 $foodOrder = isset($_POST['food_order']) ? $_POST['food_order'] : '[]';
 $foodItems = [];
 $totalFood = 0;
@@ -127,7 +100,6 @@ if (!empty($foodData) && is_array($foodData)) {
     }
 }
 
-// Calcular totales
 $subtotalGeneral = $ticketSubtotal + $totalFood;
 $taxAmountGeneral = $subtotalGeneral * ($taxRate / 100);
 $totalGeneral = $subtotalGeneral + $taxAmountGeneral;
@@ -137,20 +109,32 @@ $purchaseId = null;
 try {
     $pdo->beginTransaction();
 
-    // Bloquear showtime
     $stmt = $pdo->prepare("SELECT s.*, r.capacity, r.seat_layout FROM showtimes s JOIN rooms r ON s.room_id = r.id WHERE s.id = ? FOR UPDATE");
     $stmt->execute([$showtimeId]);
     $showtimeLocked = $stmt->fetch();
 
     if (!$showtimeLocked) throw new Exception("Función no encontrada");
 
-    // ✅ Verificar asientos ocupados (EXCLUYENDO los del propio usuario)
+    // 🛡️ VERIFICAR ASIENTOS OCUPADOS (EXCLUYENDO los del propio usuario)
     $placeholders = implode(',', array_fill(0, count($seatsArray), '?'));
-    $stmtCheck = $pdo->prepare("SELECT seat_code FROM tickets WHERE showtime_id = ? AND seat_code IN ($placeholders) AND user_id != ? FOR UPDATE");
+    $stmtCheck = $pdo->prepare("
+        SELECT seat_code FROM tickets 
+        WHERE showtime_id = ? AND seat_code IN ($placeholders) AND user_id != ?
+        AND (
+            price_paid > 0
+            OR EXISTS (
+                SELECT 1 FROM purchases p
+                WHERE p.user_id = tickets.user_id
+                AND p.showtime_id = tickets.showtime_id
+                AND p.status IN ('completed', 'pending')
+                AND p.expires_at > NOW()
+            )
+        )
+        FOR UPDATE
+    ");
     $stmtCheck->execute(array_merge([$showtimeId], $seatsArray, [$userId]));
     $existingSeats = $stmtCheck->fetchAll(PDO::FETCH_COLUMN);
 
-    // Verificar compras pendientes de otros
     $stmtPending = $pdo->prepare("SELECT seats FROM purchases WHERE showtime_id = ? AND status = 'pending' AND user_id != ? FOR UPDATE");
     $stmtPending->execute([$showtimeId, $userId]);
     $pendingPurchases = $stmtPending->fetchAll();
@@ -168,7 +152,6 @@ try {
         throw new Exception("Asientos ocupados: " . implode(', ', $conflictSeats));
     }
 
-    // Verificar asientos bloqueados
     $layout = json_decode($showtimeLocked['seat_layout'], true);
     $blockedSeats = $layout['blockedSeats'] ?? [];
     $blockedRequested = array_intersect($seatsArray, $blockedSeats);
@@ -180,27 +163,59 @@ try {
     $transactionId = generateTransactionId();
 
     // Eliminar tickets temporales del usuario antes de insertar los definitivos
-    $stmtDelete = $pdo->prepare("DELETE FROM tickets WHERE showtime_id = ? AND user_id = ? AND seat_code IN ($placeholders)");
+    $stmtDelete = $pdo->prepare("
+        DELETE t FROM tickets t
+        WHERE t.showtime_id = ? AND t.user_id = ? AND t.seat_code IN ($placeholders)
+        AND NOT EXISTS (
+            SELECT 1 FROM purchases p
+            WHERE p.user_id = t.user_id
+            AND p.showtime_id = t.showtime_id
+            AND p.status = 'completed'
+        )
+    ");
     $stmtDelete->execute(array_merge([$showtimeId, $userId], $seatsArray));
 
     // Insertar tickets definitivos
-    $stmtInsert = $pdo->prepare("INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid) VALUES (?, ?, ?, ?)");
+    $stmtInsert = $pdo->prepare("
+        INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid)
+        VALUES (?, ?, ?, ?)
+    ");
     $ticketIds = [];
+    $insertErrors = [];
 
     foreach ($seatsArray as $index => $seat) {
-        if ($index < ($totalAdults = intval($ticketQuantities['adult'] ?? 0))) {
+        $totalAdults = intval($ticketQuantities['adult'] ?? 0);
+        $totalChildren = intval($ticketQuantities['child'] ?? 0);
+        
+        if ($index < $totalAdults) {
             $price = $pricesByType['adult'];
-        } elseif ($index < ($totalAdults + intval($ticketQuantities['child'] ?? 0))) {
+        } elseif ($index < ($totalAdults + $totalChildren)) {
             $price = $pricesByType['child'];
         } else {
             $price = $pricesByType['senior'];
         }
 
-        $stmtInsert->execute([$userId, $showtimeId, $seat, $price]);
-        $ticketIds[] = $pdo->lastInsertId();
+        try {
+            $stmtInsert->execute([$userId, $showtimeId, $seat, $price]);
+            $ticketIds[] = $pdo->lastInsertId();
+        } catch (PDOException $e) {
+            if ($e->getCode() == 23000 || strpos($e->getMessage(), 'Duplicate') !== false) {
+                $insertErrors[] = $seat;
+                error_log("⚠️ Error duplicado en checkout: asiento $seat - " . $e->getMessage());
+            } else {
+                throw $e;
+            }
+        }
     }
 
-    // Registrar compra
+    if (!empty($insertErrors)) {
+        throw new Exception("Error al reservar asientos (ya ocupados): " . implode(', ', $insertErrors));
+    }
+
+    if (count($ticketIds) !== count($seatsArray)) {
+        throw new Exception("No se pudieron reservar todos los asientos. Por favor, selecciona otros.");
+    }
+
     $sessionToken = bin2hex(random_bytes(32));
     $expiresAt = date('Y-m-d H:i:s', strtotime('+10 minutes'));
     $reference = 'CMP-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6));
@@ -229,14 +244,16 @@ try {
 
     $purchaseId = $pdo->lastInsertId();
 
-    // Insertar purchase_tickets
     $stmtPurchaseTicket = $pdo->prepare("INSERT INTO purchase_tickets (purchase_id, showtime_id, ticket_type_id, seat_code, price) VALUES (?, ?, ?, ?, ?)");
 
     foreach ($seatsArray as $index => $seat) {
-        if ($index < ($totalAdults = intval($ticketQuantities['adult'] ?? 0))) {
+        $totalAdults = intval($ticketQuantities['adult'] ?? 0);
+        $totalChildren = intval($ticketQuantities['child'] ?? 0);
+        
+        if ($index < $totalAdults) {
             $ticketTypeId = 1;
             $price = $pricesByType['adult'];
-        } elseif ($index < ($totalAdults + intval($ticketQuantities['child'] ?? 0))) {
+        } elseif ($index < ($totalAdults + $totalChildren)) {
             $ticketTypeId = 2;
             $price = $pricesByType['child'];
         } else {
@@ -247,7 +264,6 @@ try {
         $stmtPurchaseTicket->execute([$purchaseId, $showtimeId, $ticketTypeId, $seat, $price]);
     }
 
-    // Insertar food_orders
     if (!empty($foodItems)) {
         $stmtFood = $pdo->prepare("INSERT INTO food_orders (user_id, showtime_id, food_item_id, quantity, unit_price, total_price, status, purchase_id) VALUES (?, ?, ?, ?, ?, ?, 'completed', ?)");
 
@@ -257,6 +273,39 @@ try {
     }
 
     $_SESSION['last_order_id'] = $purchaseId;
+
+    // ✅ CORRECCIÓN: Limpiar TODOS los tickets temporales del usuario para este showtime
+    $stmtCleanTemp = $pdo->prepare("
+        DELETE t FROM tickets t
+        WHERE t.showtime_id = ? AND t.user_id = ?
+        AND t.price_paid = 0
+        AND NOT EXISTS (
+            SELECT 1 FROM purchases p
+            WHERE p.user_id = t.user_id
+            AND p.showtime_id = t.showtime_id
+            AND p.status = 'completed'
+        )
+    ");
+    $stmtCleanTemp->execute([$showtimeId, $userId]);
+    $cleanedCount = $stmtCleanTemp->rowCount();
+
+    if ($cleanedCount > 0) {
+        error_log("✅ checkout: Limpiados $cleanedCount tickets temporales del usuario $userId para showtime $showtimeId");
+    }
+
+    // ✅ CORRECCIÓN: Marcar todas las compras pending anteriores como expired (excepto la actual)
+    $stmtExpireOld = $pdo->prepare("
+        UPDATE purchases 
+        SET status = 'expired', expires_at = NOW()
+        WHERE user_id = ? AND showtime_id = ? AND status = 'pending' AND id != ?
+    ");
+    $stmtExpireOld->execute([$userId, $showtimeId, $purchaseId]);
+    $expiredCount = $stmtExpireOld->rowCount();
+
+    if ($expiredCount > 0) {
+        error_log("✅ checkout: Marcadas $expiredCount compras pending anteriores como expired para user $userId");
+    }
+
     clearPurchaseSession($showtimeId);
 
     $pdo->commit();
