@@ -326,13 +326,11 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                                     elseif ($isUserPending) $seatClass = 'seat-selected';
                                     elseif ($isAccessible) $seatClass = 'seat-accessible';
                                 ?>
-                                    <button data-seat="<?= $seatId ?>" class="seat <?= $seatClass ?>" <?= ($isOccupied || $isBlocked) ? 'disabled' : '' ?>>
-                                        <?php if(!$isBlocked && !$isOccupied): ?>
-                                            <span class="seat-label"><?= $isAccessible ? '♿' : $seatNumber ?></span>
-                                        <?php elseif($isOccupied): ?>
-                                            <span class="seat-label"><?= $seatNumber ?></span>
-                                        <?php endif; ?>
-                                    </button>
+                                   <button data-seat="<?= $seatId ?>" class="seat <?= $seatClass ?>" <?= ($isOccupied || $isBlocked) ? 'disabled' : '' ?>>
+									<?php if(!$isBlocked): ?>
+    <span class="seat-label"><?= $isAccessible ? '♿' : $seatNumber ?></span>
+<?php endif; ?>
+								</button>
                                 <?php endforeach; ?>
                             </div>
                         <?php endforeach; ?>

@@ -5,7 +5,6 @@
 header('Content-Type: application/json');
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
-
 require_once 'config.php';
 
 if (!isset($_SESSION['user_id'])) {
@@ -31,7 +30,9 @@ if ($showtimeId <= 0) {
 try {
     $pdo->beginTransaction();
     
+    // ============================================
     // Marcar compras pendientes como expiradas
+    // ============================================
     $stmt = $pdo->prepare("
         UPDATE purchases 
         SET status = 'expired', expires_at = NOW()
@@ -40,14 +41,15 @@ try {
     $stmt->execute([$_SESSION['user_id'], $showtimeId]);
     $expiredCount = $stmt->rowCount();
     
-    // Eliminar tickets temporales
+    // ============================================
+    // ✅ CORRECCIÓN: Eliminar tickets temporales (price_paid = 0)
+    // Sin NOT EXISTS que bloquee la limpieza después de la primera compra.
+    // price_paid = 0 ya garantiza que nunca toca un ticket pagado.
+    // ============================================
     $stmt = $pdo->prepare("
-        DELETE t FROM tickets t
-        WHERE t.showtime_id = ? AND t.user_id = ?
-        AND NOT EXISTS (
-            SELECT 1 FROM purchases p 
-            WHERE p.user_id = t.user_id AND p.showtime_id = t.showtime_id AND p.status = 'completed'
-        )
+        DELETE FROM tickets
+        WHERE showtime_id = ? AND user_id = ?
+        AND price_paid = 0
     ");
     $stmt->execute([$showtimeId, $_SESSION['user_id']]);
     $deletedCount = $stmt->rowCount();

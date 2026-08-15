@@ -171,22 +171,28 @@ try {
         }
     }
 
+    // ============================================
+    // ✅ CORRECCIÓN: Eliminar TODOS los tickets temporales del usuario
+    // Sin NOT EXISTS redundante - price_paid = 0 ya garantiza que no toca tickets pagados
+    // ============================================
+    $stmt = $pdo->prepare("
+        DELETE FROM tickets
+        WHERE showtime_id = ? AND user_id = ?
+        AND price_paid = 0
+    ");
+    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
+    $deletedOldTemp = $stmt->rowCount();
+
+    if ($deletedOldTemp > 0) {
+        error_log("✅ create_food_session: Eliminados $deletedOldTemp tickets temporales del usuario " . $_SESSION['user_id']);
+    }
+
     // 🛡️ VERIFICAR ASIENTOS OCUPADOS
     $placeholders = implode(',', array_fill(0, count($seatArray), '?'));
     
     $stmt = $pdo->prepare("
         SELECT seat_code FROM tickets
         WHERE showtime_id = ? AND seat_code IN ($placeholders) AND user_id != ?
-        AND (
-            price_paid > 0
-            OR EXISTS (
-                SELECT 1 FROM purchases p
-                WHERE p.user_id = tickets.user_id
-                AND p.showtime_id = tickets.showtime_id
-                AND p.status IN ('completed', 'pending')
-                AND p.expires_at > NOW()
-            )
-        )
         FOR UPDATE
     ");
     $stmt->execute(array_merge([$showtimeId], $seatArray, [$_SESSION['user_id']]));
@@ -270,45 +276,10 @@ try {
         error_log("✅ Compra pendiente actualizada para usuario " . $_SESSION['user_id']);
     }
 
-    // ✅ CORRECCIÓN: Eliminar TODOS los tickets temporales antiguos del usuario
-    $stmt = $pdo->prepare("
-        DELETE t FROM tickets t
-        WHERE t.showtime_id = ? AND t.user_id = ?
-        AND t.price_paid = 0
-        AND NOT EXISTS (
-            SELECT 1 FROM purchases p
-            WHERE p.user_id = t.user_id
-            AND p.showtime_id = t.showtime_id
-            AND p.status = 'completed'
-        )
-    ");
-    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
-    $deletedOldTemp = $stmt->rowCount();
-
-    if ($deletedOldTemp > 0) {
-        error_log("✅ create_food_session: Eliminados $deletedOldTemp tickets temporales antiguos del usuario " . $_SESSION['user_id']);
-    }
-
-    // ✅ CORRECCIÓN: Marcar compras pending anteriores como expired (excepto la actual)
-    if ($existing) {
-        $stmtExpireOld = $pdo->prepare("
-            UPDATE purchases 
-            SET status = 'expired', expires_at = NOW()
-            WHERE user_id = ? AND showtime_id = ? AND status = 'pending' AND id != ?
-        ");
-        $stmtExpireOld->execute([$_SESSION['user_id'], $showtimeId, $existing['id']]);
-        $expiredOldPurchases = $stmtExpireOld->rowCount();
-
-        if ($expiredOldPurchases > 0) {
-            error_log("✅ create_food_session: Marcadas $expiredOldPurchases compras pending anteriores como expired");
-        }
-    }
-
     // CREAR TICKETS TEMPORALES
     $stmtInsert = $pdo->prepare("
         INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid)
         VALUES (?, ?, ?, 0)
-        ON DUPLICATE KEY UPDATE user_id = VALUES(user_id)
     ");
 
     $insertedCount = 0;
@@ -317,16 +288,7 @@ try {
     foreach ($seatArray as $seat) {
         try {
             $stmtInsert->execute([$_SESSION['user_id'], $showtimeId, $seat]);
-            
-            $stmtCheck = $pdo->prepare("SELECT user_id FROM tickets WHERE showtime_id = ? AND seat_code = ?");
-            $stmtCheck->execute([$showtimeId, $seat]);
-            $ticketOwner = $stmtCheck->fetchColumn();
-            
-            if ($ticketOwner && $ticketOwner == $_SESSION['user_id']) {
-                $insertedCount++;
-            } else {
-                $failedSeats[] = $seat;
-            }
+            $insertedCount++;
         } catch (PDOException $e) {
             if ($e->getCode() == 23000 || strpos($e->getMessage(), 'Duplicate') !== false) {
                 $failedSeats[] = $seat;

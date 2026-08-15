@@ -162,18 +162,14 @@ try {
 
     $transactionId = generateTransactionId();
 
-    // Eliminar tickets temporales del usuario antes de insertar los definitivos
-    $stmtDelete = $pdo->prepare("
-        DELETE t FROM tickets t
-        WHERE t.showtime_id = ? AND t.user_id = ? AND t.seat_code IN ($placeholders)
-        AND NOT EXISTS (
-            SELECT 1 FROM purchases p
-            WHERE p.user_id = t.user_id
-            AND p.showtime_id = t.showtime_id
-            AND p.status = 'completed'
-        )
-    ");
-    $stmtDelete->execute(array_merge([$showtimeId, $userId], $seatsArray));
+// ✅ Corrección: solo importa si ESTE asiento ya fue pagado (price_paid > 0),
+// no si el usuario tiene otras compras completadas en la misma función.
+$stmtDelete = $pdo->prepare("
+    DELETE FROM tickets
+    WHERE showtime_id = ? AND user_id = ? AND seat_code IN ($placeholders)
+    AND price_paid = 0
+");
+$stmtDelete->execute(array_merge([$showtimeId, $userId], $seatsArray));
 
     // Insertar tickets definitivos
     $stmtInsert = $pdo->prepare("
