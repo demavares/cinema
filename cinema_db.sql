@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: datame
--- Tiempo de generación: 14-08-2026 a las 14:28:17
+-- Tiempo de generación: 15-08-2026 a las 08:31:52
 -- Versión del servidor: 10.11.18-MariaDB-ubu2204
 -- Versión de PHP: 8.3.26
 
@@ -143,8 +143,11 @@ CREATE TABLE `food_orders` (
 --
 
 INSERT INTO `food_orders` (`id`, `user_id`, `ticket_id`, `showtime_id`, `purchase_id`, `food_item_id`, `quantity`, `unit_price`, `total_price`, `order_date`, `status`) VALUES
-(1, 8, NULL, 64, 486, 3, 1, 15.00, 15.00, '2026-08-14 13:57:04', 'completed'),
-(2, 8, NULL, 64, 488, 4, 1, 1500.00, 1500.00, '2026-08-14 14:26:28', 'completed');
+(5, 8, NULL, 64, 502, 1, 1, 1200.00, 1200.00, '2026-08-15 01:46:57', 'completed'),
+(6, 8, NULL, 64, 502, 4, 1, 1500.00, 1500.00, '2026-08-15 01:46:57', 'completed'),
+(7, 8, NULL, 64, 504, 3, 1, 15.00, 15.00, '2026-08-15 03:37:14', 'completed'),
+(8, 8, NULL, 64, 504, 4, 1, 1500.00, 1500.00, '2026-08-15 03:37:14', 'completed'),
+(9, 8, NULL, 64, 510, 2, 1, 1500.00, 1500.00, '2026-08-15 04:03:45', 'completed');
 
 -- --------------------------------------------------------
 
@@ -214,16 +217,23 @@ CREATE TABLE `purchases` (
 --
 
 INSERT INTO `purchases` (`id`, `user_id`, `showtime_id`, `seats`, `total_tickets`, `total_food`, `total_amount`, `subtotal`, `tax_amount`, `tax_rate`, `purchase_date`, `status`, `payment_method`, `payment_data`, `session_token`, `expires_at`) VALUES
-(479, 8, 64, 'A1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 12:44:17', 'expired', NULL, NULL, 'c680f348b049932d0cee2d89650226296d0cdcbfea337a59fe69a96ae0983358', '2026-08-14 08:54:17'),
-(480, 8, 64, 'A1', 1, 1215.00, 4889.40, 4215.00, 674.40, 16.00, '2026-08-14 12:44:25', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-DA98ACA2\",\"method\":\"movil\",\"reference\":\"CMP-20260814-98BADC\",\"date\":\"2026-08-14 08:44:25\",\"ip\":\"172.22.0.1\"}', '590aabae692f4e7956018063ac80901620ecbdb5aa9c76adb5b4f73d95ce3914', '2026-08-14 08:54:25'),
-(481, 8, 64, 'B1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 13:38:53', 'expired', NULL, NULL, 'cd0af9b838292b2c9eb5b3c36afcdd2850b1706f96d5e530031a952f4d19ed90', '2026-08-14 09:50:15'),
-(482, 8, 64, 'A1', 1, 3000.00, 6960.00, 6000.00, 960.00, 16.00, '2026-08-14 13:39:02', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-A7690770\",\"method\":\"movil\",\"reference\":\"CMP-20260814-69155A\",\"date\":\"2026-08-14 09:39:02\",\"ip\":\"172.22.0.1\"}', 'd06c2d99b87684170702bad7add9a2b62a4d9f6c6039cd26191f83de5c94708e', '2026-08-14 09:49:02'),
-(483, 8, 64, 'A2', 1, 0.00, 3480.00, 3000.00, 480.00, 16.00, '2026-08-14 13:39:55', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-AAB02F26\",\"method\":\"movil\",\"reference\":\"CMP-20260814-B03197\",\"date\":\"2026-08-14 09:39:55\",\"ip\":\"172.22.0.1\"}', 'f7e3c833a63fcb335d68324472b06058c29bead106ee35bd8c7d4764ba17f02e', '2026-08-14 09:49:55'),
-(484, 8, 64, 'B1', 1, 0.00, 1740.00, 1500.00, 240.00, 16.00, '2026-08-14 13:40:23', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-AC71CEA7\",\"method\":\"movil\",\"reference\":\"CMP-20260814-71DD8F\",\"date\":\"2026-08-14 09:40:23\",\"ip\":\"172.22.0.1\"}', '4e6f4500f354f6c189f5f109cd5af7868d2665f1a26b2c213e7500bca90eeceb', '2026-08-14 09:50:23'),
-(485, 8, 64, 'A11', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 13:56:56', 'expired', NULL, NULL, '45ba3acf2a136f955d4eaf09520e60389328722bf63f5a7e95291b9fa218d194', '2026-08-14 10:06:56'),
-(486, 8, 64, 'A11', 1, 15.00, 3497.40, 3015.00, 482.40, 16.00, '2026-08-14 13:57:04', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-EB0CD052\",\"method\":\"movil\",\"reference\":\"CMP-20260814-0CE3DD\",\"date\":\"2026-08-14 09:57:04\",\"ip\":\"172.22.0.1\"}', 'c05eb836f7154bf5d95933c7c50ef5223eff5367f47f02860607ad7a9479dc12', '2026-08-14 10:07:04'),
-(487, 8, 64, 'A11', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-14 14:25:54', 'pending', NULL, NULL, '5e9c88d89f9d390ae07862e9d78998eb423389931d15e2cc39c884d8f775f9fc', '2026-08-14 10:35:54'),
-(488, 8, 64, 'A11', 1, 1500.00, 5220.00, 4500.00, 720.00, 16.00, '2026-08-14 14:26:28', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-5943E24E\",\"method\":\"movil\",\"reference\":\"CMP-20260814-43F0A4\",\"date\":\"2026-08-14 10:26:28\",\"ip\":\"172.22.0.1\"}', '29d0c0f47f9f9ef70be4330303d077ac3ef737ce4b85d8987be6960d66ca5cda', '2026-08-14 10:36:28');
+(497, 8, 64, 'A1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 01:32:11', 'expired', NULL, NULL, '4fd224fc2f95ec72d744de235873b9a14d2a87a761ee8b3c07717abf91399887', '2026-08-14 21:32:17'),
+(498, 8, 64, 'A1', 1, 0.00, 3480.00, 3000.00, 480.00, 16.00, '2026-08-15 01:32:17', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-1A1CAFD7\",\"method\":\"movil\",\"reference\":\"CMP-20260814-1CBCC0\",\"date\":\"2026-08-14 21:32:17\",\"ip\":\"172.22.0.1\"}', '1e07441cc6110c8a5d79e1b4701c9ee449d6f2662d0f95a01f8a8652bbbd0285', '2026-08-14 21:42:17'),
+(499, 8, 64, 'A2', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 01:33:08', 'expired', NULL, NULL, '0d2495defb1d5a9850b3ef6c225df67cfec0c3cba8c0f46f2d85139a682a7ea7', '2026-08-14 21:33:14'),
+(500, 8, 64, 'A2', 1, 0.00, 3480.00, 3000.00, 480.00, 16.00, '2026-08-15 01:33:14', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-1DA61F26\",\"method\":\"movil\",\"reference\":\"CMP-20260814-A622C2\",\"date\":\"2026-08-14 21:33:14\",\"ip\":\"172.22.0.1\"}', '3854a39d2726950a480d5bc45315935e212d26c6e342e0400a0f8fcbce85977e', '2026-08-14 21:43:14'),
+(501, 8, 64, 'B9', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 01:46:46', 'expired', NULL, NULL, '0a901ce40bdcce6b362ae8de95af336bc6634f2d81a7574458a5a847af1cf401', '2026-08-14 21:46:57'),
+(502, 8, 64, 'B9', 1, 2700.00, 6612.00, 5700.00, 912.00, 16.00, '2026-08-15 01:46:57', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-511B884E\",\"method\":\"movil\",\"reference\":\"CMP-20260814-1B8B36\",\"date\":\"2026-08-14 21:46:57\",\"ip\":\"172.22.0.1\"}', '773fb58b16769a9d329d47d1645058af120de0ebc1acfc92c8860c5efc27da94', '2026-08-14 21:56:57'),
+(503, 8, 64, 'B8', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 03:37:01', 'expired', NULL, NULL, '38b1bd98dfc9eb1e6d8ca823e2a1eb68779346208e5bd3b4b7409d8363ad928e', '2026-08-14 23:37:14'),
+(504, 8, 64, 'B8', 1, 1515.00, 5237.40, 4515.00, 722.40, 16.00, '2026-08-15 03:37:14', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-EEADD630\",\"method\":\"movil\",\"reference\":\"CMP-20260814-ADDADF\",\"date\":\"2026-08-14 23:37:14\",\"ip\":\"172.22.0.1\"}', 'baff0cb7cc960d0fd02339a8eb138a264088400862c265072832b408265c815d', '2026-08-14 23:47:14'),
+(507, 8, 64, 'A12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 03:47:42', 'expired', NULL, NULL, '6a54728aba0c1a314076d6e52929d91daa07be216a915a4c3e5e5a7acde24be7', '2026-08-14 23:47:47'),
+(508, 8, 64, 'A12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 04:03:23', 'expired', NULL, NULL, '8065d93d4d226456f0441cbe3fe974f0e71fbee24e5996ea3fb7b03d62fa4d51', '2026-08-15 00:03:29'),
+(509, 8, 64, 'A12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 04:03:37', 'expired', NULL, NULL, 'f6f92f9b5a2f6bd64445ddcf02b796d44f373b9f6b8a4a12d90a491e5e1d9de0', '2026-08-15 00:03:45'),
+(510, 8, 64, 'A12', 1, 1500.00, 5220.00, 4500.00, 720.00, 16.00, '2026-08-15 04:03:45', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260815-5211CE30\",\"method\":\"movil\",\"reference\":\"CMP-20260815-11DB13\",\"date\":\"2026-08-15 00:03:45\",\"ip\":\"172.22.0.1\"}', '25d5ded1b571770f358d11623f3b600071e408ea1b08ffe1f6fe05ce328315e3', '2026-08-15 00:13:45'),
+(511, 8, 64, 'A10', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 06:05:38', 'expired', NULL, NULL, 'c1f6a18408494bfc64254e1d4a6183ba1f238dc547e48da2d754fc912c7b5af9', '2026-08-15 02:15:38'),
+(512, 8, 64, 'B1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 06:45:18', 'expired', NULL, NULL, '8398c0dd6f2425f49b181df183d9d4d2dd071046ecdaf09eb531c6af769bea45', '2026-08-15 02:45:24'),
+(513, 8, 64, 'B1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 06:45:47', 'expired', NULL, NULL, 'bc6bf17235b62b5d691fda31530d39538f8530fa719d36f7f2ec4eaca1f7a4e3', '2026-08-15 02:46:18'),
+(514, 8, 64, 'B1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 07:05:20', 'expired', NULL, NULL, 'ac88a4144d6c27b5c83cb731b981640b40a0fe93289357d516dfa4e243af1174', '2026-08-15 03:05:33'),
+(515, 8, 64, 'B1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 07:06:48', 'expired', NULL, NULL, '29ce7f3a5b258fdfc83ef4d703b67106301b1bf22c881300bab7ef083c07da8d', '2026-08-15 03:07:08');
 
 -- --------------------------------------------------------
 
@@ -246,8 +256,11 @@ CREATE TABLE `purchase_tickets` (
 --
 
 INSERT INTO `purchase_tickets` (`id`, `purchase_id`, `showtime_id`, `ticket_type_id`, `seat_code`, `price`, `created_at`) VALUES
-(1, 486, 64, 1, 'A11', 3000.00, '2026-08-14 13:57:04'),
-(2, 488, 64, 1, 'A11', 3000.00, '2026-08-14 14:26:28');
+(6, 498, 64, 1, 'A1', 3000.00, '2026-08-15 01:32:17'),
+(7, 500, 64, 1, 'A2', 3000.00, '2026-08-15 01:33:14'),
+(8, 502, 64, 1, 'B9', 3000.00, '2026-08-15 01:46:57'),
+(9, 504, 64, 1, 'B8', 3000.00, '2026-08-15 03:37:14'),
+(10, 510, 64, 1, 'A12', 3000.00, '2026-08-15 04:03:45');
 
 -- --------------------------------------------------------
 
@@ -404,9 +417,11 @@ CREATE TABLE `tickets` (
 --
 
 INSERT INTO `tickets` (`id`, `user_id`, `showtime_id`, `seat_code`, `purchase_date`, `price_paid`) VALUES
-(133, 8, 64, 'A1', '2026-08-14 13:39:02', 3000.00),
-(135, 8, 64, 'A2', '2026-08-14 13:39:55', 3000.00),
-(141, 8, 64, 'A11', '2026-08-14 14:26:28', 3000.00);
+(159, 8, 64, 'A1', '2026-08-15 01:32:17', 3000.00),
+(161, 8, 64, 'A2', '2026-08-15 01:33:14', 3000.00),
+(163, 8, 64, 'B9', '2026-08-15 01:46:57', 3000.00),
+(165, 8, 64, 'B8', '2026-08-15 03:37:14', 3000.00),
+(171, 8, 64, 'A12', '2026-08-15 04:03:45', 3000.00);
 
 -- --------------------------------------------------------
 
@@ -420,13 +435,6 @@ CREATE TABLE `ticket_logs` (
   `ticket_count` int(11) NOT NULL,
   `released_at` timestamp NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `ticket_logs`
---
-
-INSERT INTO `ticket_logs` (`id`, `showtime_id`, `ticket_count`, `released_at`) VALUES
-(20, 66, 0, '2026-08-14 04:31:56');
 
 -- --------------------------------------------------------
 
@@ -480,8 +488,8 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `email`, `cedula_type`, `cedula_number`, `phone_prefix`, `phone_number`, `birth_date`, `password`, `role`, `is_blocked`, `created_at`, `last_login`) VALUES
-(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-13 22:12:38'),
-(8, 'Darwin Mavarez', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-14 07:50:24');
+(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-15 04:16:19'),
+(8, 'Darwin Mavarez', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-14 20:36:12');
 
 --
 -- Índices para tablas volcadas
@@ -586,6 +594,7 @@ ALTER TABLE `tax_config`
 ALTER TABLE `tickets`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `unique_seat_showtime` (`showtime_id`,`seat_code`),
+  ADD UNIQUE KEY `unique_showtime_seat` (`showtime_id`,`seat_code`),
   ADD KEY `user_id` (`user_id`),
   ADD KEY `idx_showtime_seat` (`showtime_id`,`seat_code`);
 
@@ -635,7 +644,7 @@ ALTER TABLE `food_items`
 -- AUTO_INCREMENT de la tabla `food_orders`
 --
 ALTER TABLE `food_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT de la tabla `movies`
@@ -647,13 +656,13 @@ ALTER TABLE `movies`
 -- AUTO_INCREMENT de la tabla `purchases`
 --
 ALTER TABLE `purchases`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=489;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=516;
 
 --
 -- AUTO_INCREMENT de la tabla `purchase_tickets`
 --
 ALTER TABLE `purchase_tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `rate_limits`
@@ -689,13 +698,13 @@ ALTER TABLE `tax_config`
 -- AUTO_INCREMENT de la tabla `tickets`
 --
 ALTER TABLE `tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=142;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=177;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_logs`
 --
 ALTER TABLE `ticket_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_types`

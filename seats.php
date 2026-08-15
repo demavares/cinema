@@ -57,24 +57,45 @@ if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
     exit;
 }
 
-// ✅ CORRECCIÓN: Query mejorada para excluir tickets temporales sin compra válida
-// Solo considerar ocupados los tickets que:
-// 1. Tienen precio pagado > 0 (definitivos)
-// 2. O pertenecen a una compra pending que aún no ha expirado
-$stmtOccupied = $pdo->prepare("
-    SELECT DISTINCT t.seat_code FROM tickets t
-    WHERE t.showtime_id = ?
-    AND t.user_id != ?
-    AND (
-        t.price_paid > 0
-        OR EXISTS (
+// ============================================
+// 🧹 CORRECCIÓN: LIMPIAR TICKETS ZOMBIES ANTES DE CONSULTAR
+// Elimina tickets temporales (price_paid=0) que NO tienen compra pending válida.
+// Esto evita que asientos queden bloqueados por compras abandonadas/expiradas
+// y previene errores de UNIQUE constraint al reservar.
+// ============================================
+try {
+    $stmtCleanZombies = $pdo->prepare("
+        DELETE t FROM tickets t
+        WHERE t.showtime_id = ?
+        AND t.price_paid = 0
+        AND NOT EXISTS (
             SELECT 1 FROM purchases p
             WHERE p.user_id = t.user_id
             AND p.showtime_id = t.showtime_id
-            AND p.status IN ('completed', 'pending')
+            AND p.status = 'pending'
             AND p.expires_at > NOW()
         )
-    )
+    ");
+    $stmtCleanZombies->execute([$showtimeId]);
+    $zombiesDeleted = $stmtCleanZombies->rowCount();
+    
+    if ($zombiesDeleted > 0) {
+        error_log("🧹 seats.php: Limpiados $zombiesDeleted tickets zombies del showtime $showtimeId");
+    }
+} catch (Exception $e) {
+    error_log("⚠️ seats.php: Error limpiando zombies: " . $e->getMessage());
+}
+
+// ============================================
+// ✅ CORRECCIÓN: QUERY SIMPLIFICADA DE ASIENTOS OCUPADOS
+// Después de limpiar zombies, cualquier ticket en la BD (de otro usuario)
+// significa que el asiento está ocupado. Sin NOT EXISTS redundante.
+// Esto garantiza que cuando el Usuario A selecciona un asiento,
+// el Usuario B lo vea como ocupado correctamente.
+// ============================================
+$stmtOccupied = $pdo->prepare("
+    SELECT DISTINCT seat_code FROM tickets
+    WHERE showtime_id = ? AND user_id != ?
 ");
 $stmtOccupied->execute([$showtimeId, $_SESSION['user_id']]);
 $occupiedSeats = $stmtOccupied->fetchAll(PDO::FETCH_COLUMN);
@@ -230,6 +251,11 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .seat-label { font-size: calc(var(--seat-size) * 0.35); color: #0f172a; text-align: center; position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); font-weight: bold; white-space: nowrap; }
 .seat-selected .seat-label, .seat-occupied .seat-label { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
 
+/* ✅ CORREGIDO: Hacer visible el icono ♿ en asientos ocupados accesibles */
+.seat-occupied .seat-label { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+.seat-accessible.seat-occupied { background-color: #ef4444 !important; opacity: 0.9; }
+.seat-accessible.seat-occupied .seat-label { font-size: calc(var(--seat-size) * 0.6) !important; }
+
 .cinema-screen { background: #1a1a1a !important; color: #6b7280; text-align: center; padding: 3px; border-radius: 8px; margin-top: 28px; font-weight: bold; letter-spacing: 4px; font-size: clamp(0.7rem, 2vw, 1rem); width: 100%; cursor: default; }
 
 .legend { display: flex; gap: clamp(8px, 2vw, 20px); justify-content: center; flex-wrap: wrap; margin-top: 20px; }
@@ -326,11 +352,11 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                                     elseif ($isUserPending) $seatClass = 'seat-selected';
                                     elseif ($isAccessible) $seatClass = 'seat-accessible';
                                 ?>
-                                   <button data-seat="<?= $seatId ?>" class="seat <?= $seatClass ?>" <?= ($isOccupied || $isBlocked) ? 'disabled' : '' ?>>
-									<?php if(!$isBlocked): ?>
-    <span class="seat-label"><?= $isAccessible ? '♿' : $seatNumber ?></span>
-<?php endif; ?>
-								</button>
+                                    <button data-seat="<?= $seatId ?>" class="seat <?= $seatClass ?> <?= ($isAccessible && $isOccupied) ? 'seat-accessible' : '' ?>" <?= ($isOccupied || $isBlocked) ? 'disabled' : '' ?>>
+                                        <?php if(!$isBlocked): ?>
+                                            <span class="seat-label"><?= $isAccessible ? '♿' : $seatNumber ?></span>
+                                        <?php endif; ?>
+                                    </button>
                                 <?php endforeach; ?>
                             </div>
                         <?php endforeach; ?>
@@ -681,8 +707,11 @@ document.addEventListener('DOMContentLoaded', function() {
                     data.occupied.forEach(seatId => {
                         const seatEl = document.querySelector('[data-seat="' + seatId + '"]');
                         if (seatEl && !seatEl.classList.contains('seat-occupied')) {
-                            seatEl.classList.remove('seat-selected', 'seat-available', 'seat-accessible');
+                            // ✅ CORREGIDO: Preservar la clase seat-accessible si el asiento es accesible
+                            const isAccessibleSeat = accessibleSeats.includes(seatId);
+                            seatEl.classList.remove('seat-selected', 'seat-available');
                             seatEl.classList.add('seat-occupied');
+                            if (isAccessibleSeat) seatEl.classList.add('seat-accessible');
                             seatEl.disabled = true;
 
                             const index = selectedSeats.indexOf(seatId);
