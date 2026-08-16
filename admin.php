@@ -1222,14 +1222,25 @@ if (isset($_GET['toggle_room']) && validateGetAction('toggle_room', $_GET['toggl
 // Eliminar Horario
 if (isset($_GET['delete_showtime']) && validateGetAction('delete_showtime', $_GET['delete_showtime'])) {
     $id = intval($_GET['delete_showtime']);
-
     try {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM tickets WHERE showtime_id = ?");
+        // ✅ UNIFICADO: Solo contar tickets confirmados (pagados).
+        // Los tickets 'hold' (temporales) no deben impedir la eliminación.
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM tickets WHERE showtime_id = ? AND status = 'confirmed'");
         $stmt->execute([$id]);
+        $confirmedCount = $stmt->fetchColumn();
 
-        if ($stmt->fetchColumn() > 0) {
-            $error = "No se puede eliminar el horario porque tiene boletos vendidos. Mejor desactívalo.";
+        if ($confirmedCount > 0) {
+            $error = "No se puede eliminar el horario porque tiene $confirmedCount boleto(s) confirmado(s). Mejor desactívalo.";
         } else {
+            // ✅ Limpiar tickets temporales 'hold' antes de eliminar el showtime
+            $stmtClean = $pdo->prepare("DELETE FROM tickets WHERE showtime_id = ? AND status = 'hold'");
+            $stmtClean->execute([$id]);
+            $cleanedHolds = $stmtClean->rowCount();
+
+            if ($cleanedHolds > 0) {
+                error_log("🧹 admin.php: Limpiados $cleanedHolds tickets hold del showtime $id antes de eliminarlo");
+            }
+
             $stmt = $pdo->prepare("DELETE FROM showtimes WHERE id = ?");
             $stmt->execute([$id]);
             header("Location: admin.php?tab=showtimes&msg=" . urlencode("Horario eliminado correctamente."));
@@ -2863,23 +2874,25 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
             $history_start_date = $_GET['history_start_date'] ?? '';
             $history_end_date = $_GET['history_end_date'] ?? '';
 
-            $history_sql = "
-                SELECT
-                    s.id as showtime_id,
-                    COALESCE(m.title, 'Película eliminada') as movie_title,
-                    r.name as room_name,
-                    s.show_date, s.show_time, m.duration,
-                    DATE_ADD(CONCAT(s.show_date, ' ', s.show_time), INTERVAL m.duration MINUTE) as end_time,
-                    (SELECT COUNT(*) FROM tickets t WHERE t.showtime_id = s.id) +
-                    (SELECT COALESCE(SUM(ticket_count), 0) FROM ticket_logs tl WHERE tl.showtime_id = s.id) as tickets_sold,
-                    (SELECT COALESCE(SUM(t.price_paid), 0) FROM tickets t WHERE t.showtime_id = s.id) +
-                    (SELECT COALESCE(SUM(tl.ticket_count * s.price), 0) FROM ticket_logs tl WHERE tl.showtime_id = s.id) as total_revenue,
-                    s.price as original_price, s.half_price_monday, s.promotions, s.is_active, s.language
-                FROM showtimes s
-                LEFT JOIN movies m ON s.movie_id = m.id
-                JOIN rooms r ON s.room_id = r.id
-                WHERE 1=1
-            ";
+            // ✅ UNIFICADO: Solo contar tickets confirmados (pagados).
+			// Los tickets 'hold' temporales no deben aparecer en las estadísticas de ventas.
+			$history_sql = "
+			SELECT
+				s.id as showtime_id,
+				COALESCE(m.title, 'Película eliminada') as movie_title,
+				r.name as room_name,
+				s.show_date, s.show_time, m.duration,
+				DATE_ADD(CONCAT(s.show_date, ' ', s.show_time), INTERVAL m.duration MINUTE) as end_time,
+				(SELECT COUNT(*) FROM tickets t WHERE t.showtime_id = s.id AND t.status = 'confirmed') +
+				(SELECT COALESCE(SUM(ticket_count), 0) FROM ticket_logs tl WHERE tl.showtime_id = s.id) as tickets_sold,
+				(SELECT COALESCE(SUM(t.price_paid), 0) FROM tickets t WHERE t.showtime_id = s.id AND t.status = 'confirmed') +
+				(SELECT COALESCE(SUM(tl.ticket_count * s.price), 0) FROM ticket_logs tl WHERE tl.showtime_id = s.id) as total_revenue,
+				s.price as original_price, s.half_price_monday, s.promotions, s.is_active, s.language
+			FROM showtimes s
+			LEFT JOIN movies m ON s.movie_id = m.id
+			JOIN rooms r ON s.room_id = r.id
+			WHERE 1=1
+			";
 
             $params = [];
             if (!empty($history_start_date) && !empty($history_end_date)) {

@@ -2,7 +2,6 @@
 // ============================================
 // create_food_session.php - Crear sesión de comida
 // ============================================
-
 $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
     || (isset($_SERVER['HTTP_ACCEPT']) && stristr($_SERVER['HTTP_ACCEPT'], 'application/json'))
     || (isset($_SERVER['CONTENT_TYPE']) && stristr($_SERVER['CONTENT_TYPE'], 'application/json'));
@@ -11,7 +10,6 @@ if ($isAjax) {
     header('Content-Type: application/json');
 }
 header('Cache-Control: no-cache, no-store, must-revalidate');
-
 error_reporting(E_ALL);
 ini_set('display_errors', 0);
 require_once 'config.php';
@@ -62,11 +60,6 @@ error_log("🔍 create_food_session.php - token: " . substr($token, 0, 10) . "..
 
 $ticketsKey = 'ticket_quantities_' . $showtimeId;
 $totalSeatsKey = 'total_seats_' . $showtimeId;
-
-error_log("🔍 create_food_session.php - ticketsKey: $ticketsKey");
-error_log("🔍 create_food_session.php - totalSeatsKey: $totalSeatsKey");
-error_log("🔍 create_food_session.php - ticket_quantities en sesión: " . (isset($_SESSION[$ticketsKey]) ? json_encode($_SESSION[$ticketsKey]) : 'NO EXISTE'));
-error_log("🔍 create_food_session.php - total_seats en sesión: " . ($_SESSION[$totalSeatsKey] ?? 'NO EXISTE'));
 
 $ticketsData = $_SESSION[$ticketsKey] ?? null;
 $totalSeatsNeeded = $_SESSION[$totalSeatsKey] ?? 0;
@@ -172,32 +165,31 @@ try {
     }
 
     // ============================================
-    // ✅ CORRECCIÓN: Eliminar TODOS los tickets temporales del usuario
-    // Sin NOT EXISTS redundante - price_paid = 0 ya garantiza que no toca tickets pagados
+    // ✅ UNIFICADO: Eliminar reservas 'hold' anteriores del propio usuario
     // ============================================
     $stmt = $pdo->prepare("
         DELETE FROM tickets
         WHERE showtime_id = ? AND user_id = ?
-        AND price_paid = 0
+        AND status = 'hold'
     ");
     $stmt->execute([$showtimeId, $_SESSION['user_id']]);
     $deletedOldTemp = $stmt->rowCount();
 
     if ($deletedOldTemp > 0) {
-        error_log("✅ create_food_session: Eliminados $deletedOldTemp tickets temporales del usuario " . $_SESSION['user_id']);
+        error_log("✅ create_food_session: Eliminadas $deletedOldTemp reservas hold del usuario " . $_SESSION['user_id']);
     }
 
-    // 🛡️ VERIFICAR ASIENTOS OCUPADOS
+    // 🛡️ VERIFICAR ASIENTOS OCUPADOS (hold o confirmed de otros usuarios)
     $placeholders = implode(',', array_fill(0, count($seatArray), '?'));
-    
     $stmt = $pdo->prepare("
         SELECT seat_code FROM tickets
         WHERE showtime_id = ? AND seat_code IN ($placeholders) AND user_id != ?
+        AND status IN ('hold', 'confirmed')
         FOR UPDATE
     ");
     $stmt->execute(array_merge([$showtimeId], $seatArray, [$_SESSION['user_id']]));
     $occupiedSeats = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    
+
     $conflictSeats = array_intersect($seatArray, $occupiedSeats);
 
     if (!empty($conflictSeats)) {
@@ -276,10 +268,12 @@ try {
         error_log("✅ Compra pendiente actualizada para usuario " . $_SESSION['user_id']);
     }
 
-    // CREAR TICKETS TEMPORALES
+    // ============================================
+    // ✅ UNIFICADO: Crear reservas temporales con status='hold'
+    // ============================================
     $stmtInsert = $pdo->prepare("
-        INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid)
-        VALUES (?, ?, ?, 0)
+        INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid, status)
+        VALUES (?, ?, ?, 0, 'hold')
     ");
 
     $insertedCount = 0;

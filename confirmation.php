@@ -82,21 +82,23 @@ if (!$showtime) {
     exit;
 }
 
+// ============================================
+// ✅ UNIFICADO: Obtener tipos de boleto desde tickets (ya no purchase_tickets)
+// ============================================
 $stmt = $pdo->prepare("
-    SELECT pt.*, tt.name as ticket_type_name, tt.code as ticket_type_code
-    FROM purchase_tickets pt
-    JOIN ticket_types tt ON pt.ticket_type_id = tt.id
-    WHERE pt.purchase_id = ?
-    ORDER BY pt.id ASC
+    SELECT t.*, tt.name as ticket_type_name, tt.code as ticket_type_code
+    FROM tickets t
+    JOIN ticket_types tt ON t.ticket_type_id = tt.id
+    WHERE t.purchase_id = ? AND t.status = 'confirmed'
+    ORDER BY t.id ASC
 ");
 $stmt->execute([$purchaseId]);
 $purchaseTickets = $stmt->fetchAll();
 
-// ✅ CORREGIDO: PROCESAR ASIENTOS Y DETECTAR ACCESIBLES
+// ✅ PROCESAR ASIENTOS Y DETECTAR ACCESIBLES
 $seatsFromDB = $purchase['seats'] ?? '';
 $seatsArray = !empty($seatsFromDB) ? explode(',', $seatsFromDB) : [];
 
-// Obtener asientos accesibles desde el layout de la sala
 $seatLayout = json_decode($showtime['seat_layout'] ?? '{}', true);
 $accessibleSeatsFromLayout = $seatLayout['wheelchairSeats'] ?? ($seatLayout['accessibleSeats'] ?? []);
 
@@ -109,7 +111,7 @@ foreach ($seatsArray as $seat) {
 
     $cleanSeat = str_replace('♿', '', $seat);
     $cleanSeatsArray[] = $cleanSeat;
-    
+
     if (in_array($cleanSeat, $accessibleSeatsFromLayout)) {
         $accessibleSeats[] = $cleanSeat;
     }
@@ -136,13 +138,16 @@ foreach ($foodOrders as $food) {
 
 $taxRate = floatval($purchase['tax_rate'] ?? 16);
 
+// ============================================
+// ✅ UNIFICADO: Desglose por tipo usando price_paid
+// ============================================
 $ticketTypes = [];
 $ticketTotal = 0;
 
 foreach ($purchaseTickets as $pt) {
     $code = $pt['ticket_type_code'] ?? 'adult';
     $name = $pt['ticket_type_name'] ?? ucfirst($code);
-    $price = floatval($pt['price']);
+    $price = floatval($pt['price_paid']);
 
     if (!isset($ticketTypes[$code])) {
         $ticketTypes[$code] = [
@@ -327,13 +332,8 @@ body {
     color: #1f2937 !important;
 }
 
-.bg-\[\#14141e\] {
-    background-color: #ffffff !important;
-}
-
-.border-\[\#1e1e2e\] {
-    border-color: #e2e8f0 !important;
-}
+.bg-\[\#14141e\] { background-color: #ffffff !important; }
+.border-\[\#1e1e2e\] { border-color: #e2e8f0 !important; }
 
 .confirmation-card {
     background: #ffffff;
@@ -382,15 +382,8 @@ body {
     margin-bottom: 20px;
 }
 
-.summary-dotted-line {
-    border-top: 2px dashed #94a3b8;
-    margin: 14px 0;
-}
-
-.summary-solid-line {
-    border-top: 2px solid #6366f1;
-    margin: 14px 0;
-}
+.summary-dotted-line { border-top: 2px dashed #94a3b8; margin: 14px 0; }
+.summary-solid-line { border-top: 2px solid #6366f1; margin: 14px 0; }
 
 .summary-plain-row {
     display: flex;
@@ -440,25 +433,10 @@ body {
     flex-shrink: 0;
 }
 
-.promo-tag.monday {
-    background: #dcfce7;
-    color: #15803d;
-    border-color: #bbf7d0;
-}
-
-.promo-tag.monday .promo-dot {
-    background: #15803d;
-}
-
-.promo-tag.presale {
-    background: #fef3c7;
-    color: #b45309;
-    border-color: #fde68a;
-}
-
-.promo-tag.presale .promo-dot {
-    background: #b45309;
-}
+.promo-tag.monday { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+.promo-tag.monday .promo-dot { background: #15803d; }
+.promo-tag.presale { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+.promo-tag.presale .promo-dot { background: #b45309; }
 
 .format-badge {
     display: inline-flex;
@@ -484,15 +462,8 @@ body {
     padding: 2px 0;
 }
 
-.ticket-summary-item .ticket-type {
-    font-weight: 500;
-    color: #1f2937;
-}
-
-.ticket-summary-item .ticket-total {
-    font-weight: 600;
-    color: #16a34a;
-}
+.ticket-summary-item .ticket-type { font-weight: 500; color: #1f2937; }
+.ticket-summary-item .ticket-total { font-weight: 600; color: #16a34a; }
 
 .cart-item {
     display: flex;
@@ -503,29 +474,11 @@ body {
     font-size: 0.95rem;
 }
 
-.cart-item:last-child {
-    border-bottom: none;
-}
+.cart-item:last-child { border-bottom: none; }
+.cart-item .item-name { color: #1f2937; flex: 1; word-break: break-word; font-weight: 500; }
+.cart-item .item-price { color: #16a34a; font-weight: 600; font-size: 0.95rem; }
 
-.cart-item .item-name {
-    color: #1f2937;
-    flex: 1;
-    word-break: break-word;
-    font-weight: 500;
-}
-
-.cart-item .item-price {
-    color: #16a34a;
-    font-weight: 600;
-    font-size: 0.95rem;
-}
-
-.seats-display {
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: #1f2937;
-    word-break: break-word;
-}
+.seats-display { font-size: 0.95rem; font-weight: 500; color: #1f2937; word-break: break-word; }
 
 .seat-list {
     display: flex;
@@ -553,13 +506,8 @@ body {
     background: #dbeafe;
 }
 
-.seat-item .accessible-icon {
-    font-size: 0.8rem;
-}
-
-.seat-item .seat-label {
-    font-weight: 700;
-}
+.seat-item .accessible-icon { font-size: 0.8rem; }
+.seat-item .seat-label { font-weight: 700; }
 
 .payment-box {
     background: #f8fafc;
@@ -577,17 +525,8 @@ body {
     border-bottom: 1px solid #e2e8f0;
 }
 
-.payment-box .payment-header .payment-label {
-    color: #1f2937;
-    font-size: 0.9rem;
-    font-weight: 600;
-}
-
-.payment-box .payment-header .payment-value {
-    color: #0f172a;
-    font-weight: 700;
-    font-size: 0.95rem;
-}
+.payment-box .payment-header .payment-label { color: #1f2937; font-size: 0.9rem; font-weight: 600; }
+.payment-box .payment-header .payment-value { color: #0f172a; font-weight: 700; font-size: 0.95rem; }
 
 .payment-box .payment-detail {
     display: flex;
@@ -598,19 +537,9 @@ body {
     border-bottom: 1px solid #f1f5f9;
 }
 
-.payment-box .payment-detail:last-child {
-    border-bottom: none;
-}
-
-.payment-box .payment-detail .detail-label {
-    color: #4b5563;
-    font-weight: 500;
-}
-
-.payment-box .payment-detail .detail-value {
-    color: #0f172a;
-    font-weight: 600;
-}
+.payment-box .payment-detail:last-child { border-bottom: none; }
+.payment-box .payment-detail .detail-label { color: #4b5563; font-weight: 500; }
+.payment-box .payment-detail .detail-value { color: #0f172a; font-weight: 600; }
 
 .btn-actions {
     display: flex;
@@ -679,13 +608,8 @@ body {
     color: #3730a3;
 }
 
-.info-box strong {
-    color: #1e1b4b;
-}
-
-.info-box .text-sky-400 {
-    color: #0369a1;
-}
+.info-box strong { color: #1e1b4b; }
+.info-box .text-sky-400 { color: #0369a1; }
 
 .print-btn {
     background: #ffffff;
@@ -731,122 +655,34 @@ body {
     gap: 10px;
 }
 
-.integrity-warning .warning-icon {
-    font-size: 1.2rem;
-    flex-shrink: 0;
-    margin-top: 1px;
-}
-
-.integrity-warning .warning-text {
-    flex: 1;
-}
-
-.integrity-warning .warning-text strong {
-    color: #78350f;
-}
+.integrity-warning .warning-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 1px; }
+.integrity-warning .warning-text { flex: 1; }
+.integrity-warning .warning-text strong { color: #78350f; }
 
 @media (max-width: 640px) {
-    .confirmation-card {
-        padding: 20px;
-        margin: 0 8px;
-        border-radius: 12px;
-    }
-
-    .success-icon {
-        width: 56px;
-        height: 56px;
-        font-size: 24px;
-        margin-bottom: 14px;
-    }
-
-    .confirmation-title {
-        font-size: 1.3rem;
-    }
-
-    .confirmation-subtitle {
-        font-size: 0.85rem;
-        margin-bottom: 18px;
-    }
-
-    .card-summary {
-        padding: 16px;
-    }
-
-    .summary-movie-poster {
-        width: 60px;
-        height: 90px;
-    }
-
-    .summary-movie-title {
-        font-size: 0.95rem;
-    }
-
-    .payment-box {
-        padding: 12px;
-        margin-top: 12px;
-    }
-
-    .btn-actions {
-        gap: 8px;
-        margin-top: 18px;
-    }
-
-    .btn-actions .btn-primary,
-    .btn-actions .btn-secondary,
-    .print-btn {
-        padding: 10px;
-        font-size: 0.85rem;
-    }
-
-    .seat-list {
-        gap: 4px 8px;
-    }
-
-    .seat-item {
-        padding: 1px 8px 1px 6px;
-        font-size: 0.75rem;
-    }
-
-    .ticket-summary-item {
-        font-size: 0.8rem;
-    }
-
-    .payment-box .payment-detail {
-        font-size: 0.75rem;
-    }
-
-    .integrity-warning {
-        font-size: 0.75rem;
-        padding: 10px 12px;
-    }
+    .confirmation-card { padding: 20px; margin: 0 8px; border-radius: 12px; }
+    .success-icon { width: 56px; height: 56px; font-size: 24px; margin-bottom: 14px; }
+    .confirmation-title { font-size: 1.3rem; }
+    .confirmation-subtitle { font-size: 0.85rem; margin-bottom: 18px; }
+    .card-summary { padding: 16px; }
+    .summary-movie-poster { width: 60px; height: 90px; }
+    .summary-movie-title { font-size: 0.95rem; }
+    .payment-box { padding: 12px; margin-top: 12px; }
+    .btn-actions { gap: 8px; margin-top: 18px; }
+    .btn-actions .btn-primary, .btn-actions .btn-secondary, .print-btn { padding: 10px; font-size: 0.85rem; }
+    .seat-list { gap: 4px 8px; }
+    .seat-item { padding: 1px 8px 1px 6px; font-size: 0.75rem; }
+    .ticket-summary-item { font-size: 0.8rem; }
+    .payment-box .payment-detail { font-size: 0.75rem; }
+    .integrity-warning { font-size: 0.75rem; padding: 10px 12px; }
 }
 
 @media print {
-    body {
-        background: white !important;
-    }
-
-    .btn-actions,
-    .print-btn,
-    header,
-    footer {
-        display: none !important;
-    }
-
-    .confirmation-card {
-        box-shadow: none !important;
-        border: 1px solid #000 !important;
-        max-width: 100% !important;
-    }
-
-    .card-summary {
-        box-shadow: none !important;
-        border: 1px solid #ccc !important;
-    }
-
-    .integrity-warning {
-        display: none !important;
-    }
+    body { background: white !important; }
+    .btn-actions, .print-btn, header, footer { display: none !important; }
+    .confirmation-card { box-shadow: none !important; border: 1px solid #000 !important; max-width: 100% !important; }
+    .card-summary { box-shadow: none !important; border: 1px solid #ccc !important; }
+    .integrity-warning { display: none !important; }
 }
 </style>
 

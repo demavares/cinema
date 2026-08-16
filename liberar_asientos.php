@@ -29,47 +29,47 @@ if ($showtimeId <= 0) {
 
 try {
     $pdo->beginTransaction();
-    
+
     // ============================================
     // Marcar compras pendientes como expiradas
     // ============================================
     $stmt = $pdo->prepare("
-        UPDATE purchases 
+        UPDATE purchases
         SET status = 'expired', expires_at = NOW()
         WHERE user_id = ? AND showtime_id = ? AND status = 'pending'
     ");
     $stmt->execute([$_SESSION['user_id'], $showtimeId]);
     $expiredCount = $stmt->rowCount();
-    
+
     // ============================================
-    // ✅ CORRECCIÓN: Eliminar tickets temporales (price_paid = 0)
-    // Sin NOT EXISTS que bloquee la limpieza después de la primera compra.
-    // price_paid = 0 ya garantiza que nunca toca un ticket pagado.
+    // UNIFICADO: Eliminar SOLO reservas temporales (status='hold')
+    // Sin NOT EXISTS redundante. status='hold' garantiza que nunca
+    // se toca un ticket confirmado (pagado).
     // ============================================
     $stmt = $pdo->prepare("
         DELETE FROM tickets
         WHERE showtime_id = ? AND user_id = ?
-        AND price_paid = 0
+        AND status = 'hold'
     ");
     $stmt->execute([$showtimeId, $_SESSION['user_id']]);
     $deletedCount = $stmt->rowCount();
-    
+
     $pdo->commit();
-    
+
     // Limpiar sesión
     clearPurchaseSession($showtimeId);
     unset($_SESSION['food_valid_' . $showtimeId]);
     unset($_SESSION['food_seats_' . $showtimeId]);
     unset($_SESSION['food_timeout_' . $showtimeId]);
     unset($_SESSION['food_order_' . $showtimeId]);
-    
+
     echo json_encode([
         'success' => true,
         'expired_purchases' => $expiredCount,
         'deleted_tickets' => $deletedCount
     ]);
     exit;
-    
+
 } catch (Exception $e) {
     $pdo->rollBack();
     error_log("❌ liberar_asientos.php: " . $e->getMessage());

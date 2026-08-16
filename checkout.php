@@ -115,27 +115,20 @@ try {
 
     if (!$showtimeLocked) throw new Exception("Función no encontrada");
 
-    // 🛡️ VERIFICAR ASIENTOS OCUPADOS (EXCLUYENDO los del propio usuario)
+    // ============================================
+    // 🛡️ VERIFICAR ASIENTOS OCUPADOS (hold/confirmed de otros usuarios)
+    // ============================================
     $placeholders = implode(',', array_fill(0, count($seatsArray), '?'));
     $stmtCheck = $pdo->prepare("
-        SELECT seat_code FROM tickets 
+        SELECT seat_code FROM tickets
         WHERE showtime_id = ? AND seat_code IN ($placeholders) AND user_id != ?
-        AND (
-            price_paid > 0
-            OR EXISTS (
-                SELECT 1 FROM purchases p
-                WHERE p.user_id = tickets.user_id
-                AND p.showtime_id = tickets.showtime_id
-                AND p.status IN ('completed', 'pending')
-                AND p.expires_at > NOW()
-            )
-        )
+        AND status IN ('hold', 'confirmed')
         FOR UPDATE
     ");
     $stmtCheck->execute(array_merge([$showtimeId], $seatsArray, [$userId]));
     $existingSeats = $stmtCheck->fetchAll(PDO::FETCH_COLUMN);
 
-    $stmtPending = $pdo->prepare("SELECT seats FROM purchases WHERE showtime_id = ? AND status = 'pending' AND user_id != ? FOR UPDATE");
+    $stmtPending = $pdo->prepare("SELECT seats FROM purchases WHERE showtime_id = ? AND status = 'pending' AND user_id != ? AND expires_at > NOW() FOR UPDATE");
     $stmtPending->execute([$showtimeId, $userId]);
     $pendingPurchases = $stmtPending->fetchAll();
     $pendingSeats = [];
@@ -162,56 +155,9 @@ try {
 
     $transactionId = generateTransactionId();
 
-// ✅ Corrección: solo importa si ESTE asiento ya fue pagado (price_paid > 0),
-// no si el usuario tiene otras compras completadas en la misma función.
-$stmtDelete = $pdo->prepare("
-    DELETE FROM tickets
-    WHERE showtime_id = ? AND user_id = ? AND seat_code IN ($placeholders)
-    AND price_paid = 0
-");
-$stmtDelete->execute(array_merge([$showtimeId, $userId], $seatsArray));
-
-    // Insertar tickets definitivos
-    $stmtInsert = $pdo->prepare("
-        INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid)
-        VALUES (?, ?, ?, ?)
-    ");
-    $ticketIds = [];
-    $insertErrors = [];
-
-    foreach ($seatsArray as $index => $seat) {
-        $totalAdults = intval($ticketQuantities['adult'] ?? 0);
-        $totalChildren = intval($ticketQuantities['child'] ?? 0);
-        
-        if ($index < $totalAdults) {
-            $price = $pricesByType['adult'];
-        } elseif ($index < ($totalAdults + $totalChildren)) {
-            $price = $pricesByType['child'];
-        } else {
-            $price = $pricesByType['senior'];
-        }
-
-        try {
-            $stmtInsert->execute([$userId, $showtimeId, $seat, $price]);
-            $ticketIds[] = $pdo->lastInsertId();
-        } catch (PDOException $e) {
-            if ($e->getCode() == 23000 || strpos($e->getMessage(), 'Duplicate') !== false) {
-                $insertErrors[] = $seat;
-                error_log("⚠️ Error duplicado en checkout: asiento $seat - " . $e->getMessage());
-            } else {
-                throw $e;
-            }
-        }
-    }
-
-    if (!empty($insertErrors)) {
-        throw new Exception("Error al reservar asientos (ya ocupados): " . implode(', ', $insertErrors));
-    }
-
-    if (count($ticketIds) !== count($seatsArray)) {
-        throw new Exception("No se pudieron reservar todos los asientos. Por favor, selecciona otros.");
-    }
-
+    // ============================================
+    // ✅ UNIFICADO: 1) Crear la compra PRIMERO (para tener purchase_id)
+    // ============================================
     $sessionToken = bin2hex(random_bytes(32));
     $expiresAt = date('Y-m-d H:i:s', strtotime('+10 minutes'));
     $reference = 'CMP-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -6));
@@ -240,12 +186,32 @@ $stmtDelete->execute(array_merge([$showtimeId, $userId], $seatsArray));
 
     $purchaseId = $pdo->lastInsertId();
 
-    $stmtPurchaseTicket = $pdo->prepare("INSERT INTO purchase_tickets (purchase_id, showtime_id, ticket_type_id, seat_code, price) VALUES (?, ?, ?, ?, ?)");
+    // ============================================
+    // ✅ UNIFICADO: 2) Confirmar tickets hold → confirmed
+    // ============================================
+    $stmtConfirm = $pdo->prepare("
+        UPDATE tickets
+        SET status = 'confirmed',
+            price_paid = ?,
+            purchase_id = ?,
+            ticket_type_id = ?,
+            confirmed_at = NOW()
+        WHERE showtime_id = ? AND seat_code = ? AND user_id = ? AND status = 'hold'
+    ");
+
+    // Respaldo: si el 'hold' no existía, insertar directamente como confirmed
+    $stmtInsertFallback = $pdo->prepare("
+        INSERT INTO tickets (user_id, showtime_id, seat_code, price_paid, status, purchase_id, ticket_type_id, confirmed_at)
+        VALUES (?, ?, ?, ?, 'confirmed', ?, ?, NOW())
+    ");
+
+    $confirmedCount = 0;
+    $insertErrors = [];
 
     foreach ($seatsArray as $index => $seat) {
         $totalAdults = intval($ticketQuantities['adult'] ?? 0);
         $totalChildren = intval($ticketQuantities['child'] ?? 0);
-        
+
         if ($index < $totalAdults) {
             $ticketTypeId = 1;
             $price = $pricesByType['adult'];
@@ -257,9 +223,38 @@ $stmtDelete->execute(array_merge([$showtimeId, $userId], $seatsArray));
             $price = $pricesByType['senior'];
         }
 
-        $stmtPurchaseTicket->execute([$purchaseId, $showtimeId, $ticketTypeId, $seat, $price]);
+        // Intentar confirmar el 'hold' existente
+        $stmtConfirm->execute([$price, $purchaseId, $ticketTypeId, $showtimeId, $seat, $userId]);
+
+        if ($stmtConfirm->rowCount() > 0) {
+            $confirmedCount++;
+        } else {
+            // El hold no existía (caso anómalo): insertar directamente
+            try {
+                $stmtInsertFallback->execute([$userId, $showtimeId, $seat, $price, $purchaseId, $ticketTypeId]);
+                $confirmedCount++;
+            } catch (PDOException $e) {
+                if ($e->getCode() == 23000 || strpos($e->getMessage(), 'Duplicate') !== false) {
+                    $insertErrors[] = $seat;
+                    error_log("⚠️ Error duplicado en checkout: asiento $seat - " . $e->getMessage());
+                } else {
+                    throw $e;
+                }
+            }
+        }
     }
 
+    if (!empty($insertErrors)) {
+        throw new Exception("Error al reservar asientos (ya ocupados): " . implode(', ', $insertErrors));
+    }
+
+    if ($confirmedCount !== count($seatsArray)) {
+        throw new Exception("No se pudieron confirmar todos los asientos. Por favor, selecciona otros.");
+    }
+
+    // ============================================
+    // ✅ UNIFICADO: 3) Insertar food_orders (vinculados al purchase_id)
+    // ============================================
     if (!empty($foodItems)) {
         $stmtFood = $pdo->prepare("INSERT INTO food_orders (user_id, showtime_id, food_item_id, quantity, unit_price, total_price, status, purchase_id) VALUES (?, ?, ?, ?, ?, ?, 'completed', ?)");
 
@@ -270,28 +265,25 @@ $stmtDelete->execute(array_merge([$showtimeId, $userId], $seatsArray));
 
     $_SESSION['last_order_id'] = $purchaseId;
 
-    // ✅ CORRECCIÓN: Limpiar TODOS los tickets temporales del usuario para este showtime
+    // ============================================
+    // 🧹 Limpiar reservas 'hold' sobrantes del usuario para este showtime
+    // ============================================
     $stmtCleanTemp = $pdo->prepare("
-        DELETE t FROM tickets t
-        WHERE t.showtime_id = ? AND t.user_id = ?
-        AND t.price_paid = 0
-        AND NOT EXISTS (
-            SELECT 1 FROM purchases p
-            WHERE p.user_id = t.user_id
-            AND p.showtime_id = t.showtime_id
-            AND p.status = 'completed'
-        )
+        DELETE FROM tickets
+        WHERE showtime_id = ? AND user_id = ? AND status = 'hold'
     ");
     $stmtCleanTemp->execute([$showtimeId, $userId]);
     $cleanedCount = $stmtCleanTemp->rowCount();
 
     if ($cleanedCount > 0) {
-        error_log("✅ checkout: Limpiados $cleanedCount tickets temporales del usuario $userId para showtime $showtimeId");
+        error_log("✅ checkout: Limpiadas $cleanedCount reservas hold sobrantes del usuario $userId para showtime $showtimeId");
     }
 
-    // ✅ CORRECCIÓN: Marcar todas las compras pending anteriores como expired (excepto la actual)
+    // ============================================
+    // Marcar compras pending anteriores como expired (excepto la actual)
+    // ============================================
     $stmtExpireOld = $pdo->prepare("
-        UPDATE purchases 
+        UPDATE purchases
         SET status = 'expired', expires_at = NOW()
         WHERE user_id = ? AND showtime_id = ? AND status = 'pending' AND id != ?
     ");

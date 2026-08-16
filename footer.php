@@ -162,7 +162,6 @@ $config = getSiteConfig($pdo);
                     <a href="#">Términos y Condiciones</a>
                     <span class="dot">•</span>
                     <a href="#">Políticas de Privacidad</a>
-                    <span class="dot">•</span>
                 </div>
             </div>
         </div>

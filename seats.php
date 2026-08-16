@@ -58,16 +58,13 @@ if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
 }
 
 // ============================================
-// 🧹 CORRECCIÓN: LIMPIAR TICKETS ZOMBIES ANTES DE CONSULTAR
-// Elimina tickets temporales (price_paid=0) que NO tienen compra pending válida.
-// Esto evita que asientos queden bloqueados por compras abandonadas/expiradas
-// y previene errores de UNIQUE constraint al reservar.
+// 🧹 UNIFICADO: Limpiar reservas 'hold' huérfanas (sin compra pending válida)
 // ============================================
 try {
     $stmtCleanZombies = $pdo->prepare("
         DELETE t FROM tickets t
         WHERE t.showtime_id = ?
-        AND t.price_paid = 0
+        AND t.status = 'hold'
         AND NOT EXISTS (
             SELECT 1 FROM purchases p
             WHERE p.user_id = t.user_id
@@ -78,41 +75,39 @@ try {
     ");
     $stmtCleanZombies->execute([$showtimeId]);
     $zombiesDeleted = $stmtCleanZombies->rowCount();
-    
+
     if ($zombiesDeleted > 0) {
-        error_log("🧹 seats.php: Limpiados $zombiesDeleted tickets zombies del showtime $showtimeId");
+        error_log("🧹 seats.php: Limpiadas $zombiesDeleted reservas hold huérfanas del showtime $showtimeId");
     }
 } catch (Exception $e) {
-    error_log("⚠️ seats.php: Error limpiando zombies: " . $e->getMessage());
+    error_log("⚠️ seats.php: Error limpiando reservas hold: " . $e->getMessage());
 }
 
 // ============================================
-// ✅ CORRECCIÓN: QUERY SIMPLIFICADA DE ASIENTOS OCUPADOS
-// Después de limpiar zombies, cualquier ticket en la BD (de otro usuario)
-// significa que el asiento está ocupado. Sin NOT EXISTS redundante.
-// Esto garantiza que cuando el Usuario A selecciona un asiento,
-// el Usuario B lo vea como ocupado correctamente.
+// ✅ UNIFICADO: Asientos ocupados = cualquier ticket activo de OTRO usuario
 // ============================================
 $stmtOccupied = $pdo->prepare("
     SELECT DISTINCT seat_code FROM tickets
     WHERE showtime_id = ? AND user_id != ?
+    AND status IN ('hold', 'confirmed')
 ");
 $stmtOccupied->execute([$showtimeId, $_SESSION['user_id']]);
 $occupiedSeats = $stmtOccupied->fetchAll(PDO::FETCH_COLUMN);
 
+// Asientos ya comprados (confirmed) por el propio usuario
 $stmtCompleted = $pdo->prepare("
-    SELECT DISTINCT t.seat_code 
-    FROM tickets t
-    INNER JOIN purchases p ON t.user_id = p.user_id AND t.showtime_id = p.showtime_id
-    WHERE t.showtime_id = ? AND p.status = 'completed'
+    SELECT seat_code FROM tickets
+    WHERE showtime_id = ? AND user_id = ? AND status = 'confirmed'
 ");
-$stmtCompleted->execute([$showtimeId]);
+$stmtCompleted->execute([$showtimeId, $_SESSION['user_id']]);
 $userCompletedSeats = $stmtCompleted->fetchAll(PDO::FETCH_COLUMN);
+
 $occupiedSeats = array_unique(array_merge($occupiedSeats, $userCompletedSeats));
 
+// Recuperar reservas 'hold' activas del propio usuario (compras pending válidas)
 $userPendingSeats = [];
 $stmtUserPendingPurchases = $pdo->prepare("
-    SELECT seats FROM purchases 
+    SELECT seats FROM purchases
     WHERE showtime_id = ? AND user_id = ? AND status = 'pending' AND expires_at > NOW()
 ");
 $stmtUserPendingPurchases->execute([$showtimeId, $_SESSION['user_id']]);
@@ -130,15 +125,10 @@ $userPendingSeats = array_diff($userPendingSeats, $userCompletedSeats);
 $userPendingSeats = array_values($userPendingSeats);
 
 if ($fromFood) {
+    // ✅ UNIFICADO: Recuperar asientos 'hold' del propio usuario
     $stmtRecover = $pdo->prepare("
         SELECT seat_code FROM tickets
-        WHERE showtime_id = ? AND user_id = ?
-          AND NOT EXISTS (
-              SELECT 1 FROM purchases p
-              WHERE p.user_id = tickets.user_id
-                AND p.showtime_id = tickets.showtime_id
-                AND p.status = 'completed'
-          )
+        WHERE showtime_id = ? AND user_id = ? AND status = 'hold'
     ");
     $stmtRecover->execute([$showtimeId, $_SESSION['user_id']]);
     $recoveredSeats = $stmtRecover->fetchAll(PDO::FETCH_COLUMN);
@@ -251,7 +241,6 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .seat-label { font-size: calc(var(--seat-size) * 0.35); color: #0f172a; text-align: center; position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); font-weight: bold; white-space: nowrap; }
 .seat-selected .seat-label, .seat-occupied .seat-label { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
 
-/* ✅ CORREGIDO: Hacer visible el icono ♿ en asientos ocupados accesibles */
 .seat-occupied .seat-label { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
 .seat-accessible.seat-occupied { background-color: #ef4444 !important; opacity: 0.9; }
 .seat-accessible.seat-occupied .seat-label { font-size: calc(var(--seat-size) * 0.6) !important; }
@@ -707,7 +696,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     data.occupied.forEach(seatId => {
                         const seatEl = document.querySelector('[data-seat="' + seatId + '"]');
                         if (seatEl && !seatEl.classList.contains('seat-occupied')) {
-                            // ✅ CORREGIDO: Preservar la clase seat-accessible si el asiento es accesible
                             const isAccessibleSeat = accessibleSeats.includes(seatId);
                             seatEl.classList.remove('seat-selected', 'seat-available');
                             seatEl.classList.add('seat-occupied');

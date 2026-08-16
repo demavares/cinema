@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: datame
--- Tiempo de generación: 15-08-2026 a las 08:31:52
+-- Tiempo de generación: 16-08-2026 a las 07:16:15
 -- Versión del servidor: 10.11.18-MariaDB-ubu2204
 -- Versión de PHP: 8.3.26
 
@@ -147,7 +147,11 @@ INSERT INTO `food_orders` (`id`, `user_id`, `ticket_id`, `showtime_id`, `purchas
 (6, 8, NULL, 64, 502, 4, 1, 1500.00, 1500.00, '2026-08-15 01:46:57', 'completed'),
 (7, 8, NULL, 64, 504, 3, 1, 15.00, 15.00, '2026-08-15 03:37:14', 'completed'),
 (8, 8, NULL, 64, 504, 4, 1, 1500.00, 1500.00, '2026-08-15 03:37:14', 'completed'),
-(9, 8, NULL, 64, 510, 2, 1, 1500.00, 1500.00, '2026-08-15 04:03:45', 'completed');
+(9, 8, NULL, 64, 510, 2, 1, 1500.00, 1500.00, '2026-08-15 04:03:45', 'completed'),
+(10, 8, NULL, 64, 519, 3, 1, 15.00, 15.00, '2026-08-16 05:14:00', 'completed'),
+(11, 8, NULL, 64, 519, 4, 1, 1500.00, 1500.00, '2026-08-16 05:14:00', 'completed'),
+(12, 1, NULL, 64, 521, 3, 3, 15.00, 45.00, '2026-08-16 06:25:34', 'completed'),
+(13, 1, NULL, 64, 521, 4, 3, 1500.00, 4500.00, '2026-08-16 06:25:34', 'completed');
 
 -- --------------------------------------------------------
 
@@ -217,50 +221,11 @@ CREATE TABLE `purchases` (
 --
 
 INSERT INTO `purchases` (`id`, `user_id`, `showtime_id`, `seats`, `total_tickets`, `total_food`, `total_amount`, `subtotal`, `tax_amount`, `tax_rate`, `purchase_date`, `status`, `payment_method`, `payment_data`, `session_token`, `expires_at`) VALUES
-(497, 8, 64, 'A1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 01:32:11', 'expired', NULL, NULL, '4fd224fc2f95ec72d744de235873b9a14d2a87a761ee8b3c07717abf91399887', '2026-08-14 21:32:17'),
-(498, 8, 64, 'A1', 1, 0.00, 3480.00, 3000.00, 480.00, 16.00, '2026-08-15 01:32:17', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-1A1CAFD7\",\"method\":\"movil\",\"reference\":\"CMP-20260814-1CBCC0\",\"date\":\"2026-08-14 21:32:17\",\"ip\":\"172.22.0.1\"}', '1e07441cc6110c8a5d79e1b4701c9ee449d6f2662d0f95a01f8a8652bbbd0285', '2026-08-14 21:42:17'),
-(499, 8, 64, 'A2', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 01:33:08', 'expired', NULL, NULL, '0d2495defb1d5a9850b3ef6c225df67cfec0c3cba8c0f46f2d85139a682a7ea7', '2026-08-14 21:33:14'),
-(500, 8, 64, 'A2', 1, 0.00, 3480.00, 3000.00, 480.00, 16.00, '2026-08-15 01:33:14', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-1DA61F26\",\"method\":\"movil\",\"reference\":\"CMP-20260814-A622C2\",\"date\":\"2026-08-14 21:33:14\",\"ip\":\"172.22.0.1\"}', '3854a39d2726950a480d5bc45315935e212d26c6e342e0400a0f8fcbce85977e', '2026-08-14 21:43:14'),
-(501, 8, 64, 'B9', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 01:46:46', 'expired', NULL, NULL, '0a901ce40bdcce6b362ae8de95af336bc6634f2d81a7574458a5a847af1cf401', '2026-08-14 21:46:57'),
-(502, 8, 64, 'B9', 1, 2700.00, 6612.00, 5700.00, 912.00, 16.00, '2026-08-15 01:46:57', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-511B884E\",\"method\":\"movil\",\"reference\":\"CMP-20260814-1B8B36\",\"date\":\"2026-08-14 21:46:57\",\"ip\":\"172.22.0.1\"}', '773fb58b16769a9d329d47d1645058af120de0ebc1acfc92c8860c5efc27da94', '2026-08-14 21:56:57'),
-(503, 8, 64, 'B8', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 03:37:01', 'expired', NULL, NULL, '38b1bd98dfc9eb1e6d8ca823e2a1eb68779346208e5bd3b4b7409d8363ad928e', '2026-08-14 23:37:14'),
-(504, 8, 64, 'B8', 1, 1515.00, 5237.40, 4515.00, 722.40, 16.00, '2026-08-15 03:37:14', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260814-EEADD630\",\"method\":\"movil\",\"reference\":\"CMP-20260814-ADDADF\",\"date\":\"2026-08-14 23:37:14\",\"ip\":\"172.22.0.1\"}', 'baff0cb7cc960d0fd02339a8eb138a264088400862c265072832b408265c815d', '2026-08-14 23:47:14'),
-(507, 8, 64, 'A12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 03:47:42', 'expired', NULL, NULL, '6a54728aba0c1a314076d6e52929d91daa07be216a915a4c3e5e5a7acde24be7', '2026-08-14 23:47:47'),
-(508, 8, 64, 'A12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 04:03:23', 'expired', NULL, NULL, '8065d93d4d226456f0441cbe3fe974f0e71fbee24e5996ea3fb7b03d62fa4d51', '2026-08-15 00:03:29'),
-(509, 8, 64, 'A12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 04:03:37', 'expired', NULL, NULL, 'f6f92f9b5a2f6bd64445ddcf02b796d44f373b9f6b8a4a12d90a491e5e1d9de0', '2026-08-15 00:03:45'),
-(510, 8, 64, 'A12', 1, 1500.00, 5220.00, 4500.00, 720.00, 16.00, '2026-08-15 04:03:45', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260815-5211CE30\",\"method\":\"movil\",\"reference\":\"CMP-20260815-11DB13\",\"date\":\"2026-08-15 00:03:45\",\"ip\":\"172.22.0.1\"}', '25d5ded1b571770f358d11623f3b600071e408ea1b08ffe1f6fe05ce328315e3', '2026-08-15 00:13:45'),
-(511, 8, 64, 'A10', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 06:05:38', 'expired', NULL, NULL, 'c1f6a18408494bfc64254e1d4a6183ba1f238dc547e48da2d754fc912c7b5af9', '2026-08-15 02:15:38'),
-(512, 8, 64, 'B1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 06:45:18', 'expired', NULL, NULL, '8398c0dd6f2425f49b181df183d9d4d2dd071046ecdaf09eb531c6af769bea45', '2026-08-15 02:45:24'),
-(513, 8, 64, 'B1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 06:45:47', 'expired', NULL, NULL, 'bc6bf17235b62b5d691fda31530d39538f8530fa719d36f7f2ec4eaca1f7a4e3', '2026-08-15 02:46:18'),
-(514, 8, 64, 'B1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 07:05:20', 'expired', NULL, NULL, 'ac88a4144d6c27b5c83cb731b981640b40a0fe93289357d516dfa4e243af1174', '2026-08-15 03:05:33'),
-(515, 8, 64, 'B1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-15 07:06:48', 'expired', NULL, NULL, '29ce7f3a5b258fdfc83ef4d703b67106301b1bf22c881300bab7ef083c07da8d', '2026-08-15 03:07:08');
-
--- --------------------------------------------------------
-
---
--- Estructura de tabla para la tabla `purchase_tickets`
---
-
-CREATE TABLE `purchase_tickets` (
-  `id` int(11) NOT NULL,
-  `purchase_id` int(11) NOT NULL,
-  `showtime_id` int(11) NOT NULL,
-  `ticket_type_id` int(11) NOT NULL,
-  `seat_code` varchar(10) NOT NULL,
-  `price` decimal(10,2) NOT NULL,
-  `created_at` timestamp NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Volcado de datos para la tabla `purchase_tickets`
---
-
-INSERT INTO `purchase_tickets` (`id`, `purchase_id`, `showtime_id`, `ticket_type_id`, `seat_code`, `price`, `created_at`) VALUES
-(6, 498, 64, 1, 'A1', 3000.00, '2026-08-15 01:32:17'),
-(7, 500, 64, 1, 'A2', 3000.00, '2026-08-15 01:33:14'),
-(8, 502, 64, 1, 'B9', 3000.00, '2026-08-15 01:46:57'),
-(9, 504, 64, 1, 'B8', 3000.00, '2026-08-15 03:37:14'),
-(10, 510, 64, 1, 'A12', 3000.00, '2026-08-15 04:03:45');
+(517, 8, 64, 'A1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-16 05:10:34', 'expired', NULL, NULL, 'adbaa58d53fe6b5c32aec1d982796af95d246a207aa55b051b01965de7c8a96a', '2026-08-16 01:11:11'),
+(518, 8, 64, 'A1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-16 05:13:49', 'expired', NULL, NULL, '0073890cc2595769e974f6f30e309a8f4cdf09ff4835f31e4095c29b90309e36', '2026-08-16 01:14:00'),
+(519, 8, 64, 'A1', 1, 1515.00, 5237.40, 4515.00, 722.40, 16.00, '2026-08-16 05:14:00', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260816-71829C8D\",\"method\":\"movil\",\"reference\":\"CMP-20260816-829CAF\",\"date\":\"2026-08-16 01:14:00\",\"ip\":\"172.22.0.1\"}', '96c290bae6a32a5e3d7076f811bb202ec59937e0aaada3180b245aa98e00af1c', '2026-08-16 01:24:00'),
+(520, 1, 64, 'A12,A11,A10', 3, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-16 06:25:17', 'expired', NULL, NULL, '11357922d097dc8cfcaef84495637e11596e6839e9206f8136f1e59cdb93bc12', '2026-08-16 02:25:34'),
+(521, 1, 64, 'A12,A11,A10', 3, 4545.00, 11072.20, 9545.00, 1527.20, 16.00, '2026-08-16 06:25:34', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260816-7DE0C07F\",\"method\":\"movil\",\"reference\":\"CMP-20260816-E0C0A8\",\"date\":\"2026-08-16 02:25:34\",\"ip\":\"172.22.0.1\"}', 'a3b73e7cbac27d39ab9a0e9c9c73f7d43f42285a29e8dcab09047a2b4b88ea6f', '2026-08-16 02:35:34');
 
 -- --------------------------------------------------------
 
@@ -407,21 +372,24 @@ CREATE TABLE `tickets` (
   `id` int(11) NOT NULL,
   `user_id` int(11) NOT NULL,
   `showtime_id` int(11) NOT NULL,
+  `purchase_id` int(11) DEFAULT NULL COMMENT 'NULL mientras es reserva temporal (hold)',
+  `ticket_type_id` int(11) DEFAULT NULL COMMENT 'NULL mientras es reserva temporal (hold)',
   `seat_code` varchar(10) NOT NULL,
-  `purchase_date` timestamp NULL DEFAULT current_timestamp(),
-  `price_paid` decimal(10,2) NOT NULL
+  `price_paid` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `status` enum('hold','confirmed') NOT NULL DEFAULT 'hold' COMMENT 'hold=reserva temporal | confirmed=pagado',
+  `created_at` timestamp NULL DEFAULT current_timestamp(),
+  `confirmed_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Volcado de datos para la tabla `tickets`
 --
 
-INSERT INTO `tickets` (`id`, `user_id`, `showtime_id`, `seat_code`, `purchase_date`, `price_paid`) VALUES
-(159, 8, 64, 'A1', '2026-08-15 01:32:17', 3000.00),
-(161, 8, 64, 'A2', '2026-08-15 01:33:14', 3000.00),
-(163, 8, 64, 'B9', '2026-08-15 01:46:57', 3000.00),
-(165, 8, 64, 'B8', '2026-08-15 03:37:14', 3000.00),
-(171, 8, 64, 'A12', '2026-08-15 04:03:45', 3000.00);
+INSERT INTO `tickets` (`id`, `user_id`, `showtime_id`, `purchase_id`, `ticket_type_id`, `seat_code`, `price_paid`, `status`, `created_at`, `confirmed_at`) VALUES
+(2, 8, 64, 519, 1, 'A1', 3000.00, 'confirmed', '2026-08-16 05:13:49', '2026-08-16 05:14:00'),
+(3, 1, 64, 521, 1, 'A12', 3000.00, 'confirmed', '2026-08-16 06:25:17', '2026-08-16 06:25:34'),
+(4, 1, 64, 521, 2, 'A11', 500.00, 'confirmed', '2026-08-16 06:25:17', '2026-08-16 06:25:34'),
+(5, 1, 64, 521, 3, 'A10', 1500.00, 'confirmed', '2026-08-16 06:25:17', '2026-08-16 06:25:34');
 
 -- --------------------------------------------------------
 
@@ -488,8 +456,8 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `email`, `cedula_type`, `cedula_number`, `phone_prefix`, `phone_number`, `birth_date`, `password`, `role`, `is_blocked`, `created_at`, `last_login`) VALUES
-(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-15 04:16:19'),
-(8, 'Darwin Mavarez', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-14 20:36:12');
+(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-16 02:21:13'),
+(8, 'Darwin Mavarez', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-16 00:59:29');
 
 --
 -- Índices para tablas volcadas
@@ -521,10 +489,10 @@ ALTER TABLE `food_items`
 ALTER TABLE `food_orders`
   ADD PRIMARY KEY (`id`),
   ADD KEY `user_id` (`user_id`),
-  ADD KEY `ticket_id` (`ticket_id`),
   ADD KEY `showtime_id` (`showtime_id`),
   ADD KEY `food_item_id` (`food_item_id`),
-  ADD KEY `idx_purchase_id` (`purchase_id`);
+  ADD KEY `idx_purchase_id` (`purchase_id`),
+  ADD KEY `food_orders_ibfk_2` (`ticket_id`);
 
 --
 -- Indices de la tabla `movies`
@@ -542,15 +510,6 @@ ALTER TABLE `purchases`
   ADD KEY `idx_status_fecha` (`status`,`purchase_date`),
   ADD KEY `idx_user_showtime` (`user_id`,`showtime_id`),
   ADD KEY `idx_status_expires` (`status`,`expires_at`);
-
---
--- Indices de la tabla `purchase_tickets`
---
-ALTER TABLE `purchase_tickets`
-  ADD PRIMARY KEY (`id`),
-  ADD KEY `purchase_id` (`purchase_id`),
-  ADD KEY `showtime_id` (`showtime_id`),
-  ADD KEY `ticket_type_id` (`ticket_type_id`);
 
 --
 -- Indices de la tabla `rate_limits`
@@ -593,10 +552,11 @@ ALTER TABLE `tax_config`
 --
 ALTER TABLE `tickets`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `unique_seat_showtime` (`showtime_id`,`seat_code`),
   ADD UNIQUE KEY `unique_showtime_seat` (`showtime_id`,`seat_code`),
   ADD KEY `user_id` (`user_id`),
-  ADD KEY `idx_showtime_seat` (`showtime_id`,`seat_code`);
+  ADD KEY `idx_purchase_id` (`purchase_id`),
+  ADD KEY `idx_ticket_type` (`ticket_type_id`),
+  ADD KEY `idx_status` (`status`);
 
 --
 -- Indices de la tabla `ticket_logs`
@@ -644,7 +604,7 @@ ALTER TABLE `food_items`
 -- AUTO_INCREMENT de la tabla `food_orders`
 --
 ALTER TABLE `food_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT de la tabla `movies`
@@ -656,13 +616,7 @@ ALTER TABLE `movies`
 -- AUTO_INCREMENT de la tabla `purchases`
 --
 ALTER TABLE `purchases`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=516;
-
---
--- AUTO_INCREMENT de la tabla `purchase_tickets`
---
-ALTER TABLE `purchase_tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=522;
 
 --
 -- AUTO_INCREMENT de la tabla `rate_limits`
@@ -698,7 +652,7 @@ ALTER TABLE `tax_config`
 -- AUTO_INCREMENT de la tabla `tickets`
 --
 ALTER TABLE `tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=177;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_logs`
@@ -751,14 +705,6 @@ ALTER TABLE `purchases`
   ADD CONSTRAINT `purchases_ibfk_2` FOREIGN KEY (`showtime_id`) REFERENCES `showtimes` (`id`) ON DELETE CASCADE;
 
 --
--- Filtros para la tabla `purchase_tickets`
---
-ALTER TABLE `purchase_tickets`
-  ADD CONSTRAINT `purchase_tickets_ibfk_1` FOREIGN KEY (`purchase_id`) REFERENCES `purchases` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `purchase_tickets_ibfk_2` FOREIGN KEY (`showtime_id`) REFERENCES `showtimes` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `purchase_tickets_ibfk_3` FOREIGN KEY (`ticket_type_id`) REFERENCES `ticket_types` (`id`) ON DELETE CASCADE;
-
---
 -- Filtros para la tabla `showtimes`
 --
 ALTER TABLE `showtimes`
@@ -769,6 +715,8 @@ ALTER TABLE `showtimes`
 -- Filtros para la tabla `tickets`
 --
 ALTER TABLE `tickets`
+  ADD CONSTRAINT `tickets_fk_purchase` FOREIGN KEY (`purchase_id`) REFERENCES `purchases` (`id`) ON DELETE SET NULL,
+  ADD CONSTRAINT `tickets_fk_type` FOREIGN KEY (`ticket_type_id`) REFERENCES `ticket_types` (`id`) ON DELETE SET NULL,
   ADD CONSTRAINT `tickets_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `tickets_ibfk_2` FOREIGN KEY (`showtime_id`) REFERENCES `showtimes` (`id`) ON DELETE CASCADE;
 
