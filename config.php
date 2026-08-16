@@ -3,6 +3,7 @@
 // CONFIGURACIÓN DE SESIÓN (MEJORADA)
 // ============================================
 date_default_timezone_set('America/Caracas');
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' https://cdnjs.cloudflare.com;");
 
 if (session_status() === PHP_SESSION_NONE) {
     // Configuración segura de cookies
@@ -142,7 +143,8 @@ function getMovieFromTMDB($title, $year = null) {
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
     $response = curl_exec($ch);
     curl_close($ch);
 
@@ -156,7 +158,8 @@ function getMovieFromTMDB($title, $year = null) {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $detail_url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         $detail_response = curl_exec($ch);
         curl_close($ch);
 

@@ -15,7 +15,7 @@
 // Solo permitir ejecución por línea de comandos (CLI), no vía web
 if (php_sapi_name() !== 'cli') {
     http_response_code(403);
-    exit("Acceso denegado: este script solo puede ejecutarse desde la línea de comandos.");
+    exit("Acceso denegado: este script solo puede ejecutarse desde la línea de comandos.\n");
 }
 
 error_reporting(E_ALL);
@@ -61,17 +61,17 @@ try {
     // ============================================
     // PASO 2: Eliminar tickets 'hold' zombies
     // (reservas temporales sin una compra pending vigente)
+    // ✅ CORREGIDO: Usar LEFT JOIN en lugar de NOT EXISTS para mejor rendimiento
     // ============================================
     $stmtDeleteZombies = $pdo->prepare("
         DELETE t FROM tickets t
+        LEFT JOIN purchases p 
+            ON p.user_id = t.user_id 
+            AND p.showtime_id = t.showtime_id
+            AND p.status = 'pending'
+            AND p.expires_at > NOW()
         WHERE t.status = 'hold'
-          AND NOT EXISTS (
-              SELECT 1 FROM purchases p
-              WHERE p.user_id = t.user_id
-                AND p.showtime_id = t.showtime_id
-                AND p.status = 'pending'
-                AND p.expires_at > NOW()
-          )
+        AND p.id IS NULL
     ");
     $stmtDeleteZombies->execute();
     $deletedZombies = $stmtDeleteZombies->rowCount();
@@ -90,7 +90,53 @@ try {
     echo "  🗑️  Eliminadas $deletedOldPurchases compras expired antiguas (>30 días)\n";
 
     // ============================================
-    // PASO 4: Registrar última ejecución en site_config
+    // PASO 4: Eliminar tickets sin compra asociada (huérfanos)
+    // Tickets que quedaron sin purchase_id después de expirar o por errores
+    // ============================================
+    $stmtDeleteOrphans = $pdo->prepare("
+        DELETE t FROM tickets t
+        LEFT JOIN purchases p ON p.id = t.purchase_id
+        WHERE t.purchase_id IS NOT NULL
+        AND p.id IS NULL
+    ");
+    $stmtDeleteOrphans->execute();
+    $deletedOrphanTickets = $stmtDeleteOrphans->rowCount();
+    
+    if ($deletedOrphanTickets > 0) {
+        echo "  🗑️  Eliminados $deletedOrphanTickets tickets huérfanos (sin compra asociada)\n";
+    }
+
+    // ============================================
+    // PASO 5: Eliminar food_orders pending antiguos (> 30 días)
+    // ============================================
+    $stmtDeleteOldFood = $pdo->prepare("
+        DELETE FROM food_orders
+        WHERE status = 'pending'
+          AND order_date < DATE_SUB(NOW(), INTERVAL 30 DAY)
+    ");
+    $stmtDeleteOldFood->execute();
+    $deletedOldFood = $stmtDeleteOldFood->rowCount();
+    
+    if ($deletedOldFood > 0) {
+        echo "  🗑️  Eliminados $deletedOldFood pedidos de comida pending antiguos (>30 días)\n";
+    }
+
+    // ============================================
+    // PASO 6: Eliminar ticket_logs antiguos (> 90 días)
+    // ============================================
+    $stmtDeleteOldLogs = $pdo->prepare("
+        DELETE FROM ticket_logs
+        WHERE released_at < DATE_SUB(NOW(), INTERVAL 90 DAY)
+    ");
+    $stmtDeleteOldLogs->execute();
+    $deletedOldLogs = $stmtDeleteOldLogs->rowCount();
+    
+    if ($deletedOldLogs > 0) {
+        echo "  🗑️  Eliminados $deletedOldLogs logs antiguos (>90 días)\n";
+    }
+
+    // ============================================
+    // PASO 7: Registrar última ejecución en site_config
     // ============================================
     $stmtConfig = $pdo->prepare("
         UPDATE site_config
@@ -103,7 +149,19 @@ try {
 
     $duration = round((microtime(true) - $start) * 1000, 2);
     echo "[$timestamp] ✅ Limpieza completada en {$duration}ms\n";
-    echo "  Resumen: $expiredPurchases expired | $deletedZombies zombies | $deletedOldPurchases antiguas\n";
+    echo "  Resumen:\n";
+    echo "    - $expiredPurchases compras marcadas como expired\n";
+    echo "    - $deletedZombies tickets hold zombies eliminados\n";
+    echo "    - $deletedOldPurchases compras expired antiguas eliminadas\n";
+    if ($deletedOrphanTickets > 0) {
+        echo "    - $deletedOrphanTickets tickets huérfanos eliminados\n";
+    }
+    if ($deletedOldFood > 0) {
+        echo "    - $deletedOldFood pedidos de comida antiguos eliminados\n";
+    }
+    if ($deletedOldLogs > 0) {
+        echo "    - $deletedOldLogs logs antiguos eliminados\n";
+    }
 
 } catch (Exception $e) {
     if (isset($pdo) && $pdo->inTransaction()) {
