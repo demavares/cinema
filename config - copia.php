@@ -41,118 +41,20 @@ if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
 }
 
 // ============================================
-// CARGAR VARIABLES DE ENTORNO DESDE .env
+// CONFIGURACIÓN DE BASE DE DATOS
 // ============================================
-function loadEnv($path = '.env') {
-    if (!file_exists($path)) {
-        error_log("❌ Error: El archivo .env no existe en: " . $path);
-        return false;
-    }
-    
-    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    
-    if ($lines === false) {
-        error_log("❌ Error: No se pudo leer el archivo .env");
-        return false;
-    }
-    
-    foreach ($lines as $line) {
-        // Ignorar comentarios
-        if (strpos(trim($line), '#') === 0) {
-            continue;
-        }
-        
-        // Parsear KEY=VALUE
-        if (strpos($line, '=') !== false) {
-            list($key, $value) = explode('=', $line, 2);
-            $key = trim($key);
-            $value = trim($value);
-            
-            // Eliminar comillas si existen
-            if ((substr($value, 0, 1) === '"' && substr($value, -1) === '"') ||
-                (substr($value, 0, 1) === "'" && substr($value, -1) === "'")) {
-                $value = substr($value, 1, -1);
-            }
-            
-            // No sobrescribir variables ya definidas
-            if (!array_key_exists($key, $_ENV) && !getenv($key)) {
-                putenv("$key=$value");
-                $_ENV[$key] = $value;
-            }
-        }
-    }
-    
-    return true;
-}
-
-// ============================================
-// FUNCIÓN AUXILIAR PARA OBTENER VARIABLES DE ENTORNO
-// ============================================
-function env($key, $default = null) {
-    $value = getenv($key);
-    
-    if ($value === false) {
-        $value = $_ENV[$key] ?? null;
-    }
-    
-    if ($value === null) {
-        return $default;
-    }
-    
-    // Convertir valores booleanos
-    switch (strtolower($value)) {
-        case 'true':
-        case '(true)':
-            return true;
-        case 'false':
-        case '(false)':
-            return false;
-        case 'empty':
-        case '(empty)':
-            return '';
-        case 'null':
-        case '(null)':
-            return null;
-    }
-    
-    return $value;
-}
-
-// Cargar el archivo .env
-loadEnv(__DIR__ . '/.env');
-
-// ============================================
-// CONFIGURACIÓN DE BASE DE DATOS (DESDE .env)
-// ============================================
-define('DB_HOST', env('DB_HOST', 'localhost'));
-define('DB_USER', env('DB_USER', 'root'));
-define('DB_PASS', env('DB_PASS', ''));
-define('DB_NAME', env('DB_NAME', 'cinema_db'));
-define('TMDB_API_KEY', env('TMDB_API_KEY', ''));
-define('TMDB_API_URL', env('TMDB_API_URL', 'https://api.themoviedb.org/3/'));
-
-// Validar que las credenciales estén presentes
-if (empty(DB_USER) || empty(DB_NAME)) {
-    error_log("❌ Error: Faltan credenciales de base de datos en .env");
-    die("Error de configuración. Contacte al administrador.");
-}
-
-if (empty(TMDB_API_KEY)) {
-    error_log("⚠️ Advertencia: TMDB_API_KEY no configurada en .env");
-}
+define('DB_HOST', 'datame');
+define('DB_USER', 'root');
+define('DB_PASS', '123456');
+define('DB_NAME', 'cinema_db');
+define('TMDB_API_KEY', 'ddfdd934489b749f7d132c356a3d687a');
+define('TMDB_API_URL', 'https://api.themoviedb.org/3/');
 
 try {
-    $pdo = new PDO(
-        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
-        DB_USER,
-        DB_PASS,
-        [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-            PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '-04:00'"
-        ]
-    );
+    $pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+    $pdo->exec("SET time_zone = '-04:00'");
 } catch (PDOException $e) {
     error_log("Error de conexión: " . $e->getMessage());
     die("Error de conexión a la base de datos. Por favor, contacte al administrador.");
@@ -167,27 +69,6 @@ function getSiteConfig($pdo) {
         return $config;
     }
 
-    $defaults = [
-        'site_name' => 'Cinema Pro',
-        'site_logo' => '',
-        'footer_logo' => '',
-        'site_favicon' => '',
-        'footer_copyright' => '© ' . date('Y') . ' Cinema. Todos los derechos reservados.',
-        'currency_symbol' => '$',
-        'currency_position' => 'left',
-        'thousands_separator' => '.',
-        'decimal_separator' => ',',
-        'decimal_places' => '2',
-        'address' => '',
-        'phone' => '',
-        'email' => '',
-        'instagram' => '',
-        'facebook' => '',
-        'twitter' => '',
-        'telegram' => '',
-        'whatsapp' => ''
-    ];
-
     try {
         $stmt = $pdo->query("SELECT key_name, value FROM site_config");
         $rows = $stmt->fetchAll();
@@ -196,15 +77,34 @@ function getSiteConfig($pdo) {
             $config[$row['key_name']] = $row['value'];
         }
 
+        $defaults = [
+            'site_name' => 'Cinema Pro',
+            'site_logo' => '',
+            'footer_logo' => '',
+            'site_favicon' => '',
+            'currency_symbol' => '$',
+            'currency_position' => 'left',
+            'thousands_separator' => '.',
+            'decimal_separator' => ',',
+            'decimal_places' => '2',
+            'address' => '',
+            'phone' => '',
+            'email' => '',
+            'instagram' => '',
+            'facebook' => '',
+            'twitter' => '',
+            'telegram' => '',
+            'whatsapp' => ''
+        ];
+
         foreach ($defaults as $key => $default_value) {
-            if (!isset($config[$key]) || $config[$key] === '') {
+            if (!isset($config[$key])) {
                 $config[$key] = $default_value;
             }
         }
 
         return $config;
     } catch (PDOException $e) {
-        error_log("Error cargando configuración del sitio: " . $e->getMessage());
         return $defaults;
     }
 }
@@ -233,12 +133,6 @@ function formatCurrency($amount, $config = null) {
 // ============================================
 function getMovieFromTMDB($title, $year = null) {
     $api_key = TMDB_API_KEY;
-    
-    if (empty($api_key)) {
-        error_log("⚠️ TMDB_API_KEY no configurada");
-        return null;
-    }
-    
     $query = urlencode($title);
     $url = TMDB_API_URL . "search/movie?api_key={$api_key}&query={$query}&language=es-ES";
 
@@ -250,16 +144,9 @@ function getMovieFromTMDB($title, $year = null) {
     curl_setopt($ch, CURLOPT_URL, $url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+	curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
     $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-
-    if ($httpCode !== 200) {
-        error_log("Error en API TMDB: HTTP $httpCode");
-        return null;
-    }
 
     $data = json_decode($response, true);
 
@@ -272,8 +159,7 @@ function getMovieFromTMDB($title, $year = null) {
         curl_setopt($ch, CURLOPT_URL, $detail_url);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         $detail_response = curl_exec($ch);
         curl_close($ch);
 
@@ -491,7 +377,7 @@ function cleanupExpiredPurchasesPeriodic($pdo) {
                 WHERE p.user_id = t.user_id 
                 AND p.showtime_id = t.showtime_id
             )
-            AND t.created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)
+            AND t.purchase_date < DATE_SUB(NOW(), INTERVAL 30 DAY)
         ");
         $stmtOrphanTickets->execute();
         $deletedOrphanTickets = $stmtOrphanTickets->rowCount();
@@ -1013,9 +899,6 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
         return ['error' => 'Sala no encontrada'];
     }
 
-    // 🔽 🔽 🔽 CORRECCIÓN DE BUG APLICADA AQUÍ 🔽 🔽 🔽
-    // Se excluyen los asientos en estado 'hold' que pertenecen al usuario actual
-    // Esto evita el error de "No hay suficientes asientos" al comprar los últimos asientos de la sala
     $stmt = $pdo->prepare("
         SELECT seat_code FROM tickets 
         WHERE showtime_id = ? 
@@ -1023,7 +906,7 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
     ");
     $stmt->execute([$showtimeId, $_SESSION['user_id']]);
     $occupiedSeats = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    // 🔼 🔼 🔼 FIN DE LA CORRECCIÓN 🔼 🔼 🔼
+
 
     $layout = json_decode($room['seat_layout'], true);
     $blockedSeats = $layout['blockedSeats'] ?? [];

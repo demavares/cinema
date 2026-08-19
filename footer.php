@@ -153,18 +153,23 @@ $config = getSiteConfig($pdo);
 
             </div>
         </div>
-
-        <!-- Copyright / Sub-footer -->
-        <div class="footer-bottom">
-            <div class="footer-container footer-bottom-content">
-                <p>&copy; <?= date('Y') ?> <span title="<?= htmlspecialchars($config['site_name'] ?? 'Cinema Pro') ?>"><?= htmlspecialchars($config['site_name'] ?? 'Cinema Pro') ?></span>. Todos los derechos reservados.</p>
-                <div class="legal-links">
-                    <a href="#">Términos y Condiciones</a>
-                    <span class="dot">•</span>
-                    <a href="#">Políticas de Privacidad</a>
-                </div>
-            </div>
-        </div>
+		<!-- Copyright / Sub-footer -->
+		<div class="footer-bottom">
+			<div class="footer-container footer-bottom-content">
+				<?php
+				// ✅ Obtener copyright desde configuración de BD
+				$footerCopyright = $config['footer_copyright'] ?? '© {year} Cinema. Todos los derechos reservados.';
+				// Reemplazar placeholder {year} con el año actual
+				$footerCopyright = str_replace('{year}', date('Y'), $footerCopyright);
+				?>
+				<p><?= $footerCopyright ?></p>
+				<div class="legal-links">
+					<a href="#">Términos y Condiciones</a>
+					<span class="dot">•</span>
+					<a href="#">Políticas de Privacidad</a>
+				</div>
+			</div>
+		</div>
     </footer>
 
     <!-- Estilos CSS del Footer (Tema Oscuro) -->

@@ -263,8 +263,10 @@ $currencyConfig = [
     'places' => intval($siteConfig['decimal_places'] ?? 2)
 ];
 
+$year = $movie['year'] ?? '';
 $year_display = !empty($year) ? ' (' . $year . ')' : '';
-$pageTitle = $title . $year_display . ' - ' . ($siteConfig['site_name'] ?? 'Cinema Pro');
+$siteConfig = getSiteConfig($pdo);
+$pageTitle = $movie['title'] . $year_display . ' - ' . ($siteConfig['site_name'] ?? 'Cinema');
 $backUrl = 'index.php';
 
 require_once 'header.php';

@@ -866,11 +866,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['save_config'])) {
             try {
                 $config_keys = [
-                    'site_name', 'currency_symbol', 'currency_position',
-                    'thousands_separator', 'decimal_separator', 'decimal_places',
-                    'address', 'phone', 'email',
-                    'instagram', 'facebook', 'twitter', 'telegram', 'whatsapp'
-                ];
+					'site_name', 'footer_copyright', 'currency_symbol', 'currency_position',
+					'thousands_separator', 'decimal_separator', 'decimal_places',
+					'address', 'phone', 'email',
+					'instagram', 'facebook', 'twitter', 'telegram', 'whatsapp'
+				];
 
                 foreach ($config_keys as $key) {
                     if (isset($_POST[$key])) {
@@ -3030,10 +3030,20 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                 </div>
 
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Nombre del Sitio</label>
-                    <input type="text" name="site_name" value="<?= htmlspecialchars($config['site_name'] ?? 'Cinema Pro') ?>"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
+					<label class="block text-sm text-gray-400 mb-1">Nombre del Sitio</label>
+					<input type="text" name="site_name" value="<?= htmlspecialchars($config['site_name'] ?? 'Cinema Pro') ?>"
+						   class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+				</div>
+
+				<!-- ✅ NUEVO CAMPO: Copyright del Footer -->
+				<div>
+					<label class="block text-sm text-gray-400 mb-1">Copyright del Footer</label>
+					<textarea name="footer_copyright" rows="2"
+							  class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+							  placeholder="© {year} Cinema Pro. Todos los derechos reservados."
+					><?= htmlspecialchars($config['footer_copyright'] ?? '') ?></textarea>
+					<p class="text-xs text-gray-500 mt-1">Usa <code class="bg-gray-600 px-1 rounded">{year}</code> para el año actual. Se mostrará en el pie de página.</p>
+				</div>
 
                 <div>
                     <label class="block text-sm text-gray-400 mb-1">Subir Logo del Header</label>
