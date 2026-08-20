@@ -449,7 +449,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 
 <script src="timeout_manager.js"></script>
 
-<script>
+<script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
 const baseSubtotal = <?= $baseSubtotal ?>;
 const taxRate = <?= $taxRate ?>;
 const showtimeId = <?= $showtimeId ?>;

@@ -504,7 +504,7 @@ $config = getSiteConfig($pdo);
         }
     </style>
 
-    <script>
+    <script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
     function openDirections(destinationAddress) {
         const encodedDestination = encodeURIComponent(destinationAddress);
         

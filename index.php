@@ -3,10 +3,9 @@ require_once 'config.php';
 
 // ============================================
 // ✅ CORREGIDO: DETECTAR SESIÓN EXPIRADA (UNIFICADO CON MODAL)
-// Se activa el modal con expired=1 o session_expired=1
 // ============================================
 $mostrar_alerta = (isset($_GET['expired']) && $_GET['expired'] === '1')
-               || (isset($_GET['session_expired']) && $_GET['session_expired'] == 1);
+    || (isset($_GET['session_expired']) && $_GET['session_expired'] == 1);
 
 // ============================================
 // DETECTAR LOGOUT RECIENTE
@@ -66,13 +65,12 @@ require_once 'header.php';
         <div class="timeout-icon">⏰</div>
         <h2 class="timeout-title">¡Sesión Expirada!</h2>
         <p class="timeout-text">Tu tiempo para seleccionar comida ha expirado.<br>Los asientos han sido liberados automáticamente.</p>
-        <button class="timeout-btn" onclick="closeTimeoutModal()"><i class="fas fa-home mr-2"></i> Entendido</button>
+        <button class="timeout-btn" id="closeTimeoutBtn"><i class="fas fa-home mr-2"></i> Entendido</button>
     </div>
 </div>
 
 <!-- ============================================ -->
 <!-- ✅ MODAL DE SESIÓN EXPIRADA POR INACTIVIDAD (UNIFICADO) -->
-<!-- Se muestra con expired=1 o session_expired=1 -->
 <!-- ============================================ -->
 <div class="session-expired-modal-overlay <?= $mostrar_alerta ? 'active' : '' ?>" id="sessionExpiredModal">
     <div class="session-expired-modal">
@@ -80,16 +78,16 @@ require_once 'header.php';
         <h2 class="session-expired-title">¡Sesión Expirada!</h2>
         <p class="session-expired-text">Tu sesión ha expirado por inactividad.<br>Por favor, selecciona nuevamente tus boletos para continuar.</p>
         <div class="session-expired-actions">
-            <button class="session-expired-btn" onclick="closeSessionExpiredModal()"><i class="fas fa-film mr-2"></i> Ver Cartelera</button>
-            <button class="session-expired-btn-secondary" onclick="closeSessionExpiredModal()">Cerrar</button>
+            <button class="session-expired-btn" id="closeSessionBtn1"><i class="fas fa-film mr-2"></i> Ver Cartelera</button>
+			<button class="session-expired-btn-secondary" id="closeSessionBtn2">Cerrar</button>
         </div>
     </div>
 </div>
 
 <style>
 /* ============================================
-   ESTILOS GENERALES
-   ============================================ */
+ESTILOS GENERALES
+============================================ */
 html {
     overflow-x: clip;
     background-color: #ffffff;
@@ -117,8 +115,8 @@ main.container {
 }
 
 /* ============================================
-   MODAL DE TIMEOUT
-   ============================================ */
+MODAL DE TIMEOUT
+============================================ */
 .timeout-modal-overlay {
     display: none;
     position: fixed;
@@ -189,8 +187,8 @@ main.container {
 }
 
 /* ============================================
-   ✅ MODAL DE SESIÓN EXPIRADA (MEJORADO)
-   ============================================ */
+✅ MODAL DE SESIÓN EXPIRADA (MEJORADO)
+============================================ */
 .session-expired-modal-overlay {
     display: none;
     position: fixed;
@@ -225,7 +223,6 @@ main.container {
     overflow: hidden;
 }
 
-/* Barra decorativa superior */
 .session-expired-modal::before {
     content: '';
     position: absolute;
@@ -264,7 +261,6 @@ main.container {
     line-height: 1.6;
 }
 
-/* ✅ NUEVO: Contenedor de acciones */
 .session-expired-actions {
     display: flex;
     flex-direction: column;
@@ -289,7 +285,6 @@ main.container {
     transform: scale(1.05);
 }
 
-/* ✅ NUEVO: Botón secundario */
 .session-expired-btn-secondary {
     background: transparent;
     color: #9ca3af;
@@ -325,8 +320,8 @@ main.container {
 }
 
 /* ============================================
-   CARRUSEL HERO
-   ============================================ */
+CARRUSEL HERO
+============================================ */
 .hero-carousel {
     position: relative;
     z-index: 1;
@@ -502,8 +497,8 @@ main.container {
 }
 
 /* ============================================
-   BOTÓN RESERVAR
-   ============================================ */
+BOTÓN RESERVAR
+============================================ */
 .btn-reserve {
     background: linear-gradient(135deg, #4f46e5, #7c3aed);
     color: white;
@@ -533,8 +528,8 @@ main.container {
 }
 
 /* ============================================
-   TARJETAS DE PELÍCULAS
-   ============================================ */
+TARJETAS DE PELÍCULAS
+============================================ */
 .movie-card {
     background: #ffffff;
     border: 1px solid #d1d5db;
@@ -634,10 +629,10 @@ main.container {
     .timeout-icon, .session-expired-icon { font-size: 3rem; }
     .timeout-title, .session-expired-title { font-size: 1.2rem; }
     .timeout-text, .session-expired-text { font-size: 0.85rem; }
-    .timeout-btn, .session-expired-btn, .session-expired-btn-secondary { 
-        padding: 10px 24px; 
-        font-size: 0.9rem; 
-        width: 100%; 
+    .timeout-btn, .session-expired-btn, .session-expired-btn-secondary {
+        padding: 10px 24px;
+        font-size: 0.9rem;
+        width: 100%;
     }
 }
 
@@ -686,66 +681,66 @@ main.container {
 <main class="container mx-auto px-4 pb-16 mb-12">
 
 <?php if (!empty($movies)): ?>
-    <!-- ========================================== -->
-    <!-- BANNER CARRUSEL 100% ANCHO (HERO)          -->
-    <!-- ========================================== -->
-    <section class="hero-carousel">
-        <div class="carousel-slides-container" id="carouselSlides">
-            <?php foreach ($movies as $index => $m):
-                $poster_url = $m['poster_url'] ?? getPlaceholderImage(300, 450, '🎬');
-                $backdrop_url = !empty($m['banner_url']) ? $m['banner_url'] : $poster_url;
-                $m_description = $m['description'] ?? '';
-                $m_duration = $m['duration'] ?? 0;
-                $m_genre = $m['genre'] ?? '';
-                $m_year = $m['year'] ?? '';
-                $m_classification = $m['classification'] ?? '';
-                $m_title = $m['title'] ?? '';
-                $m_id = $m['id'] ?? 0;
-            ?>
-                <div class="hero-slide">
-                    <div class="hero-backdrop" style="background-image: url('<?= htmlspecialchars($backdrop_url) ?>');"></div>
-                    <div class="hero-content">
-                        <a href="movie_detail.php?id=<?= intval($m_id) ?>" class="hero-poster hidden sm:block">
-                            <img src="<?= htmlspecialchars($poster_url) ?>" alt="<?= htmlspecialchars($m_title) ?>"  loading="lazy">
-                        </a>
-                        <div class="hero-info">
-                            <h1><?= htmlspecialchars($m_title) ?></h1>
-                            <div class="hero-meta">
-                                <?php if($m_duration > 0): ?>
-                                    <span class="meta-item"><i class="far fa-clock text-indigo-400"></i><?= formatDuration($m_duration) ?></span>
-                                <?php endif; ?>
-                                <?php if(!empty($m_genre)): ?>
-                                    <span class="meta-item"><i class="fas fa-tag text-indigo-400"></i><?= htmlspecialchars($m_genre) ?></span>
-                                <?php endif; ?>
-                                <?php if(!empty($m_classification)): ?>
-                                    <span class="meta-item"><span class="certification-tag b"><?= htmlspecialchars($m_classification) ?></span></span>
-                                <?php endif; ?>
-                                <?php if(!empty($m_year)): ?>
-                                    <span class="meta-item"><i class="far fa-calendar-alt text-indigo-400"></i><?= htmlspecialchars($m_year) ?></span>
-                                <?php endif; ?>
-                            </div>
-                            <?php if(!empty($m_description)): ?>
-                                <p class="overview-text text-sm mb-4"><?= htmlspecialchars($m_description) ?></p>
-                            <?php endif; ?>
-                            <div class="flex items-center gap-3 flex-wrap">
-                                <a href="movie_detail.php?id=<?= intval($m_id) ?>" class="btn-reserve btn-hero-reserve"><i class="fas fa-ticket-alt"></i> Ver Funciones</a>
-                            </div>
-                        </div>
+<!-- ========================================== -->
+<!-- BANNER CARRUSEL 100% ANCHO (HERO)          -->
+<!-- ========================================== -->
+<section class="hero-carousel">
+    <div class="carousel-slides-container" id="carouselSlides">
+        <?php foreach ($movies as $index => $m):
+            $poster_url = $m['poster_url'] ?? getPlaceholderImage(300, 450, '🎬');
+            $backdrop_url = !empty($m['banner_url']) ? $m['banner_url'] : $poster_url;
+            $m_description = $m['description'] ?? '';
+            $m_duration = $m['duration'] ?? 0;
+            $m_genre = $m['genre'] ?? '';
+            $m_year = $m['year'] ?? '';
+            $m_classification = $m['classification'] ?? '';
+            $m_title = $m['title'] ?? '';
+            $m_id = $m['id'] ?? 0;
+        ?>
+        <div class="hero-slide">
+            <div class="hero-backdrop" style="background-image: url('<?= htmlspecialchars($backdrop_url) ?>');"></div>
+            <div class="hero-content">
+                <a href="movie_detail.php?id=<?= intval($m_id) ?>" class="hero-poster hidden sm:block">
+                    <img src="<?= htmlspecialchars($poster_url) ?>" alt="<?= htmlspecialchars($m_title) ?>" loading="lazy">
+                </a>
+                <div class="hero-info">
+                    <h1><?= htmlspecialchars($m_title) ?></h1>
+                    <div class="hero-meta">
+                        <?php if($m_duration > 0): ?>
+                            <span class="meta-item"><i class="far fa-clock text-indigo-400"></i><?= formatDuration($m_duration) ?></span>
+                        <?php endif; ?>
+                        <?php if(!empty($m_genre)): ?>
+                            <span class="meta-item"><i class="fas fa-tag text-indigo-400"></i><?= htmlspecialchars($m_genre) ?></span>
+                        <?php endif; ?>
+                        <?php if(!empty($m_classification)): ?>
+                            <span class="meta-item"><span class="certification-tag b"><?= htmlspecialchars($m_classification) ?></span></span>
+                        <?php endif; ?>
+                        <?php if(!empty($m_year)): ?>
+                            <span class="meta-item"><i class="far fa-calendar-alt text-indigo-400"></i><?= htmlspecialchars($m_year) ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <?php if(!empty($m_description)): ?>
+                        <p class="overview-text text-sm mb-4"><?= htmlspecialchars($m_description) ?></p>
+                    <?php endif; ?>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <a href="movie_detail.php?id=<?= intval($m_id) ?>" class="btn-reserve btn-hero-reserve"><i class="fas fa-ticket-alt"></i> Ver Funciones</a>
                     </div>
                 </div>
+            </div>
+        </div>
+        <?php endforeach; ?>
+    </div>
+
+    <?php if(count($movies) > 1): ?>
+        <button class="carousel-nav-btn prev" id="carouselPrev"><i class="fas fa-chevron-left"></i></button>
+        <button class="carousel-nav-btn next" id="carouselNext"><i class="fas fa-chevron-right"></i></button>
+        <div class="carousel-dots">
+            <?php foreach($movies as $i => $m): ?>
+                <span class="carousel-dot <?= $i === 0 ? 'active' : '' ?>" data-slide="<?= $i ?>"></span>
             <?php endforeach; ?>
         </div>
-
-        <?php if(count($movies) > 1): ?>
-            <button class="carousel-nav-btn prev" onclick="moveSlide(-1)"><i class="fas fa-chevron-left"></i></button>
-            <button class="carousel-nav-btn next" onclick="moveSlide(1)"><i class="fas fa-chevron-right"></i></button>
-            <div class="carousel-dots">
-                <?php foreach($movies as $i => $m): ?>
-                    <span class="carousel-dot <?= $i === 0 ? 'active' : '' ?>" onclick="goToSlide(<?= $i ?>)"></span>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-    </section>
+    <?php endif; ?>
+</section>
 <?php endif; ?>
 
 <!-- Título de sección -->
@@ -803,52 +798,52 @@ main.container {
 
             $poster_url = $movie['poster_url'] ?? getPlaceholderImage(300, 450, '🎬');
         ?>
-            <div class="movie-card rounded-xl">
-                <a href="movie_detail.php?id=<?= intval($movie['id']) ?>" class="poster">
-                    <img src="<?= htmlspecialchars($poster_url) ?>" alt="<?= htmlspecialchars($movie['title']) ?>" title="<?= htmlspecialchars($movie['title']) ?>" loading="lazy">
-                    <?php if($hasPresale): ?>
-                        <img src="preventa.png" alt="PREVENTA" class="presale-ribbon-img">
-                    <?php endif; ?>
-                </a>
-                <div class="p-4">
-                    <h3 class="font-bold text-gray-900 text-base truncate" title="<?= htmlspecialchars($movie['title']) ?>">
-                        <a href="movie_detail.php?id=<?= intval($movie['id']) ?>" class="hover:text-indigo-600 transition-colors"><?= htmlspecialchars($movie['title']) ?></a>
-                    </h3>
+        <div class="movie-card rounded-xl">
+            <a href="movie_detail.php?id=<?= intval($movie['id']) ?>" class="poster">
+                <img src="<?= htmlspecialchars($poster_url) ?>" alt="<?= htmlspecialchars($movie['title']) ?>" title="<?= htmlspecialchars($movie['title']) ?>" loading="lazy">
+                <?php if($hasPresale): ?>
+                    <img src="preventa.png" alt="PREVENTA" class="presale-ribbon-img">
+                <?php endif; ?>
+            </a>
+            <div class="p-4">
+                <h3 class="font-bold text-gray-900 text-base truncate" title="<?= htmlspecialchars($movie['title']) ?>">
+                    <a href="movie_detail.php?id=<?= intval($movie['id']) ?>" class="hover:text-indigo-600 transition-colors"><?= htmlspecialchars($movie['title']) ?></a>
+                </h3>
 
-                    <?php if(count($genre_names) > 0): ?>
-                        <div class="flex flex-wrap gap-1 mt-2">
-                            <?php $display_genres = array_slice($genre_names, 0, 2);
-                            foreach ($display_genres as $genre_name): ?>
-                                <span class="genre-tag"><?= htmlspecialchars($genre_name) ?></span>
-                            <?php endforeach; ?>
-                            <?php if(count($genre_names) > 2): ?>
-                                <span class="genre-tag">+<?= count($genre_names) - 2 ?></span>
-                            <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
-
-                    <div class="info-row">
-                        <?php if($certLabel): ?>
-                            <span class="certification-tag <?= $certClass ?>"><?= htmlspecialchars($certLabel) ?></span>
+                <?php if(count($genre_names) > 0): ?>
+                    <div class="flex flex-wrap gap-1 mt-2">
+                        <?php $display_genres = array_slice($genre_names, 0, 2);
+                        foreach ($display_genres as $genre_name): ?>
+                            <span class="genre-tag"><?= htmlspecialchars($genre_name) ?></span>
+                        <?php endforeach; ?>
+                        <?php if(count($genre_names) > 2): ?>
+                            <span class="genre-tag">+<?= count($genre_names) - 2 ?></span>
                         <?php endif; ?>
                     </div>
+                <?php endif; ?>
 
-                    <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
-                        <?php if($duration > 0): ?>
-                            <span><i class="far fa-clock mr-1"></i><?= $formatted_duration ?></span>
-                        <?php endif; ?>
-                        <?php if($movie['year']): ?>
-                            <span><i class="far fa-calendar-alt mr-1"></i><?= htmlspecialchars($movie['year']) ?></span>
-                        <?php endif; ?>
-                    </div>
-
-                    <?php if(!empty($director)): ?>
-                        <div class="mt-1 text-xs text-gray-500"><span class="text-gray-600">Dir: <?= htmlspecialchars($director) ?></span></div>
+                <div class="info-row">
+                    <?php if($certLabel): ?>
+                        <span class="certification-tag <?= $certClass ?>"><?= htmlspecialchars($certLabel) ?></span>
                     <?php endif; ?>
-
-                    <button onclick="window.location.href='movie_detail.php?id=<?= intval($movie['id']) ?>'" class="btn-reserve mt-3"><i class="fas fa-ticket-alt"></i> Ver Funciones</button>
                 </div>
+
+                <div class="flex items-center gap-3 mt-2 text-xs text-gray-500">
+                    <?php if($duration > 0): ?>
+                        <span><i class="far fa-clock mr-1"></i><?= $formatted_duration ?></span>
+                    <?php endif; ?>
+                    <?php if($movie['year']): ?>
+                        <span><i class="far fa-calendar-alt mr-1"></i><?= htmlspecialchars($movie['year']) ?></span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if(!empty($director)): ?>
+                    <div class="mt-1 text-xs text-gray-500"><span class="text-gray-600">Dir: <?= htmlspecialchars($director) ?></span></div>
+                <?php endif; ?>
+
+                <button data-movie-id="<?= intval($movie['id']) ?>" class="btn-reserve mt-3 movie-detail-btn"><i class="fas fa-ticket-alt"></i> Ver Funciones</button>
             </div>
+        </div>
         <?php endforeach; ?>
     </div>
 <?php endif; ?>
@@ -857,7 +852,7 @@ main.container {
 
 <?php require_once 'footer.php'; ?>
 
-<script>
+<script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
 // ============================================
 // LIMPIAR SESSIONSTORAGE SI ES NECESARIO
 // ============================================
@@ -870,7 +865,7 @@ main.container {
         'payment_method_', 'selected_seats_', 'selected_seats_count_', 'ticket_selection_',
         'pending_checkout', 'last_order_id', 'last_showtime_id'
     ];
-    
+
     const sessionKeysToRemove = [];
     for (let i = 0; i < sessionStorage.length; i++) {
         const key = sessionStorage.key(i);
@@ -879,7 +874,6 @@ main.container {
             if (shouldRemove) sessionKeysToRemove.push(key);
         }
     }
-    
     sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
     console.log('✅ SessionStorage limpiado:', sessionKeysToRemove.length, 'claves eliminadas');
 })();
@@ -892,7 +886,6 @@ function closeTimeoutModal() {
     const modal = document.getElementById('timeoutModal');
     if (!modal) return;
     modal.classList.remove('active');
-    
     if (window.history && window.history.replaceState) {
         const url = new URL(window.location.href);
         url.searchParams.delete('timeout');
@@ -901,14 +894,11 @@ function closeTimeoutModal() {
     document.body.style.overflow = '';
 }
 
-// ✅ CORREGIDO: Limpiar URL al cerrar el modal de sesión expirada
 function closeSessionExpiredModal() {
     const modal = document.getElementById('sessionExpiredModal');
     if (!modal) return;
     modal.classList.remove('active');
     document.body.style.overflow = '';
-    
-    // Limpiar parámetros de la URL para evitar que reaparezca al recargar
     if (window.history && window.history.replaceState) {
         const url = new URL(window.location.href);
         url.searchParams.delete('expired');
@@ -917,36 +907,6 @@ function closeSessionExpiredModal() {
         console.log('🧹 URL limpiada, eliminados parámetros de sesión expirada');
     }
 }
-
-// Cerrar modales con Escape
-document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape') {
-        const timeoutModal = document.getElementById('timeoutModal');
-        if (timeoutModal && timeoutModal.classList.contains('active')) closeTimeoutModal();
-        
-        const sessionModal = document.getElementById('sessionExpiredModal');
-        if (sessionModal && sessionModal.classList.contains('active')) closeSessionExpiredModal();
-    }
-});
-
-// Click fuera del modal
-document.addEventListener('DOMContentLoaded', function() {
-    const timeoutModal = document.getElementById('timeoutModal');
-    if (timeoutModal && timeoutModal.classList.contains('active')) {
-        document.body.style.overflow = 'hidden';
-        timeoutModal.addEventListener('click', function(e) {
-            if (e.target === this) closeTimeoutModal();
-        });
-    }
-    
-    const sessionModal = document.getElementById('sessionExpiredModal');
-    if (sessionModal && sessionModal.classList.contains('active')) {
-        document.body.style.overflow = 'hidden';
-        sessionModal.addEventListener('click', function(e) {
-            if (e.target === this) closeSessionExpiredModal();
-        });
-    }
-});
 
 // ============================================
 // CARRUSEL
@@ -959,7 +919,7 @@ function updateCarousel() {
     const container = document.getElementById('carouselSlides');
     if (!container) return;
     container.style.transform = `translateX(-${currentSlideIndex * 100}%)`;
-    
+
     const dots = document.querySelectorAll('.carousel-dot');
     dots.forEach((dot, index) => {
         dot.classList.toggle('active', index === currentSlideIndex);
@@ -992,13 +952,94 @@ function resetAutoSlide() {
     startAutoSlide();
 }
 
-// Animar tarjetas al cargar
-document.querySelectorAll('.movie-card').forEach((card, index) => {
-    card.style.animationDelay = (index * 0.1) + 's';
-});
+// ============================================
+// EVENT LISTENERS (Reemplazo de onclick inline)
+// ============================================
+document.addEventListener('DOMContentLoaded', function() {
+    // Botones de navegación del carrusel
+    const prevBtn = document.getElementById('carouselPrev');
+    const nextBtn = document.getElementById('carouselNext');
+    
+    if (prevBtn) {
+        prevBtn.addEventListener('click', function() {
+            moveSlide(-1);
+        });
+    }
+    
+    if (nextBtn) {
+        nextBtn.addEventListener('click', function() {
+            moveSlide(1);
+        });
+    }
 
-// Iniciar carrusel automático
-document.addEventListener('DOMContentLoaded', () => {
+    // Dots del carrusel
+    const dots = document.querySelectorAll('.carousel-dot');
+    dots.forEach((dot, index) => {
+        dot.addEventListener('click', function() {
+            goToSlide(index);
+        });
+    });
+
+    // Botones de cerrar modales
+    const closeTimeoutBtn = document.getElementById('closeTimeoutBtn');
+    if (closeTimeoutBtn) {
+        closeTimeoutBtn.addEventListener('click', closeTimeoutModal);
+    }
+
+    const closeSessionBtn1 = document.getElementById('closeSessionBtn1');
+    if (closeSessionBtn1) {
+        closeSessionBtn1.addEventListener('click', closeSessionExpiredModal);
+    }
+
+    const closeSessionBtn2 = document.getElementById('closeSessionBtn2');
+    if (closeSessionBtn2) {
+        closeSessionBtn2.addEventListener('click', closeSessionExpiredModal);
+    }
+
+    // Botones de ver funciones en tarjetas
+    const movieDetailBtns = document.querySelectorAll('.movie-detail-btn');
+    movieDetailBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const movieId = this.getAttribute('data-movie-id');
+            if (movieId) {
+                window.location.href = 'movie_detail.php?id=' + movieId;
+            }
+        });
+    });
+
+    // Cerrar modales con Escape
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const timeoutModal = document.getElementById('timeoutModal');
+            if (timeoutModal && timeoutModal.classList.contains('active')) closeTimeoutModal();
+            const sessionModal = document.getElementById('sessionExpiredModal');
+            if (sessionModal && sessionModal.classList.contains('active')) closeSessionExpiredModal();
+        }
+    });
+
+    // Click fuera del modal
+    const timeoutModal = document.getElementById('timeoutModal');
+    if (timeoutModal && timeoutModal.classList.contains('active')) {
+        document.body.style.overflow = 'hidden';
+        timeoutModal.addEventListener('click', function(e) {
+            if (e.target === this) closeTimeoutModal();
+        });
+    }
+
+    const sessionModal = document.getElementById('sessionExpiredModal');
+    if (sessionModal && sessionModal.classList.contains('active')) {
+        document.body.style.overflow = 'hidden';
+        sessionModal.addEventListener('click', function(e) {
+            if (e.target === this) closeSessionExpiredModal();
+        });
+    }
+
+    // Animar tarjetas al cargar
+    document.querySelectorAll('.movie-card').forEach((card, index) => {
+        card.style.animationDelay = (index * 0.1) + 's';
+    });
+
+    // Iniciar carrusel automático
     startAutoSlide();
 });
 </script>

@@ -17,36 +17,45 @@ $header_csrf_token = generateCSRFToken();
 // ✅ LIMPIAR SESSIONSTORAGE SI LA SESIÓN EXPIRÓ (Script de limpieza automática)
 $cleanStorage = isset($_GET['session_expired']) || isset($_GET['timeout']) || isset($_GET['logout']);
 ?>
-
 <!DOCTYPE html>
 <html lang="es">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= isset($pageTitle) ? htmlspecialchars($pageTitle) : htmlspecialchars($siteName) ?></title>
+
 <?php if ($hasFavicon): ?>
 <link rel="icon" type="<?= mime_content_type($siteFavicon) ?>" href="<?= htmlspecialchars($siteFavicon) . '?v=' . filemtime($siteFavicon) ?>">
 <?php else: ?>
 <link rel="icon" type="image/png" href="favicon.png">
 <?php endif; ?>
+
+<!-- ✅ CORREGIDO: Google Fonts mediante <link> en lugar de @import en CSS -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 * {
 font-family: 'Inter', sans-serif;
 margin: 0;
 padding: 0;
 box-sizing: border-box;
 }
+
 body {
 background: #0a0a0f;
 color: #e5e7eb;
 }
+
 .header-gradient {
 background: #0f0f1a;
 background: linear-gradient(180deg, #0f0f1a 0%, #0a0a0f 100%);
 }
+
 ::-webkit-scrollbar {
 width: 6px;
 height: 6px;
@@ -61,6 +70,7 @@ border-radius: 3px;
 ::-webkit-scrollbar-thumb:hover {
 background: #6366f1;
 }
+
 /* ============================================
 MENÚ HAMBURGUESA - ESTILOS
 ============================================ */
@@ -75,6 +85,7 @@ border: none;
 z-index: 60;
 position: relative;
 }
+
 .hamburger-btn span {
 display: block;
 width: 28px;
@@ -84,6 +95,7 @@ border-radius: 2px;
 transition: all 0.3s ease;
 transform-origin: center;
 }
+
 .hamburger-btn.active span:nth-child(1) {
 transform: rotate(45deg) translate(5px, 6px);
 }
@@ -94,6 +106,7 @@ transform: scaleX(0);
 .hamburger-btn.active span:nth-child(3) {
 transform: rotate(-45deg) translate(5px, -6px);
 }
+
 /* Overlay del menú */
 .menu-overlay {
 display: none;
@@ -108,10 +121,12 @@ z-index: 55;
 opacity: 0;
 transition: opacity 0.3s ease;
 }
+
 .menu-overlay.active {
 display: block;
 opacity: 1;
 }
+
 /* Menú desplegable - FONDO BLANCO */
 .mobile-menu {
 display: none;
@@ -128,10 +143,12 @@ transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 box-shadow: -8px 0 30px rgba(0, 0, 0, 0.3);
 overflow-y: auto;
 }
+
 .mobile-menu.active {
 right: 0;
 display: block;
 }
+
 /* Estilos del contenido del menú - FONDO BLANCO */
 .mobile-menu .menu-header {
 display: flex;
@@ -141,6 +158,7 @@ padding-bottom: 20px;
 border-bottom: 1px solid #e5e7eb;
 margin-bottom: 20px;
 }
+
 .mobile-menu .menu-header .user-avatar {
 width: 48px;
 height: 48px;
@@ -154,10 +172,12 @@ font-weight: 700;
 font-size: 1.2rem;
 flex-shrink: 0;
 }
+
 .mobile-menu .menu-header .user-info {
 flex: 1;
 min-width: 0;
 }
+
 .mobile-menu .menu-header .user-info .user-name {
 font-weight: 700;
 color: #111827;
@@ -167,6 +187,7 @@ white-space: nowrap;
 overflow: hidden;
 text-overflow: ellipsis;
 }
+
 .mobile-menu .menu-header .user-info .user-email {
 font-size: 0.8rem;
 color: #6b7280;
@@ -175,14 +196,17 @@ white-space: nowrap;
 overflow: hidden;
 text-overflow: ellipsis;
 }
+
 .mobile-menu .menu-items {
 list-style: none;
 padding: 0;
 margin: 0;
 }
+
 .mobile-menu .menu-items li {
 margin-bottom: 4px;
 }
+
 .mobile-menu .menu-items li a {
 display: flex;
 align-items: center;
@@ -195,32 +219,39 @@ font-weight: 500;
 font-size: 0.95rem;
 transition: all 0.2s ease;
 }
+
 .mobile-menu .menu-items li a i {
 width: 22px;
 text-align: center;
 color: #4f46e5;
 font-size: 1.1rem;
 }
+
 .mobile-menu .menu-items li a:hover {
 background: #f3f4f6;
 }
+
 .mobile-menu .menu-items li a.active {
 background: #eef2ff;
 color: #4f46e5;
 }
+
 .mobile-menu .menu-items li a.active i {
 color: #4f46e5;
 }
+
 .mobile-menu .menu-divider {
 height: 1px;
 background: #e5e7eb;
 margin: 12px 0;
 }
+
 .mobile-menu .menu-footer {
 margin-top: 20px;
 padding-top: 16px;
 border-top: 1px solid #e5e7eb;
 }
+
 .mobile-menu .menu-footer .logout-btn {
 display: flex;
 align-items: center;
@@ -237,14 +268,17 @@ background: none;
 border: none;
 cursor: pointer;
 }
+
 .mobile-menu .menu-footer .logout-btn:hover {
 background: #fef2f2;
 }
+
 .mobile-menu .menu-footer .logout-btn i {
 width: 22px;
 text-align: center;
 font-size: 1.1rem;
 }
+
 .mobile-menu .close-menu-btn {
 position: absolute;
 top: 20px;
@@ -258,27 +292,18 @@ padding: 4px 8px;
 border-radius: 8px;
 transition: background 0.2s ease;
 }
+
 .mobile-menu .close-menu-btn:hover {
 background: #f3f4f6;
 }
-.mobile-menu .menu-site-name {
-font-weight: 800;
-font-size: 1.2rem;
-color: #1f2937;
-display: flex;
-align-items: center;
-gap: 8px;
-margin-bottom: 20px;
-}
-.mobile-menu .menu-site-name i {
-color: #4f46e5;
-}
+
 /* ✅ Estilos para el formulario de logout desktop */
 .logout-form-inline {
 display: inline-flex;
 margin: 0;
 padding: 0;
 }
+
 .logout-form-inline .logout-link-btn {
 background: none;
 border: none;
@@ -292,9 +317,11 @@ transition: color 0.2s ease;
 padding: 0;
 font-family: inherit;
 }
+
 .logout-form-inline .logout-link-btn:hover {
 color: #ffffff;
 }
+
 @media (max-width: 768px) {
 .hamburger-btn {
 display: flex;
@@ -316,6 +343,7 @@ display: block;
 gap: 8px;
 }
 }
+
 @media (max-width: 480px) {
 .mobile-menu {
 width: 90%;
@@ -338,21 +366,22 @@ font-size: 0.9rem;
 </style>
 </head>
 <body>
+
 <?php
 // Si la página secundaria definió $backUrl la usa; de lo contrario, por defecto va a index.php
 $finalBackUrl = isset($backUrl) ? $backUrl : 'index.php';
 $currentPage = basename($_SERVER['PHP_SELF']);
 ?>
+
 <!-- Overlay del menú -->
 <div class="menu-overlay" id="menuOverlay"></div>
+
 <!-- Menú Móvil - FONDO BLANCO -->
 <div class="mobile-menu" id="mobileMenu">
 <button class="close-menu-btn" id="closeMenuBtn" aria-label="Cerrar menú">
 <i class="fas fa-times"></i>
 </button>
-<div class="menu-site-name">
-<i class="fas fa-film"></i> <?= htmlspecialchars($siteName) ?>
-</div>
+
 <?php if(isset($_SESSION['user_id'])): ?>
 <div class="menu-header">
 <div class="user-avatar">
@@ -364,6 +393,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 </div>
 </div>
 <?php endif; ?>
+
 <ul class="menu-items">
 <li>
 <a href="index.php" class="<?= $currentPage === 'index.php' ? 'active' : '' ?>">
@@ -385,7 +415,9 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 <?php endif; ?>
 <?php endif; ?>
 </ul>
+
 <div class="menu-divider"></div>
+
 <ul class="menu-items">
 <li>
 <a href="cartelera.php">
@@ -403,6 +435,7 @@ $currentPage = basename($_SERVER['PHP_SELF']);
 </a>
 </li>
 </ul>
+
 <?php if(isset($_SESSION['user_id'])): ?>
 <div class="menu-footer">
 <form action="logout.php" method="POST" class="logout-form-inline" style="width:100%;">
@@ -423,6 +456,7 @@ Registrarse
 </div>
 <?php endif; ?>
 </div>
+
 <!-- Header Navegación -->
 <header class="header-gradient border-b border-[#1e1e2e] sticky top-0 z-50">
 <div class="container mx-auto px-4 py-4">
@@ -445,6 +479,7 @@ La mejor experiencia cinematográfica
 </div>
 <?php endif; ?>
 </a>
+
 <!-- Menú Desktop -->
 <div class="flex items-center gap-4 desktop-menu">
 <?php if ($currentPage !== 'index.php'): ?>
@@ -453,6 +488,7 @@ La mejor experiencia cinematográfica
 <span class="hidden sm:inline">Volver</span>
 </a>
 <?php endif; ?>
+
 <?php if(isset($_SESSION['user_id'])): ?>
 <div class="flex items-center gap-3">
 <span class="text-sm text-gray-300 hidden sm:inline">
@@ -479,6 +515,7 @@ La mejor experiencia cinematográfica
 </a>
 <?php endif; ?>
 </div>
+
 <!-- Botón Hamburguesa (Móvil) -->
 <button class="hamburger-btn" id="hamburgerBtn" aria-label="Abrir menú">
 <span></span>
@@ -492,74 +529,72 @@ La mejor experiencia cinematográfica
 <!-- ============================================ -->
 <!-- SCRIPT DE LIMPIEZA AUTOMÁTICA DE SESSIONSTORAGE -->
 <!-- ============================================ -->
-<script>
+<script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
 // ============================================
 // LIMPIAR SESSIONSTORAGE SI LA SESIÓN EXPIRÓ
 // ============================================
 (function() {
-    <?php if ($cleanStorage): ?>
-    console.log('🗑️ Limpiando sessionStorage por sesión expirada/logout');
-    
-    const prefixes = [
-        'food_timeout_', 'food_seats_', 'food_valid_', 'food_order_', 'food_created_',
-        'purchase_token_', 'purchase_expires_at_', 'purchase_token_used_', 'purchase_created_at_',
-        'ticket_quantities_', 'total_seats_', 'subtotal_', 'tax_amount_', 'total_amount_', 'tax_rate_',
-        'payment_method_', 'selected_seats_', 'selected_seats_count_', 'ticket_selection_'
-    ];
-    
-    const keysToRemove = [];
-    for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (key) {
-            const shouldRemove = prefixes.some(prefix => key.includes(prefix));
-            if (shouldRemove) keysToRemove.push(key);
-        }
-    }
-    keysToRemove.forEach(key => sessionStorage.removeItem(key));
-    console.log('✅ SessionStorage limpiado:', keysToRemove.length, 'claves');
-    
-    // Limpiar localStorage también
-    try {
-        localStorage.clear();
-    } catch(e) {}
-    <?php endif; ?>
-    
-    // Verificar si venimos de index con session_expired en la URL
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.has('session_expired') || document.referrer.includes('session_expired')) {
-        console.log('🗑️ Limpiando sessionStorage por sesión expirada (desde URL/referrer)');
-        
-        const prefixes = [
-            'food_timeout_', 'food_seats_', 'food_valid_', 'food_order_', 'food_created_',
-            'purchase_token_', 'purchase_expires_at_', 'purchase_token_used_', 'purchase_created_at_',
-            'ticket_quantities_', 'total_seats_', 'subtotal_', 'tax_amount_', 'total_amount_', 'tax_rate_',
-            'payment_method_', 'selected_seats_', 'selected_seats_count_', 'ticket_selection_'
-        ];
-        
-        const keysToRemove = [];
-        for (let i = 0; i < sessionStorage.length; i++) {
-            const key = sessionStorage.key(i);
-            if (key) {
-                const shouldRemove = prefixes.some(prefix => key.includes(prefix));
-                if (shouldRemove) keysToRemove.push(key);
-            }
-        }
-        keysToRemove.forEach(key => sessionStorage.removeItem(key));
-        console.log('✅ SessionStorage limpiado:', keysToRemove.length, 'claves');
-        
-        // Si estamos en price_selection.php y hay parámetro session_expired, redirigir limpio
-        if (window.location.pathname.includes('price_selection.php') && urlParams.has('session_expired')) {
-            const showtimeId = urlParams.get('showtime_id');
-            if (showtimeId) {
-                const cleanUrl = window.location.pathname + '?showtime_id=' + showtimeId;
-                window.history.replaceState({}, document.title, cleanUrl);
-            }
-        }
-    }
+<?php if ($cleanStorage): ?>
+console.log('🗑️ Limpiando sessionStorage por sesión expirada/logout');
+const prefixes = [
+'food_timeout_', 'food_seats_', 'food_valid_', 'food_order_', 'food_created_',
+'purchase_token_', 'purchase_expires_at_', 'purchase_token_used_', 'purchase_created_at_',
+'ticket_quantities_', 'total_seats_', 'subtotal_', 'tax_amount_', 'total_amount_', 'tax_rate_',
+'payment_method_', 'selected_seats_', 'selected_seats_count_', 'ticket_selection_'
+];
+
+const keysToRemove = [];
+for (let i = 0; i < sessionStorage.length; i++) {
+const key = sessionStorage.key(i);
+if (key) {
+const shouldRemove = prefixes.some(prefix => key.includes(prefix));
+if (shouldRemove) keysToRemove.push(key);
+}
+}
+keysToRemove.forEach(key => sessionStorage.removeItem(key));
+console.log('✅ SessionStorage limpiado:', keysToRemove.length, 'claves');
+
+// Limpiar localStorage también
+try {
+localStorage.clear();
+} catch(e) {}
+<?php endif; ?>
+
+// Verificar si venimos de index con session_expired en la URL
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.has('session_expired') || document.referrer.includes('session_expired')) {
+console.log('🗑️ Limpiando sessionStorage por sesión expirada (desde URL/referrer)');
+const prefixes = [
+'food_timeout_', 'food_seats_', 'food_valid_', 'food_order_', 'food_created_',
+'purchase_token_', 'purchase_expires_at_', 'purchase_token_used_', 'purchase_created_at_',
+'ticket_quantities_', 'total_seats_', 'subtotal_', 'tax_amount_', 'total_amount_', 'tax_rate_',
+'payment_method_', 'selected_seats_', 'selected_seats_count_', 'ticket_selection_'
+];
+
+const keysToRemove = [];
+for (let i = 0; i < sessionStorage.length; i++) {
+const key = sessionStorage.key(i);
+if (key) {
+const shouldRemove = prefixes.some(prefix => key.includes(prefix));
+if (shouldRemove) keysToRemove.push(key);
+}
+}
+keysToRemove.forEach(key => sessionStorage.removeItem(key));
+console.log('✅ SessionStorage limpiado:', keysToRemove.length, 'claves');
+
+// Si estamos en price_selection.php y hay parámetro session_expired, redirigir limpio
+if (window.location.pathname.includes('price_selection.php') && urlParams.has('session_expired')) {
+const showtimeId = urlParams.get('showtime_id');
+if (showtimeId) {
+const cleanUrl = window.location.pathname + '?showtime_id=' + showtimeId;
+window.history.replaceState({}, document.title, cleanUrl);
+}
+}
+}
 })();
 </script>
 
-<script>
+<script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
 // ============================================
 // MENÚ HAMBURGUESA
 // ============================================
@@ -568,18 +603,21 @@ const hamburgerBtn = document.getElementById('hamburgerBtn');
 const mobileMenu = document.getElementById('mobileMenu');
 const menuOverlay = document.getElementById('menuOverlay');
 const closeMenuBtn = document.getElementById('closeMenuBtn');
+
 function openMenu() {
 mobileMenu.classList.add('active');
 menuOverlay.classList.add('active');
 hamburgerBtn.classList.add('active');
 document.body.style.overflow = 'hidden';
 }
+
 function closeMenu() {
 mobileMenu.classList.remove('active');
 menuOverlay.classList.remove('active');
 hamburgerBtn.classList.remove('active');
 document.body.style.overflow = '';
 }
+
 function toggleMenu() {
 if (mobileMenu.classList.contains('active')) {
 closeMenu();
@@ -587,14 +625,17 @@ closeMenu();
 openMenu();
 }
 }
+
 hamburgerBtn.addEventListener('click', toggleMenu);
 closeMenuBtn.addEventListener('click', closeMenu);
 menuOverlay.addEventListener('click', closeMenu);
+
 document.addEventListener('keydown', function(e) {
 if (e.key === 'Escape' && mobileMenu.classList.contains('active')) {
 closeMenu();
 }
 });
+
 mobileMenu.querySelectorAll('a').forEach(function(link) {
 link.addEventListener('click', function() {
 if (!this.href.includes('logout.php')) {
@@ -602,6 +643,7 @@ setTimeout(closeMenu, 150);
 }
 });
 });
+
 mobileMenu.addEventListener('touchmove', function(e) {
 if (mobileMenu.classList.contains('active')) {
 e.stopPropagation();

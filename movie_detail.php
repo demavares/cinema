@@ -1,5 +1,9 @@
 <?php
 require_once 'config.php';
+// ============================================
+// HEADERS PARA PERMITIR EMBED DE YOUTUBE
+// ============================================
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://www.youtube.com https://www.youtube-nocookie.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; frame-ancestors 'self';");
 
 // ✅ Regenerar id de sesión para un nuevo intento limpio
 if (!isset($_SESSION['last_activity'])) {
@@ -936,7 +940,15 @@ require_once 'header.php';
         <button class="close-modal" onclick="closeTrailer()">&times;</button>
         <div class="modal-content">
             <div class="trailer-container">
-                <iframe id="trailerIframe" src="" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+                <iframe 
+                    id="trailerIframe" 
+                    src="" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                    allowfullscreen
+                    loading="lazy"
+                    referrerpolicy="strict-origin-when-cross-origin"
+                    sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"
+                ></iframe>
             </div>
         </div>
     </div>
@@ -1273,10 +1285,29 @@ document.addEventListener('DOMContentLoaded', function() {
 function openTrailer(trailerKey) {
     const modal = document.getElementById('trailerModal');
     const iframe = document.getElementById('trailerIframe');
+    
     if (trailerKey && modal && iframe) {
-        iframe.src = 'https://www.youtube.com/embed/' + trailerKey + '?autoplay=1&rel=0';
+        // Construir URL con parámetros de privacidad mejorados
+        const embedUrl = 'https://www.youtube.com/embed/' + trailerKey + 
+            '?autoplay=1' +
+            '&rel=0' +
+            '&modestbranding=1' +
+            '&iv_load_policy=3' +
+            '&fs=1' +
+            '&controls=1' +
+            '&disablekb=1' +
+            '&enablejsapi=1' +
+            '&origin=' + encodeURIComponent(window.location.origin) +
+            '&widget_referrer=' + encodeURIComponent(window.location.href);
+        
+        iframe.src = embedUrl;
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
+        
+        // Forzar recarga del iframe para asegurar permisos
+        setTimeout(() => {
+            iframe.contentWindow?.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+        }, 500);
     }
 }
 

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: datame
--- Tiempo de generación: 19-08-2026 a las 07:51:58
+-- Tiempo de generación: 20-08-2026 a las 11:23:18
 -- Versión del servidor: 10.11.18-MariaDB-ubu2204
 -- Versión de PHP: 8.3.26
 
@@ -154,7 +154,32 @@ INSERT INTO `food_orders` (`id`, `user_id`, `ticket_id`, `showtime_id`, `purchas
 (13, 1, NULL, 64, 521, 4, 3, 1500.00, 4500.00, '2026-08-16 06:25:34', 'completed'),
 (14, 1, NULL, 64, 524, 2, 1, 1500.00, 1500.00, '2026-08-16 07:40:13', 'completed'),
 (15, 1, NULL, 64, 530, 3, 1, 15.00, 15.00, '2026-08-19 05:57:56', 'completed'),
-(16, 1, NULL, 64, 530, 4, 1, 1500.00, 1500.00, '2026-08-19 05:57:56', 'completed');
+(16, 1, NULL, 64, 530, 4, 1, 1500.00, 1500.00, '2026-08-19 05:57:56', 'completed'),
+(17, 1, NULL, 64, 534, 1, 1, 1200.00, 1200.00, '2026-08-20 10:54:05', 'completed');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `login_rate_limits`
+--
+
+CREATE TABLE `login_rate_limits` (
+  `rate_limit_key` varchar(191) NOT NULL,
+  `attempts` int(10) UNSIGNED NOT NULL DEFAULT 0,
+  `first_attempt_at` int(10) UNSIGNED DEFAULT NULL,
+  `last_attempt_at` int(10) UNSIGNED NOT NULL,
+  `blocked_until` int(10) UNSIGNED DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Volcado de datos para la tabla `login_rate_limits`
+--
+
+INSERT INTO `login_rate_limits` (`rate_limit_key`, `attempts`, `first_attempt_at`, `last_attempt_at`, `blocked_until`, `created_at`, `updated_at`) VALUES
+('action:movie_detail_view:ip:172.22.0.1', 1, 1787224252, 1787224252, NULL, '2026-08-20 05:20:00', '2026-08-20 11:10:52'),
+('ip:172.22.0.1', 4, 1787218128, 1787218251, NULL, '2026-08-20 04:17:05', '2026-08-20 09:30:51');
 
 -- --------------------------------------------------------
 
@@ -185,9 +210,9 @@ CREATE TABLE `movies` (
 --
 
 INSERT INTO `movies` (`id`, `title`, `description`, `poster_url`, `banner_url`, `cast_members`, `country_id`, `duration`, `genre`, `year`, `director`, `classification`, `trailer_url`, `is_active`, `created_at`) VALUES
-(18, 'Aliens', 'Alien es un organismo perfecto, una máquina de matar cuya superioridad física sólo puede competir con su agresividad. La oficial Ripley y la tripulación de la nave «Nostromo» se habían enfrentado, en el pasado, a esa monstruosa criatura. Y sólo Ripley sobrevivió a la masacre. Después de vagar por el espacio durante varios años, Ripley fue rescatada. Durante ese tiempo, el planeta de Alien ha sido colonizado. Pero, de repente, se pierde la comunicación con la colonia y, para investigar los motivos, se envía una expedición de marines espaciales, capitaneados por Ripley. Allí les esperan miles de espeluznantes criaturas. Alien se ha reproducido y esta vez la lucha es por la supervivencia de la Humanidad.', 'https://image.tmdb.org/t/p/w500/3QU9EP8BFLnTh6w9ycDSCvhqbRU.jpg', 'https://image.tmdb.org/t/p/original/4kix6fAblJIH6eMs0Ku2loyZJXK.jpg', 'Sigourney Weaver, Carrie Henn, Michael Biehn, Paul Reiser, Lance Henriksen, Bill Paxton', 21, 150, 'Acción, Suspense, Ciencia ficción', '1986', 'James Cameron', 'C (Mayores de 18)', 'https://youtu.be/gOnNP4ONTtI?si=VQ2YbkdpPoA_mGPG', 1, '2026-07-20 01:06:32'),
+(18, 'Aliens', 'Alien es un organismo perfecto, una máquina de matar cuya superioridad física sólo puede competir con su agresividad. La oficial Ripley y la tripulación de la nave «Nostromo» se habían enfrentado, en el pasado, a esa monstruosa criatura. Y sólo Ripley sobrevivió a la masacre. Después de vagar por el espacio durante varios años, Ripley fue rescatada. Durante ese tiempo, el planeta de Alien ha sido colonizado. Pero, de repente, se pierde la comunicación con la colonia y, para investigar los motivos, se envía una expedición de marines espaciales, capitaneados por Ripley. Allí les esperan miles de espeluznantes criaturas. Alien se ha reproducido y esta vez la lucha es por la supervivencia de la Humanidad.', 'https://image.tmdb.org/t/p/w500/3QU9EP8BFLnTh6w9ycDSCvhqbRU.jpg', 'https://image.tmdb.org/t/p/original/4kix6fAblJIH6eMs0Ku2loyZJXK.jpg', 'Sigourney Weaver, Carrie Henn, Michael Biehn, Paul Reiser, Lance Henriksen, Bill Paxton', 21, 150, 'Acción, Suspense, Ciencia ficción', '1986', 'James Cameron', 'C (Mayores de 18)', 'https://www.youtube.com/watch?v=oSeQQlaCZgU', 1, '2026-07-20 01:06:32'),
 (22, 'Spider-Man: Brand New Day', 'Han pasado cuatro años desde los acontecimientos de No Way Home, y Peter Parker ahora es un adulto que vive completamente solo, ha desaparecido voluntariamente de las vidas y recuerdos de quienes ama. Combatiendo el crimen en una Nueva York que ya no conoce su nombre, se ha dedicado por completo a proteger su ciudad, pero a medida que aumentan las exigencias sobre él, la presión desencadena una evolución física que amenaza su existencia, al mismo tiempo que un extraño nuevo patrón de crímenes da lugar a una de las amenazas más poderosas a las que se ha enfrentado.', 'https://image.tmdb.org/t/p/w500/tluwRNA7k0XfTtDkdLYKX1KOSCJ.jpg', 'https://image.tmdb.org/t/p/original/qeQJx07rK2xm8SD2sJxFKhE7gs0.jpg', 'Tom Holland, Zendaya, Mark Ruffalo, Jon Bernthal, Jacob Batalon, Sadie Sink', 21, 144, 'Ciencia ficción, Acción, Aventura', '2026', 'Destin Daniel Cretton', 'B (Mayores de 12)', 'https://youtu.be/lBU9_kIJI9U?si=p76bf5PItFGwTUI_', 1, '2026-07-21 03:58:04'),
-(35, 'Babymetal', 'Babymetal es un grupo idol japonés de kawaii metal formada en Tokio en 2010.', 'https://i.pinimg.com/originals/86/a3/a8/86a3a83128ec8089e613922bcdbfa99d.jpg', 'https://gritaradio.com/wp-content/uploads/2026/04/BM26-Anuncio_General_16x9-scaled.jpg', 'Suzuka Nakamoto (Su-metal), Moa Kikuchi (Moametal) y Momoko Okazaki (Momometal).', 27, 120, 'Música, Concierto', '2026', 'No disponible', 'A (Todo público)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-07-27 03:25:09'),
+(35, 'Babymetal', 'Babymetal es un grupo idol japonés de kawaii metal formada en Tokio en 2010.', 'https://cdn.shopify.com/s/files/1/0689/6061/6685/files/20251120_imp_fest_2026_vo4_referral_social_babymetal_4x5_c853eafa-872e-4d0c-9d1c-ea063dc17bad.jpg', 'https://gritaradio.com/wp-content/uploads/2026/04/BM26-Anuncio_General_16x9-scaled.jpg', 'Suzuka Nakamoto (Su-metal), Moa Kikuchi (Moametal) y Momoko Okazaki (Momometal).', 27, 120, 'Música, Concierto', '2026', 'No disponible', 'A (Todo público)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-07-27 03:25:09'),
 (47, 'He-Man y los Masters del Universo', 'En las regiones más lejanas del espacio, el reino de Eternia está amenazado por el villano Skeletor y sus traviesos ejércitos de oscuridad. Para salvar el reino de su padre y proteger las vidas de sus seres queridos, el joven príncipe Adam tiene que recuperar una espada mítica y convertirse en el legendario guerrero conocido como He-Man.', 'https://image.tmdb.org/t/p/w500/A6kqScyPEsn6akDS5HyPf9jE4Od.jpg', 'https://image.tmdb.org/t/p/original/yQIdU11DYQQp0neGtGtGxbGfRer.jpg', 'Nicholas Galitzine, Camila Mendes, Idris Elba, Jared Leto, Alison Brie, Jóhannes Haukur Jóhannesson', 21, 140, 'Acción, Fantasía, Ciencia ficción', '2026', 'Travis Knight', 'A (Todo público)', 'https://youtu.be/LjLamj-b0I8?si=lALDYK1Vkjt42iZ9', 1, '2026-08-07 04:42:39'),
 (54, 'Minions & Monsters', 'Narra la historia de cómo los minions conquistaron la industria de Hollywood, se convirtieron en estrellas de cine, lo perdieron todo, desataron monstruos en el mundo y luego se unieron para intentar salvar al planeta del caos que acababan de crear.', 'https://image.tmdb.org/t/p/w500/7DUzo8Ys7BfmZpqnzIwG4qA0egl.jpg', 'https://image.tmdb.org/t/p/original/kkcwhgSFd81QDlXo8ytrpHPQjhy.jpg', 'Pierre Coffin, Trey Parker, Christoph Waltz, Allison Janney, Jesse Eisenberg, Jeff Bridges', 21, 90, 'Aventura, Animación, Comedia, Familia, Fantasía', '2026', 'Pierre Coffin', 'A (Todo público)', 'https://youtu.be/lBU9_kIJI9U?si=p76bf5PItFGwTUI_', 1, '2026-08-11 13:26:41'),
 (55, 'La casa del fin de los tiempos', 'La casa del fin de los tiempos es el primer thriller de suspenso y terror venezolano. Narra la historia de Dulce, Ruddy Rodríguez, una madre de familia que tiene encuentros con Apariciones dentro de su vieja casa, lugar donde debe descifrar un misterio que podría desencadenar una profecía: la muerte de su familia.', 'https://image.tmdb.org/t/p/w500/weNI3TFmC2JGYwEX4YKvYIKbGme.jpg', 'https://image.tmdb.org/t/p/original/ZIwr7usYLrVodguqdosMiXzJc5.jpg', 'Ruddy Rodriguez, Gonzalo Cubero, Guillermo García, Adriana Calzadilla, Rosmel Bustamante, Hector Mercado', 20, 100, 'Terror, Drama, Fantasía', '2013', 'Alejandro Hidalgo', 'C (Mayores de 18)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-08-11 13:53:18'),
@@ -237,7 +262,13 @@ INSERT INTO `purchases` (`id`, `user_id`, `showtime_id`, `seats`, `total_tickets
 (527, 1, 64, 'A3', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-18 08:41:13', 'expired', NULL, NULL, '3d9bb818b0c435fc9c14df582fe1b777699fbba74b867c31b777f5977a72754e', '2026-08-18 04:49:08'),
 (528, 1, 64, 'A3', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-18 09:53:18', 'expired', NULL, NULL, '8062f55517813cbbfc35cf59bec4f9328398ebe8560ffb190dd080176ed9e909', '2026-08-18 05:53:37'),
 (529, 1, 64, 'B9', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-19 05:57:40', 'expired', NULL, NULL, '6fd0c0055e1e08e9d98046ce20a7707795cd8f2b26877239e2d51ed99fa4587a', '2026-08-19 01:57:56'),
-(530, 1, 64, 'B9', 1, 1515.00, 5237.40, 4515.00, 722.40, 16.00, '2026-08-19 05:57:56', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260819-5E4CED2C\",\"method\":\"movil\",\"reference\":\"CMP-20260819-4CED53\",\"date\":\"2026-08-19 01:57:56\",\"ip\":\"172.22.0.1\"}', '24e5fce0e8c9708292a3e631ecad1c8b3e924d6dfbc7acf0dd63b443f96ae34f', '2026-08-19 01:57:56');
+(530, 1, 64, 'B9', 1, 1515.00, 5237.40, 4515.00, 722.40, 16.00, '2026-08-19 05:57:56', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260819-5E4CED2C\",\"method\":\"movil\",\"reference\":\"CMP-20260819-4CED53\",\"date\":\"2026-08-19 01:57:56\",\"ip\":\"172.22.0.1\"}', '24e5fce0e8c9708292a3e631ecad1c8b3e924d6dfbc7acf0dd63b443f96ae34f', '2026-08-19 01:57:56'),
+(531, 1, 64, 'A8', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-19 18:57:18', 'expired', NULL, NULL, '63bec087fd2e99f4d9e9d493732b563e103c7d145e02d7c15bc318e36abeb250', '2026-08-19 14:57:23'),
+(532, 1, 64, 'A8', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-20 10:38:26', 'expired', NULL, NULL, 'af757eb26df5a23d4e3a7a1292a87317203fac32856269f4097a7942ce498175', '2026-08-20 06:41:26'),
+(533, 1, 64, 'A3', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-20 10:45:25', 'expired', NULL, NULL, 'eef1da9266e4735afd379dc272eccba67890b54a4707528b14e0936449a1d356', '2026-08-20 06:54:05'),
+(534, 1, 64, 'A3', 1, 1200.00, 4872.00, 4200.00, 672.00, 16.00, '2026-08-20 10:54:05', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260820-CCD3F791\",\"method\":\"movil\",\"reference\":\"CMP-20260820-D3F8D8\",\"date\":\"2026-08-20 06:54:05\",\"ip\":\"172.22.0.1\"}', '984ca45d432d203aeb9ba3982a8e3533a1be62e62f7d1741c73b01b3c318cd0e', '2026-08-20 06:54:05'),
+(535, 8, 64, 'A4', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-20 11:00:12', 'expired', NULL, NULL, '24bd1264e68d7babfeddc16c9af13b3456958fab16a97458844848be3b116151', '2026-08-20 07:10:12'),
+(536, 8, 64, 'B1', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-20 11:11:10', 'expired', NULL, NULL, 'b788b407ae006ff32e0998d35c32589d6011fbccf2dd03d25973d5b10ca9d14b', '2026-08-20 07:21:10');
 
 -- --------------------------------------------------------
 
@@ -312,8 +343,7 @@ CREATE TABLE `showtimes` (
 --
 
 INSERT INTO `showtimes` (`id`, `movie_id`, `room_id`, `show_date`, `show_time`, `price`, `price_adult`, `price_child`, `price_senior`, `enable_child_price`, `enable_senior_price`, `half_price_monday`, `promotions`, `language`, `format`, `is_active`, `created_at`) VALUES
-(64, 18, 14, '2026-08-24', '14:30:00', 3000.00, 3000.00, 500.00, 1500.00, 1, 1, 1, 'lunes_mitad,preventa', 'español', '3D', 1, '2026-08-11 04:12:47'),
-(66, 18, 14, '2026-08-13', '22:00:00', 3000.00, 3000.00, 0.00, 1500.00, 0, 1, 0, '', 'español', 'ScreenX', 0, '2026-08-13 23:56:05');
+(64, 18, 14, '2026-08-24', '14:30:00', 3000.00, 3000.00, 500.00, 1500.00, 1, 1, 1, 'lunes_mitad,preventa', 'español', '2D', 1, '2026-08-11 04:12:47');
 
 -- --------------------------------------------------------
 
@@ -351,7 +381,7 @@ INSERT INTO `site_config` (`id`, `key_name`, `value`, `updated_at`) VALUES
 (16, 'footer_copyright', '© {year} Cinema. Todos los derechos reservados.', '2026-08-19 07:22:55'),
 (17, 'footer_logo', 'uploads/footer_logo.png', '2026-07-27 01:53:32'),
 (18, 'site_favicon', 'uploads/favicon.png', '2026-08-11 05:39:24'),
-(20, 'last_cleanup_expired_purchases', '2026-08-14 05:14:26', '2026-08-14 09:14:26');
+(20, 'last_cleanup_expired_purchases', '2026-08-20 01:00:18', '2026-08-20 05:00:18');
 
 -- --------------------------------------------------------
 
@@ -404,7 +434,8 @@ INSERT INTO `tickets` (`id`, `user_id`, `showtime_id`, `purchase_id`, `ticket_ty
 (5, 1, 64, 521, 3, 'A10', 1500.00, 'confirmed', '2026-08-16 06:25:17', '2026-08-16 06:25:34'),
 (7, 1, 64, 524, 1, 'A2', 3000.00, 'confirmed', '2026-08-16 07:40:02', '2026-08-16 07:40:13'),
 (8, 1, 64, 526, 1, 'A9', 1500.00, 'confirmed', '2026-08-17 20:51:22', '2026-08-17 20:53:14'),
-(11, 1, 64, 530, 1, 'B9', 3000.00, 'confirmed', '2026-08-19 05:57:40', '2026-08-19 05:57:56');
+(11, 1, 64, 530, 1, 'B9', 3000.00, 'confirmed', '2026-08-19 05:57:40', '2026-08-19 05:57:56'),
+(14, 1, 64, 534, 1, 'A3', 3000.00, 'confirmed', '2026-08-20 10:45:25', '2026-08-20 10:54:05');
 
 -- --------------------------------------------------------
 
@@ -471,8 +502,8 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `email`, `cedula_type`, `cedula_number`, `phone_prefix`, `phone_number`, `birth_date`, `password`, `role`, `is_blocked`, `created_at`, `last_login`) VALUES
-(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-19 03:22:00'),
-(8, 'Darwin Mavarez', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-16 00:59:29');
+(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-08-20 05:34:42'),
+(8, 'Darwin Mavarez', 'darwinmavares@gmail.com', 'V', '14511134', '414', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-20 06:55:05');
 
 --
 -- Índices para tablas volcadas
@@ -508,6 +539,14 @@ ALTER TABLE `food_orders`
   ADD KEY `food_item_id` (`food_item_id`),
   ADD KEY `idx_purchase_id` (`purchase_id`),
   ADD KEY `food_orders_ibfk_2` (`ticket_id`);
+
+--
+-- Indices de la tabla `login_rate_limits`
+--
+ALTER TABLE `login_rate_limits`
+  ADD PRIMARY KEY (`rate_limit_key`),
+  ADD KEY `idx_last_attempt_at` (`last_attempt_at`),
+  ADD KEY `idx_blocked_until` (`blocked_until`);
 
 --
 -- Indices de la tabla `movies`
@@ -619,7 +658,7 @@ ALTER TABLE `food_items`
 -- AUTO_INCREMENT de la tabla `food_orders`
 --
 ALTER TABLE `food_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT de la tabla `movies`
@@ -631,7 +670,7 @@ ALTER TABLE `movies`
 -- AUTO_INCREMENT de la tabla `purchases`
 --
 ALTER TABLE `purchases`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=531;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=537;
 
 --
 -- AUTO_INCREMENT de la tabla `rate_limits`
@@ -667,7 +706,7 @@ ALTER TABLE `tax_config`
 -- AUTO_INCREMENT de la tabla `tickets`
 --
 ALTER TABLE `tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_logs`

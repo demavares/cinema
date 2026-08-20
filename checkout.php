@@ -1,7 +1,4 @@
 <?php
-// ============================================
-// checkout.php - VERSIÓN CORREGIDA
-// ============================================
 require_once 'config.php';
 
 if (!isset($_SESSION['user_id'])) {

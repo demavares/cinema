@@ -1,27 +1,57 @@
 <?php
 // ============================================
-// CONFIGURACIÓN DE SESIÓN (MEJORADA)
+// CONFIGURACIÓN DE SESIÓN Y SEGURIDAD
 // ============================================
 date_default_timezone_set('America/Caracas');
-header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: https:; font-src 'self' https://cdnjs.cloudflare.com;");
+
+// ============================================
+// ✅ CSP CON NONCE
+// ============================================
+function getCSPNonce(): string {
+    static $nonce = null;
+
+    if ($nonce === null) {
+        $nonce = base64_encode(random_bytes(16));
+    }
+
+    return $nonce;
+}
+
+$cspNonce = getCSPNonce();
+
+if (!headers_sent()) {
+    $cspDirectives = [
+        "default-src 'self'",
+        "script-src 'self' 'nonce-" . $cspNonce . "' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com",
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+        "img-src 'self' data: https: blob:",
+        "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "upgrade-insecure-requests"
+    ];
+
+    header("Content-Security-Policy: " . implode('; ', $cspDirectives));
+}
 
 if (session_status() === PHP_SESSION_NONE) {
-    // Configuración segura de cookies
     ini_set('session.cookie_lifetime', 0);
     ini_set('session.gc_maxlifetime', 3600);
     ini_set('session.cookie_httponly', 1);
     ini_set('session.use_only_cookies', 1);
+    ini_set('session.use_strict_mode', 1);
     ini_set('session.cookie_samesite', 'Lax');
-    
-    // ✅ HABILITAR SECURE FLAG SI ES HTTPS
+
     if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
         ini_set('session.cookie_secure', 1);
     }
-    
+
     session_start();
 }
 
-// Verificar expiración de sesión
 if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 3600)) {
     session_unset();
     session_destroy();
@@ -30,14 +60,15 @@ if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > 
 
 $_SESSION['last_activity'] = time();
 
-// ✅ AGREGAR HEADERS DE SEGURIDAD
-header('X-Content-Type-Options: nosniff');
-header('X-Frame-Options: DENY');
-header('X-XSS-Protection: 1; mode=block');
-header('Referrer-Policy: strict-origin-when-cross-origin');
+if (!headers_sent()) {
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: DENY');
+    header('X-XSS-Protection: 1; mode=block');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
 
-if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
-    header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
 }
 
 // ============================================
@@ -48,58 +79,50 @@ function loadEnv($path = '.env') {
         error_log("❌ Error: El archivo .env no existe en: " . $path);
         return false;
     }
-    
+
     $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    
+
     if ($lines === false) {
         error_log("❌ Error: No se pudo leer el archivo .env");
         return false;
     }
-    
+
     foreach ($lines as $line) {
-        // Ignorar comentarios
         if (strpos(trim($line), '#') === 0) {
             continue;
         }
-        
-        // Parsear KEY=VALUE
+
         if (strpos($line, '=') !== false) {
             list($key, $value) = explode('=', $line, 2);
             $key = trim($key);
             $value = trim($value);
-            
-            // Eliminar comillas si existen
+
             if ((substr($value, 0, 1) === '"' && substr($value, -1) === '"') ||
                 (substr($value, 0, 1) === "'" && substr($value, -1) === "'")) {
                 $value = substr($value, 1, -1);
             }
-            
-            // No sobrescribir variables ya definidas
+
             if (!array_key_exists($key, $_ENV) && !getenv($key)) {
                 putenv("$key=$value");
                 $_ENV[$key] = $value;
             }
         }
     }
-    
+
     return true;
 }
 
-// ============================================
-// FUNCIÓN AUXILIAR PARA OBTENER VARIABLES DE ENTORNO
-// ============================================
 function env($key, $default = null) {
     $value = getenv($key);
-    
+
     if ($value === false) {
         $value = $_ENV[$key] ?? null;
     }
-    
+
     if ($value === null) {
         return $default;
     }
-    
-    // Convertir valores booleanos
+
     switch (strtolower($value)) {
         case 'true':
         case '(true)':
@@ -114,15 +137,40 @@ function env($key, $default = null) {
         case '(null)':
             return null;
     }
-    
+
     return $value;
 }
 
-// Cargar el archivo .env
+/**
+ * Registra datos en el log de errores de forma segura,
+ * omitiendo campos sensibles.
+ */
+function secure_log($data, $message = "Datos procesados") {
+    $sensitiveKeys = [
+        'password',
+        'confirm_password',
+        'current_password',
+        'new_password',
+        'csrf_token',
+        'api_key',
+        'card_number'
+    ];
+
+    $safeData = $data;
+
+    foreach ($sensitiveKeys as $key) {
+        if (isset($safeData[$key])) {
+            $safeData[$key] = '*** REDACTED ***';
+        }
+    }
+
+    error_log($message . " - Data: " . print_r($safeData, true));
+}
+
 loadEnv(__DIR__ . '/.env');
 
 // ============================================
-// CONFIGURACIÓN DE BASE DE DATOS (DESDE .env)
+// CONFIGURACIÓN DE BASE DE DATOS
 // ============================================
 define('DB_HOST', env('DB_HOST', 'localhost'));
 define('DB_USER', env('DB_USER', 'root'));
@@ -131,7 +179,6 @@ define('DB_NAME', env('DB_NAME', 'cinema_db'));
 define('TMDB_API_KEY', env('TMDB_API_KEY', ''));
 define('TMDB_API_URL', env('TMDB_API_URL', 'https://api.themoviedb.org/3/'));
 
-// Validar que las credenciales estén presentes
 if (empty(DB_USER) || empty(DB_NAME)) {
     error_log("❌ Error: Faltan credenciales de base de datos en .env");
     die("Error de configuración. Contacte al administrador.");
@@ -159,10 +206,11 @@ try {
 }
 
 // ============================================
-// FUNCIÓN PARA OBTENER CONFIGURACIÓN DEL SITIO
+// CONFIGURACIÓN DEL SITIO
 // ============================================
 function getSiteConfig($pdo) {
     static $config = null;
+
     if ($config !== null) {
         return $config;
     }
@@ -191,7 +239,9 @@ function getSiteConfig($pdo) {
     try {
         $stmt = $pdo->query("SELECT key_name, value FROM site_config");
         $rows = $stmt->fetchAll();
+
         $config = [];
+
         foreach ($rows as $row) {
             $config[$row['key_name']] = $row['value'];
         }
@@ -209,8 +259,29 @@ function getSiteConfig($pdo) {
     }
 }
 
+function getFaviconHref($siteConfig) {
+    $favicon = trim($siteConfig['site_favicon'] ?? ($siteConfig['favicon'] ?? ''));
+
+    if ($favicon === '') {
+        return 'favicon.png';
+    }
+
+    $urlPath = parse_url($favicon, PHP_URL_PATH);
+    $localPath = ltrim($urlPath ?: $favicon, '/');
+
+    if ($localPath !== '' && is_file($localPath)) {
+        return $favicon . '?v=' . filemtime($localPath);
+    }
+
+    if (filter_var($favicon, FILTER_VALIDATE_URL)) {
+        return $favicon;
+    }
+
+    return is_file('favicon.png') ? 'favicon.png' : $favicon;
+}
+
 // ============================================
-// FUNCIÓN PARA FORMATEAR MONEDA
+// FORMATEAR MONEDA
 // ============================================
 function formatCurrency($amount, $config = null) {
     if ($config === null) {
@@ -225,20 +296,21 @@ function formatCurrency($amount, $config = null) {
     $decimals = intval($config['decimal_places'] ?? 2);
 
     $formatted = number_format($amount, $decimals, $decimal, $thousands);
+
     return $position === 'right' ? $formatted . ' ' . $symbol : $symbol . $formatted;
 }
 
 // ============================================
-// FUNCIÓN PARA OBTENER DATOS DE TMDb
+// TMDb
 // ============================================
 function getMovieFromTMDB($title, $year = null) {
     $api_key = TMDB_API_KEY;
-    
+
     if (empty($api_key)) {
         error_log("⚠️ TMDB_API_KEY no configurada");
         return null;
     }
-    
+
     $query = urlencode($title);
     $url = TMDB_API_URL . "search/movie?api_key={$api_key}&query={$query}&language=es-ES";
 
@@ -252,6 +324,7 @@ function getMovieFromTMDB($title, $year = null) {
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
     curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -266,6 +339,7 @@ function getMovieFromTMDB($title, $year = null) {
     if (!empty($data['results'])) {
         $movie_data = $data['results'][0];
         $tmdb_id = $movie_data['id'];
+
         $detail_url = TMDB_API_URL . "movie/{$tmdb_id}?api_key={$api_key}&language=es-ES&append_to_response=credits";
 
         $ch = curl_init();
@@ -274,6 +348,7 @@ function getMovieFromTMDB($title, $year = null) {
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
         curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+
         $detail_response = curl_exec($ch);
         curl_close($ch);
 
@@ -294,6 +369,7 @@ function getMovieFromTMDB($title, $year = null) {
                 }
             }
         }
+
         $director = !empty($directors) ? implode(' y ', $directors) : 'No disponible';
 
         $cast = [];
@@ -303,11 +379,13 @@ function getMovieFromTMDB($title, $year = null) {
                 $cast[] = $actor['name'];
             }
         }
+
         $cast_members = !empty($cast) ? implode(', ', $cast) : '';
 
         $country = '';
         if (isset($detail_data['production_countries']) && !empty($detail_data['production_countries'])) {
             $english_country = $detail_data['production_countries'][0]['name'];
+
             $country_translations = [
                 'United States of America' => 'Estados Unidos de América',
                 'United States' => 'Estados Unidos de América',
@@ -330,6 +408,7 @@ function getMovieFromTMDB($title, $year = null) {
                 'Peru' => 'Perú',
                 'Brazil' => 'Brasil'
             ];
+
             $country = $country_translations[$english_country] ?? $english_country;
         }
 
@@ -353,7 +432,7 @@ function getMovieFromTMDB($title, $year = null) {
 }
 
 // ============================================
-// FUNCIÓN PARA LIBERAR ASIENTOS AUTOMÁTICAMENTE
+// LIBERAR ASIENTOS EXPIRADOS
 // ============================================
 function releaseExpiredSeats($pdo) {
     $currentDateTime = date('Y-m-d H:i:s');
@@ -362,7 +441,6 @@ function releaseExpiredSeats($pdo) {
     try {
         $pdo->beginTransaction();
 
-        // 1. LIBERAR COMPRAS PENDIENTES EXPIRADAS
         $stmt = $pdo->prepare("
             SELECT id, seats, showtime_id
             FROM purchases
@@ -370,6 +448,7 @@ function releaseExpiredSeats($pdo) {
             FOR UPDATE
         ");
         $stmt->execute([$currentDateTime]);
+
         $expired_purchases = $stmt->fetchAll();
 
         foreach ($expired_purchases as $purchase) {
@@ -378,12 +457,13 @@ function releaseExpiredSeats($pdo) {
 
             $seatsArray = explode(',', $purchase['seats']);
             $placeholders = implode(',', array_fill(0, count($seatsArray), '?'));
+
             $stmt = $pdo->prepare("DELETE FROM tickets WHERE showtime_id = ? AND seat_code IN ($placeholders)");
             $stmt->execute(array_merge([$purchase['showtime_id']], $seatsArray));
+
             $total_released += count($seatsArray);
         }
 
-        // 2. LIBERAR SHOWTIMES QUE YA PASARON
         $stmt = $pdo->prepare("
             SELECT DISTINCT s.id, s.show_date, s.show_time, m.duration, COUNT(t.id) as ticket_count
             FROM showtimes s
@@ -394,6 +474,7 @@ function releaseExpiredSeats($pdo) {
             GROUP BY s.id
         ");
         $stmt->execute([$currentDateTime]);
+
         $expired_showtimes = $stmt->fetchAll();
 
         foreach ($expired_showtimes as $showtime) {
@@ -413,121 +494,113 @@ function releaseExpiredSeats($pdo) {
     return $total_released;
 }
 
-// ============================================
-// LIBERACIÓN OPTIMIZADA CON CACHÉ
-// ============================================
 function releaseExpiredSeatsOptimized($pdo) {
-    // Usar caché de sesión para evitar ejecuciones frecuentes
     $cacheKey = 'last_seat_release_time';
-    $cacheInterval = 60; // Ejecutar cada 60 segundos
-    
+    $cacheInterval = 60;
+
     $lastRelease = $_SESSION[$cacheKey] ?? 0;
     $currentTime = time();
-    
-    // Solo ejecutar si han pasado más de 60 segundos
+
     if (($currentTime - $lastRelease) < $cacheInterval) {
-        return 0; // No ejecutar, usar caché
+        return 0;
     }
-    
-    // Ejecutar liberación
+
     $released = releaseExpiredSeats($pdo);
-    
-    // Actualizar timestamp
+
     $_SESSION[$cacheKey] = $currentTime;
-    
+
     return $released;
 }
 
-// Ejecutar liberación automática optimizada
 $released_count = releaseExpiredSeatsOptimized($pdo);
 
 // ============================================
-// 🧹 LIMPIEZA AUTOMÁTICA DE REGISTROS ANTIGUOS
+// LIMPIEZA AUTOMÁTICA
 // ============================================
 function cleanupExpiredPurchasesPeriodic($pdo) {
     try {
         $lastCleanupKey = 'last_cleanup_expired_purchases';
-        
+
         $stmt = $pdo->prepare("SELECT value FROM site_config WHERE key_name = ?");
         $stmt->execute([$lastCleanupKey]);
         $lastCleanup = $stmt->fetch();
-        
+
         $now = time();
         $fiveDaysInSeconds = 5 * 24 * 60 * 60;
         $currentHour = (int)date('H');
-        
         $inMaintenanceWindow = ($currentHour >= 1 && $currentHour < 6);
-        
+
         if (!$inMaintenanceWindow) {
             return;
         }
-        
+
         $shouldCleanup = false;
+
         if (!$lastCleanup || empty($lastCleanup['value'])) {
             $shouldCleanup = true;
         } else {
             $lastCleanupTime = strtotime($lastCleanup['value']);
+
             if (($now - $lastCleanupTime) >= $fiveDaysInSeconds) {
                 $shouldCleanup = true;
             }
         }
-        
+
         if (!$shouldCleanup) {
             return;
         }
-        
+
         $stmtDelete = $pdo->prepare("
-            DELETE FROM purchases 
-            WHERE status = 'expired' 
+            DELETE FROM purchases
+            WHERE status = 'expired'
             AND purchase_date < DATE_SUB(NOW(), INTERVAL 30 DAY)
         ");
         $stmtDelete->execute();
         $deletedPurchases = $stmtDelete->rowCount();
-        
+
         $stmtOrphanTickets = $pdo->prepare("
             DELETE t FROM tickets t
             WHERE NOT EXISTS (
-                SELECT 1 FROM purchases p 
-                WHERE p.user_id = t.user_id 
+                SELECT 1 FROM purchases p
+                WHERE p.user_id = t.user_id
                 AND p.showtime_id = t.showtime_id
             )
             AND t.created_at < DATE_SUB(NOW(), INTERVAL 30 DAY)
         ");
         $stmtOrphanTickets->execute();
         $deletedOrphanTickets = $stmtOrphanTickets->rowCount();
-        
+
         $stmtOrphanFood = $pdo->prepare("
-            DELETE FROM food_orders 
-            WHERE status = 'pending' 
+            DELETE FROM food_orders
+            WHERE status = 'pending'
             AND order_date < DATE_SUB(NOW(), INTERVAL 30 DAY)
         ");
         $stmtOrphanFood->execute();
         $deletedOrphanFood = $stmtOrphanFood->rowCount();
-        
+
         $stmtOldLogs = $pdo->prepare("
-            DELETE FROM ticket_logs 
+            DELETE FROM ticket_logs
             WHERE released_at < DATE_SUB(NOW(), INTERVAL 90 DAY)
         ");
         $stmtOldLogs->execute();
         $deletedOldLogs = $stmtOldLogs->rowCount();
-        
+
         if ($lastCleanup && !empty($lastCleanup['value'])) {
             $stmtUpdate = $pdo->prepare("UPDATE site_config SET value = NOW(), updated_at = NOW() WHERE key_name = ?");
         } else {
             $stmtUpdate = $pdo->prepare("INSERT INTO site_config (key_name, value) VALUES (?, NOW())");
         }
+
         $stmtUpdate->execute([$lastCleanupKey]);
-        
-        $logMessage = sprintf(
+
+        error_log(sprintf(
             "🧹 Limpieza automática [%s]: %d compras expiradas, %d tickets huérfanos, %d pedidos comida, %d logs antiguos eliminados",
             date('Y-m-d H:i:s'),
             $deletedPurchases,
             $deletedOrphanTickets,
             $deletedOrphanFood,
             $deletedOldLogs
-        );
-        error_log($logMessage);
-        
+        ));
     } catch (Exception $e) {
         error_log("❌ Error en limpieza automática periódica: " . $e->getMessage());
     }
@@ -536,13 +609,14 @@ function cleanupExpiredPurchasesPeriodic($pdo) {
 cleanupExpiredPurchasesPeriodic($pdo);
 
 // ============================================
-// FUNCIONES CSRF (MEJORADAS CON ROTATION)
+// CSRF
 // ============================================
 function generateCSRFToken() {
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
         $_SESSION['csrf_token_created'] = time();
     }
+
     return $_SESSION['csrf_token'];
 }
 
@@ -550,11 +624,10 @@ function verifyCSRFToken($token) {
     if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
         return false;
     }
-    
-    // ✅ REGENERAR TOKEN DESPUÉS DE USO EXITOSO
+
     $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     $_SESSION['csrf_token_created'] = time();
-    
+
     return true;
 }
 
@@ -562,12 +635,14 @@ function isCSRFTokenExpired() {
     if (!isset($_SESSION['csrf_token_created'])) {
         return true;
     }
-    $maxAge = 3600; // 1 hora
+
+    $maxAge = 3600;
+
     return (time() - $_SESSION['csrf_token_created']) > $maxAge;
 }
 
 // ============================================
-// FUNCIONES DE TOKEN DE COMPRA
+// TOKENS DE COMPRA
 // ============================================
 function generatePurchaseToken() {
     return bin2hex(random_bytes(32));
@@ -575,8 +650,10 @@ function generatePurchaseToken() {
 
 function generatePurchaseTokenWithTimeout($showtimeId, $timeout = 900) {
     $token = generatePurchaseToken();
+
     $_SESSION['purchase_token_' . $showtimeId] = $token;
     $_SESSION['purchase_expires_at_' . $showtimeId] = time() + $timeout;
+
     return $token;
 }
 
@@ -586,36 +663,13 @@ function verifyPurchaseToken($token, $showtimeId) {
     }
 
     $expectedToken = $_SESSION['purchase_token_' . $showtimeId] ?? null;
+
     if (!$expectedToken || !hash_equals($expectedToken, $token)) {
         return false;
     }
 
     $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
-    if (time() > $expiresAt) {
-        unset($_SESSION['purchase_token_' . $showtimeId]);
-        unset($_SESSION['purchase_expires_at_' . $showtimeId]);
-        return false;
-    }
 
-    return true;
-}
-
-function verifyPurchaseTokenWithTimeout($token, $showtimeId) {
-    if (empty($token) || empty($showtimeId)) {
-        return false;
-    }
-
-    $expectedToken = $_SESSION['purchase_token_' . $showtimeId] ?? null;
-    if (!$expectedToken || !hash_equals($expectedToken, $token)) {
-        return false;
-    }
-
-    $usedKey = 'purchase_token_used_' . $showtimeId;
-    if (isset($_SESSION[$usedKey]) && $_SESSION[$usedKey] === true) {
-        return false;
-    }
-
-    $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
     if (time() > $expiresAt) {
         unset($_SESSION['purchase_token_' . $showtimeId]);
         unset($_SESSION['purchase_expires_at_' . $showtimeId]);
@@ -627,13 +681,21 @@ function verifyPurchaseTokenWithTimeout($token, $showtimeId) {
 
 function isPurchaseTokenExpired($showtimeId) {
     $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
-    if ($expiresAt === 0) return true;
+
+    if ($expiresAt === 0) {
+        return true;
+    }
+
     return time() > $expiresAt;
 }
 
 function getPurchaseTokenTimeLeft($showtimeId) {
     $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
-    if ($expiresAt === 0) return 0;
+
+    if ($expiresAt === 0) {
+        return 0;
+    }
+
     return max(0, $expiresAt - time());
 }
 
@@ -671,10 +733,11 @@ function generateTransactionId() {
 }
 
 // ============================================
-// FUNCIÓN PARA VALIDAR CONFLICTOS DE HORARIOS
+// CONFLICTOS DE HORARIOS
 // ============================================
 function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration, $exclude_id = null) {
     $cleanup_time = 15;
+
     $start_minutes = strtotime($show_time) / 60;
     $end_minutes = $start_minutes + $duration;
     $end_minutes_with_cleanup = $end_minutes + $cleanup_time;
@@ -692,25 +755,30 @@ function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration
     }
 
     $stmt = $pdo->prepare($sql);
+
     $params = [$room_id, $show_date];
+
     if ($exclude_id) {
         $params[] = $exclude_id;
     }
+
     $stmt->execute($params);
+
     $existing = $stmt->fetchAll();
 
     foreach ($existing as $e) {
         $existing_start = strtotime($e['show_time']) / 60;
         $existing_end = $existing_start + $e['duration'];
 
-        $overlap_start = max($start_minutes, $existing_start);
-        $overlap_end = min($end_minutes_with_cleanup, $existing_end);
-        $overlap_minutes = max(0, $overlap_end - $overlap_start);
-
         $overlap = ($start_minutes < $existing_end && $end_minutes_with_cleanup > $existing_start);
 
         if ($overlap) {
+            $overlap_start = max($start_minutes, $existing_start);
+            $overlap_end = min($end_minutes_with_cleanup, $existing_end);
+            $overlap_minutes = max(0, $overlap_end - $overlap_start);
+
             $conflict_minutes = ceil($overlap_minutes);
+
             $start_time_formatted = date('h:i A', strtotime($e['show_time']));
             $end_time_formatted = date('h:i A', strtotime("+{$e['duration']} minutes", strtotime($e['show_time'])));
             $room_name = $e['room_name'];
@@ -731,7 +799,7 @@ function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration
 }
 
 // ============================================
-// VERIFICAR SESIÓN EXPIRADA
+// SESIÓN EXPIRADA
 // ============================================
 function checkSessionExpired($showtimeId = null) {
     $limite_inactividad = 1800;
@@ -745,6 +813,7 @@ function checkSessionExpired($showtimeId = null) {
         }
 
         session_destroy();
+
         header("Location: index.php?expired=1");
         exit();
     }
@@ -769,7 +838,7 @@ function checkSessionExpired($showtimeId = null) {
 }
 
 // ============================================
-// FUNCIONES DE FECHA
+// FECHAS
 // ============================================
 function getCurrentDate() {
     return date('Y-m-d');
@@ -796,6 +865,7 @@ function formatDateVenezuela($date) {
     $days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 
     $timestamp = strtotime($date);
+
     $dayName = $days[date('w', $timestamp)];
     $day = date('d', $timestamp);
     $month = $months[date('n', $timestamp) - 1];
@@ -808,6 +878,7 @@ function getDateInSpanish($date) {
     if (empty($date)) return '';
 
     $timestamp = strtotime($date);
+
     $days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
     $months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 
@@ -840,6 +911,7 @@ function isDatePast($date) {
 
 function formatDateDayMonth($date) {
     $timestamp = strtotime($date);
+
     $months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     $days = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 
@@ -851,7 +923,7 @@ function formatDateDayMonth($date) {
 }
 
 // ============================================
-// FUNCIONES DE PRECIOS
+// PRECIOS
 // ============================================
 function getShowtimePrice($showtime) {
     $currentDay = date('N');
@@ -869,6 +941,7 @@ function getTicketPrice($movie) {
     }
 
     $currentDay = date('N');
+
     if (isset($movie['half_price_monday']) && $movie['half_price_monday'] == 1 && $currentDay == 1) {
         return $movie['price'] / 2;
     }
@@ -896,10 +969,478 @@ function getTicketPriceByType($showtime, $type) {
 }
 
 // ============================================
-// RATE LIMITING
+// RATE LIMITING PERSISTENTE
 // ============================================
+
+if (!defined('LOGIN_IP_MAX_ATTEMPTS')) {
+    define('LOGIN_IP_MAX_ATTEMPTS', 20);
+}
+
+if (!defined('LOGIN_IP_WINDOW_MINUTES')) {
+    define('LOGIN_IP_WINDOW_MINUTES', 15);
+}
+
+if (!defined('LOGIN_IP_BLOCK_MINUTES')) {
+    define('LOGIN_IP_BLOCK_MINUTES', 5);
+}
+
+if (!defined('LOGIN_ACCOUNT_MAX_ATTEMPTS')) {
+    define('LOGIN_ACCOUNT_MAX_ATTEMPTS', 5);
+}
+
+if (!defined('LOGIN_ACCOUNT_WINDOW_MINUTES')) {
+    define('LOGIN_ACCOUNT_WINDOW_MINUTES', 15);
+}
+
+if (!defined('LOGIN_ACCOUNT_BLOCK_MINUTES')) {
+    define('LOGIN_ACCOUNT_BLOCK_MINUTES', 5);
+}
+
+if (!defined('LOGIN_WARNING_FAILED_ATTEMPTS')) {
+    define('LOGIN_WARNING_FAILED_ATTEMPTS', 4);
+}
+
+function getLoginIp(): string {
+    return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+}
+
+function getLoginIpKey(string $ip): string {
+    return 'ip:' . $ip;
+}
+
+function getLoginAccountKey(string $email): string {
+    $normalized = strtolower(trim($email));
+    return 'account:' . hash('sha256', $normalized);
+}
+
+function getRateLimitRow(PDO $pdo, string $key): ?array {
+    $stmt = $pdo->prepare('
+        SELECT *
+        FROM login_rate_limits
+        WHERE rate_limit_key = ?
+        LIMIT 1
+    ');
+
+    $stmt->execute([$key]);
+
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $row ?: null;
+}
+
+function checkRateLimitKey(
+    PDO $pdo,
+    string $key,
+    int $maxAttempts,
+    int $windowMinutes,
+    int $blockMinutes
+): array {
+    $now = time();
+    $row = getRateLimitRow($pdo, $key);
+
+    if (!$row) {
+        return [
+            'limited' => false,
+            'retry_after' => 0
+        ];
+    }
+
+    if ($row['blocked_until'] !== null) {
+        if ((int)$row['blocked_until'] > $now) {
+            return [
+                'limited' => true,
+                'retry_after' => (int)$row['blocked_until'] - $now
+            ];
+        }
+
+        $stmt = $pdo->prepare('
+            UPDATE login_rate_limits
+            SET
+                attempts = 0,
+                first_attempt_at = NULL,
+                last_attempt_at = ?,
+                blocked_until = NULL
+            WHERE rate_limit_key = ?
+        ');
+
+        $stmt->execute([$now, $key]);
+
+        return [
+            'limited' => false,
+            'retry_after' => 0
+        ];
+    }
+
+    $windowStart = $now - ($windowMinutes * 60);
+
+    if ((int)$row['last_attempt_at'] < $windowStart) {
+        return [
+            'limited' => false,
+            'retry_after' => 0
+        ];
+    }
+
+    if ((int)$row['attempts'] >= $maxAttempts) {
+        $blockedUntil = $now + ($blockMinutes * 60);
+
+        $stmt = $pdo->prepare('
+            UPDATE login_rate_limits
+            SET blocked_until = ?
+            WHERE rate_limit_key = ?
+        ');
+
+        $stmt->execute([$blockedUntil, $key]);
+
+        return [
+            'limited' => true,
+            'retry_after' => $blockMinutes * 60
+        ];
+    }
+
+    return [
+        'limited' => false,
+        'retry_after' => 0
+    ];
+}
+
+function recordRateLimitFailureForKey(
+    PDO $pdo,
+    string $key,
+    int $maxAttempts,
+    int $windowMinutes,
+    int $blockMinutes
+): void {
+    $now = time();
+    $row = getRateLimitRow($pdo, $key);
+
+    if (!$row) {
+        $stmt = $pdo->prepare('
+            INSERT INTO login_rate_limits
+                (rate_limit_key, attempts, first_attempt_at, last_attempt_at, blocked_until)
+            VALUES
+                (?, 1, ?, ?, NULL)
+        ');
+
+        $stmt->execute([$key, $now, $now]);
+
+        return;
+    }
+
+    if ($row['blocked_until'] !== null) {
+        if ((int)$row['blocked_until'] > $now) {
+            return;
+        }
+
+        $stmt = $pdo->prepare('
+            UPDATE login_rate_limits
+            SET
+                attempts = 1,
+                first_attempt_at = ?,
+                last_attempt_at = ?,
+                blocked_until = NULL
+            WHERE rate_limit_key = ?
+        ');
+
+        $stmt->execute([$now, $now, $key]);
+
+        return;
+    }
+
+    $windowStart = $now - ($windowMinutes * 60);
+
+    if ((int)$row['last_attempt_at'] < $windowStart) {
+        $attempts = 1;
+        $firstAttemptAt = $now;
+    } else {
+        $attempts = (int)$row['attempts'] + 1;
+        $firstAttemptAt = (int)$row['first_attempt_at'] ?: $now;
+    }
+
+    $blockedUntil = null;
+
+    if ($attempts >= $maxAttempts) {
+        $blockedUntil = $now + ($blockMinutes * 60);
+    }
+
+    $stmt = $pdo->prepare('
+        UPDATE login_rate_limits
+        SET
+            attempts = ?,
+            first_attempt_at = ?,
+            last_attempt_at = ?,
+            blocked_until = ?
+        WHERE rate_limit_key = ?
+    ');
+
+    $stmt->execute([
+        $attempts,
+        $firstAttemptAt,
+        $now,
+        $blockedUntil,
+        $key
+    ]);
+}
+
+function consumeRateLimitKey(
+    PDO $pdo,
+    string $key,
+    int $maxAttempts,
+    int $windowMinutes,
+    int $blockMinutes = 0
+): bool {
+    $now = time();
+    $row = getRateLimitRow($pdo, $key);
+
+    if (!$row) {
+        $stmt = $pdo->prepare('
+            INSERT INTO login_rate_limits
+                (rate_limit_key, attempts, first_attempt_at, last_attempt_at, blocked_until)
+            VALUES
+                (?, 1, ?, ?, NULL)
+        ');
+
+        $stmt->execute([$key, $now, $now]);
+
+        return true;
+    }
+
+    if ($row['blocked_until'] !== null) {
+        if ((int)$row['blocked_until'] > $now) {
+            return false;
+        }
+
+        $stmt = $pdo->prepare('
+            UPDATE login_rate_limits
+            SET
+                attempts = 1,
+                first_attempt_at = ?,
+                last_attempt_at = ?,
+                blocked_until = NULL
+            WHERE rate_limit_key = ?
+        ');
+
+        $stmt->execute([$now, $now, $key]);
+
+        return true;
+    }
+
+    $windowStart = $now - ($windowMinutes * 60);
+
+    if ((int)$row['last_attempt_at'] < $windowStart) {
+        $stmt = $pdo->prepare('
+            UPDATE login_rate_limits
+            SET
+                attempts = 1,
+                first_attempt_at = ?,
+                last_attempt_at = ?,
+                blocked_until = NULL
+            WHERE rate_limit_key = ?
+        ');
+
+        $stmt->execute([$now, $now, $key]);
+
+        return true;
+    }
+
+    if ((int)$row['attempts'] >= $maxAttempts) {
+        if ($blockMinutes > 0) {
+            $blockedUntil = $now + ($blockMinutes * 60);
+
+            $stmt = $pdo->prepare('
+                UPDATE login_rate_limits
+                SET blocked_until = ?
+                WHERE rate_limit_key = ?
+            ');
+
+            $stmt->execute([$blockedUntil, $key]);
+        }
+
+        return false;
+    }
+
+    $attempts = (int)$row['attempts'] + 1;
+    $blockedUntil = null;
+
+    if ($blockMinutes > 0 && $attempts >= $maxAttempts) {
+        $blockedUntil = $now + ($blockMinutes * 60);
+    }
+
+    $stmt = $pdo->prepare('
+        UPDATE login_rate_limits
+        SET
+            attempts = ?,
+            last_attempt_at = ?,
+            blocked_until = ?
+        WHERE rate_limit_key = ?
+    ');
+
+    $stmt->execute([$attempts, $now, $blockedUntil, $key]);
+
+    return true;
+}
+
+function resetRateLimitKey(PDO $pdo, string $key): void {
+    $stmt = $pdo->prepare('
+        DELETE FROM login_rate_limits
+        WHERE rate_limit_key = ?
+    ');
+
+    $stmt->execute([$key]);
+}
+
+function checkLoginRateLimit(PDO $pdo, string $ip, string $email): array {
+    $ipCheck = checkRateLimitKey(
+        $pdo,
+        getLoginIpKey($ip),
+        LOGIN_IP_MAX_ATTEMPTS,
+        LOGIN_IP_WINDOW_MINUTES,
+        LOGIN_IP_BLOCK_MINUTES
+    );
+
+    if ($ipCheck['limited']) {
+        return $ipCheck;
+    }
+
+    return checkRateLimitKey(
+        $pdo,
+        getLoginAccountKey($email),
+        LOGIN_ACCOUNT_MAX_ATTEMPTS,
+        LOGIN_ACCOUNT_WINDOW_MINUTES,
+        LOGIN_ACCOUNT_BLOCK_MINUTES
+    );
+}
+
+function getLoginRateLimitStatus(PDO $pdo, string $ip, string $email): array {
+    $ipCheck = checkRateLimitKey(
+        $pdo,
+        getLoginIpKey($ip),
+        LOGIN_IP_MAX_ATTEMPTS,
+        LOGIN_IP_WINDOW_MINUTES,
+        LOGIN_IP_BLOCK_MINUTES
+    );
+
+    if ($ipCheck['limited']) {
+        return [
+            'limited' => true,
+            'retry_after' => $ipCheck['retry_after'],
+            'attempts' => null,
+            'attempts_left' => 0,
+            'warning' => false,
+            'reason' => 'ip'
+        ];
+    }
+
+    $accountKey = getLoginAccountKey($email);
+
+    $accountCheck = checkRateLimitKey(
+        $pdo,
+        $accountKey,
+        LOGIN_ACCOUNT_MAX_ATTEMPTS,
+        LOGIN_ACCOUNT_WINDOW_MINUTES,
+        LOGIN_ACCOUNT_BLOCK_MINUTES
+    );
+
+    if ($accountCheck['limited']) {
+        return [
+            'limited' => true,
+            'retry_after' => $accountCheck['retry_after'],
+            'attempts' => LOGIN_ACCOUNT_MAX_ATTEMPTS,
+            'attempts_left' => 0,
+            'warning' => false,
+            'reason' => 'account'
+        ];
+    }
+
+    $row = getRateLimitRow($pdo, $accountKey);
+    $attempts = 0;
+
+    if ($row) {
+        $windowStart = time() - (LOGIN_ACCOUNT_WINDOW_MINUTES * 60);
+
+        if ((int)$row['last_attempt_at'] >= $windowStart) {
+            $attempts = (int)$row['attempts'];
+        }
+    }
+
+    if ($attempts >= LOGIN_ACCOUNT_MAX_ATTEMPTS) {
+        $blockedUntil = time() + (LOGIN_ACCOUNT_BLOCK_MINUTES * 60);
+
+        $stmt = $pdo->prepare('
+            UPDATE login_rate_limits
+            SET blocked_until = ?
+            WHERE rate_limit_key = ?
+        ');
+
+        $stmt->execute([$blockedUntil, $accountKey]);
+
+        return [
+            'limited' => true,
+            'retry_after' => LOGIN_ACCOUNT_BLOCK_MINUTES * 60,
+            'attempts' => $attempts,
+            'attempts_left' => 0,
+            'warning' => false,
+            'reason' => 'account'
+        ];
+    }
+
+    $attemptsLeft = max(0, LOGIN_ACCOUNT_MAX_ATTEMPTS - $attempts);
+
+    $warningThreshold = defined('LOGIN_WARNING_FAILED_ATTEMPTS')
+        ? LOGIN_WARNING_FAILED_ATTEMPTS
+        : max(1, LOGIN_ACCOUNT_MAX_ATTEMPTS - 1);
+
+    $warning = ($attempts >= $warningThreshold && $attempts < LOGIN_ACCOUNT_MAX_ATTEMPTS);
+
+    return [
+        'limited' => false,
+        'retry_after' => 0,
+        'attempts' => $attempts,
+        'attempts_left' => $attemptsLeft,
+        'warning' => $warning,
+        'reason' => null
+    ];
+}
+
+function recordFailedLogin(PDO $pdo, string $ip, string $email): void {
+    recordRateLimitFailureForKey(
+        $pdo,
+        getLoginIpKey($ip),
+        LOGIN_IP_MAX_ATTEMPTS,
+        LOGIN_IP_WINDOW_MINUTES,
+        LOGIN_IP_BLOCK_MINUTES
+    );
+
+    recordRateLimitFailureForKey(
+        $pdo,
+        getLoginAccountKey($email),
+        LOGIN_ACCOUNT_MAX_ATTEMPTS,
+        LOGIN_ACCOUNT_WINDOW_MINUTES,
+        LOGIN_ACCOUNT_BLOCK_MINUTES
+    );
+}
+
+function resetLoginRateLimit(PDO $pdo, string $ip, string $email): void {
+    resetRateLimitKey(
+        $pdo,
+        getLoginAccountKey($email)
+    );
+}
+
+function cleanupLoginRateLimits(PDO $pdo, int $olderThanSeconds = 86400): int {
+    $stmt = $pdo->prepare('
+        DELETE FROM login_rate_limits
+        WHERE last_attempt_at < ?
+    ');
+
+    $stmt->execute([time() - $olderThanSeconds]);
+
+    return $stmt->rowCount();
+}
+
 function canGenerateToken($showtimeId) {
-    if (!isset($_SESSION['user_id'])) return false;
+    if (!isset($_SESSION['user_id'])) {
+        return false;
+    }
 
     $key = 'token_generations_' . $_SESSION['user_id'] . '_' . $showtimeId;
     $now = time();
@@ -917,27 +1458,22 @@ function canGenerateToken($showtimeId) {
     }
 
     $_SESSION[$key]['count']++;
+
     return true;
 }
 
 function checkRateLimit($action, $maxAttempts = 10, $windowMinutes = 5) {
-    $key = 'rate_limit_' . $action . '_' . $_SERVER['REMOTE_ADDR'];
-    $now = time();
+    global $pdo;
 
-    if (!isset($_SESSION[$key])) {
-        $_SESSION[$key] = ['count' => 0, 'window_start' => $now];
-    }
+    $key = 'action:' . $action . ':ip:' . getLoginIp();
 
-    if ($now - $_SESSION[$key]['window_start'] > ($windowMinutes * 60)) {
-        $_SESSION[$key] = ['count' => 0, 'window_start' => $now];
-    }
-
-    if ($_SESSION[$key]['count'] >= $maxAttempts) {
-        return false;
-    }
-
-    $_SESSION[$key]['count']++;
-    return true;
+    return consumeRateLimitKey(
+        $pdo,
+        $key,
+        $maxAttempts,
+        $windowMinutes,
+        0
+    );
 }
 
 // ============================================
@@ -950,6 +1486,7 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
         JOIN movies m ON s.movie_id = m.id
         WHERE s.id = ? AND s.is_active = 1
     ");
+
     $stmt->execute([$showtimeId]);
     $showtime = $stmt->fetch();
 
@@ -980,7 +1517,11 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
 
     foreach ($validTypes as $type) {
         $count = intval($ticketsData[$type] ?? 0);
-        if ($count < 0) $count = 0;
+
+        if ($count < 0) {
+            $count = 0;
+        }
+
         $totalSeats += $count;
 
         switch ($type) {
@@ -1006,6 +1547,7 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
         JOIN rooms r ON s.room_id = r.id
         WHERE s.id = ?
     ");
+
     $stmt->execute([$showtimeId]);
     $room = $stmt->fetch();
 
@@ -1013,17 +1555,32 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
         return ['error' => 'Sala no encontrada'];
     }
 
-    // 🔽 🔽 🔽 CORRECCIÓN DE BUG APLICADA AQUÍ 🔽 🔽 🔽
-    // Se excluyen los asientos en estado 'hold' que pertenecen al usuario actual
-    // Esto evita el error de "No hay suficientes asientos" al comprar los últimos asientos de la sala
+    $currentUserId = $_SESSION['user_id'] ?? 0;
+
     $stmt = $pdo->prepare("
-        SELECT seat_code FROM tickets 
-        WHERE showtime_id = ? 
-        AND NOT (user_id = ? AND status = 'hold')
+        SELECT DISTINCT t.seat_code
+        FROM tickets t
+        WHERE t.showtime_id = ?
+          AND NOT (t.user_id = ? AND t.status = 'hold')
+          AND (
+              t.status = 'confirmed'
+              OR (
+                  t.status = 'hold'
+                  AND EXISTS (
+                      SELECT 1
+                      FROM purchases p
+                      WHERE p.user_id = t.user_id
+                        AND p.showtime_id = t.showtime_id
+                        AND p.status = 'pending'
+                        AND p.expires_at > NOW()
+                  )
+              )
+          )
     ");
-    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
+
+    $stmt->execute([$showtimeId, $currentUserId]);
+
     $occupiedSeats = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    // 🔼 🔼 🔼 FIN DE LA CORRECCIÓN 🔼 🔼 🔼
 
     $layout = json_decode($room['seat_layout'], true);
     $blockedSeats = $layout['blockedSeats'] ?? [];

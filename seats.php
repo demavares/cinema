@@ -408,7 +408,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 
 <?php require_once 'footer.php'; ?>
 
-<script>
+<script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
 const totalSeatsNeeded = <?= $totalSeats ?>;
 const showtimeId = <?= $showtime['id'] ?>;
 const totalAmount = <?= $totalAmount ?>;

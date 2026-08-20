@@ -915,7 +915,7 @@ body {
 
 <?php require_once 'footer.php'; ?>
 
-<script>
+<script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
 document.addEventListener('DOMContentLoaded', function() {
     const showtimeId = <?= intval($showtimeId) ?>;
 

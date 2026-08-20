@@ -52,7 +52,7 @@ function validateGetAction($action, $id) {
     return true;
 }
 
-function secureFileUpload($file, $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'], $max_size = 2097152) {
+function secureFileUpload($file, $allowed_types = ['image/jpeg', 'image/jpg','image/png', 'image/gif', 'image/webp'], $max_size = 2097152) {
     if ($file['error'] !== UPLOAD_ERR_OK) {
         return ['success' => false, 'error' => 'Error al subir el archivo.'];
     }
@@ -66,7 +66,7 @@ function secureFileUpload($file, $allowed_types = ['image/jpeg', 'image/png', 'i
         return ['success' => false, 'error' => 'Tipo de archivo no permitido.'];
     }
     $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-    $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
+    $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
     if (!in_array($extension, $allowed_extensions)) {
         return ['success' => false, 'error' => 'Extensión de archivo no permitida.'];
     }
@@ -761,7 +761,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     $image_path = '';
                     if (isset($_FILES['food_image']) && $_FILES['food_image']['error'] === UPLOAD_ERR_OK) {
-                        $upload_result = secureFileUpload($_FILES['food_image'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'], 2097152);
+                        $upload_result = secureFileUpload($_FILES['food_image'], ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'], 2097152);
                         if (!$upload_result['success']) {
                             $error = $upload_result['error'];
                         } else {
@@ -808,7 +808,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 try {
                     $image_path = null;
                     if (isset($_FILES['food_image']) && $_FILES['food_image']['error'] === UPLOAD_ERR_OK) {
-                        $upload_result = secureFileUpload($_FILES['food_image'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'], 2097152);
+                        $upload_result = secureFileUpload($_FILES['food_image'], ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'], 2097152);
                         if (!$upload_result['success']) {
                             $error = $upload_result['error'];
                         } else {
