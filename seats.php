@@ -549,8 +549,20 @@ document.getElementById('btnBackToPrices').addEventListener('click', function() 
 });
 
 window.addEventListener('pageshow', function(event) {
-    if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
-        liberarAsientos();
+    // Detectar recarga (F5) o restauración desde bfcache (botón atrás)
+    const navEntry = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || null;
+    const isReload = event.persisted
+        || (navEntry && navEntry.type === 'reload')
+        || (window.performance && window.performance.navigation && window.performance.navigation.type === 2);
+
+    if (isReload) {
+        // CORREGIDO: Con un solo F5, liberar asientos y redirigir
+        // inmediatamente a index con el aviso "¡Sesión Expirada!".
+        // (Antes el beacon se procesaba después del render y hacía falta un segundo F5)
+        skipUnloadRelease = true; // evita un beacon duplicado durante el redirect
+        liberarAsientos(function() {
+            window.location.replace('index.php?expired=1');
+        });
     }
 });
 
@@ -675,7 +687,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.classList.add(isAccessible ? 'seat-accessible' : 'seat-available');
             } else {
                 if (selectedSeats.length >= maxSeats) {
-                    showNotification(`⚠️ Ya tienes ${maxSeats} asientos seleccionados.`, 'warning', 4000);
+                    showNotification(`Ya tienes ${maxSeats} asientos seleccionados.`, 'warning', 4000);
                     return;
                 }
 

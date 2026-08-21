@@ -220,8 +220,9 @@ padding: 16px 18px;
 <i class="fas fa-clock" id="timeoutIcon"></i>
 <span>Tu sesión expirará en <span class="countdown" id="countdownTimer">10:00</span></span>
 </div>
-<span class="ml-auto text-xs sm:text-sm" id="timeoutStatus">Los asientos se liberarán automáticamente</span>
+<span class="md:ml-auto text-xs sm:text-sm" id="timeoutStatus">Los asientos se liberarán automáticamente</span>
 </div>
+
 <div class="flex flex-col lg:flex-row gap-6">
 <div class="flex-1 min-w-0">
 <h2 class="text-2xl font-bold text-gray-800 mb-1">💳 Método de Pago</h2>
@@ -380,7 +381,7 @@ selectPayment(method);
 }
 });
 });
-// ✅ Listener para el submit del formulario de pago
+// Listener para el submit del formulario de pago
 const paymentForm = document.getElementById('paymentForm');
 if (paymentForm) {
 paymentForm.addEventListener('submit', function(e) {
@@ -389,7 +390,7 @@ e.preventDefault();
 alert('Por favor, selecciona un método de pago.');
 return false;
 }
-// ✅ Activar bandera para evitar liberar asientos al pagar
+// Activar bandera para evitar liberar asientos al pagar
 skipUnloadRelease = true;
 return true;
 });

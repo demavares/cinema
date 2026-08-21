@@ -322,7 +322,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
             <i class="fas fa-clock" id="timeoutIcon"></i>
             <span>Tu sesión expirará en <span class="countdown" id="countdownTimer">10:00</span></span>
         </div>
-        <span class="ml-auto text-xs sm:text-sm" id="timeoutStatus">Los asientos se liberarán automáticamente</span>
+        <span class="md:ml-auto text-xs sm:text-sm" id="timeoutStatus">Los asientos se liberarán automáticamente</span>
     </div>
 
     <div class="flex flex-col lg:flex-row gap-6">
@@ -469,7 +469,7 @@ let cart = {};
 
 let totalFoodPrice = 0;
 
-// ✅ Bandera para evitar liberar asientos al navegar hacia pagar
+// Bandera para evitar liberar asientos al navegar hacia pagar
 let skipUnloadRelease = false;
 
 function formatCurrency(amount) {
@@ -499,20 +499,6 @@ document.getElementById('btnBackToTickets').addEventListener('click', function()
             alert('Error al liberar asientos. Intenta nuevamente.');
         }
     });
-});
-
-window.addEventListener('pageshow', function(event) {
-    if (event.persisted || (window.performance && window.performance.navigation.type === 2)) {
-        liberarAsientos();
-    }
-});
-
-window.addEventListener('beforeunload', function() {
-    if (skipUnloadRelease) return;
-
-    const formData = new FormData();
-    formData.append('showtime_id', showtimeId);
-    navigator.sendBeacon('liberar_asientos.php', formData);
 });
 
 function updateCartUI() {
