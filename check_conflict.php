@@ -24,7 +24,7 @@ $duration = intval($_POST['duration'] ?? 0);
 $exclude_id = isset($_POST['exclude_id']) ? intval($_POST['exclude_id']) : null;
 
 // ============================================
-// ✅ VALIDAR DATOS DE ENTRADA
+// VALIDAR DATOS DE ENTRADA
 // ============================================
 if (empty($room_id) || empty($show_date) || empty($show_time) || $duration <= 0) {
     echo json_encode(['error' => 'Datos incompletos']);
@@ -48,27 +48,26 @@ if (strlen($show_time) === 5) {
     $show_time .= ':00';
 }
 
-// ✅ Validar duración razonable (1 minuto a 12 horas)
+// Validar duración razonable (1 minuto a 12 horas)
 if ($duration < 1 || $duration > 720) {
     echo json_encode(['error' => 'Duración inválida']);
     exit;
 }
 
 // ============================================
-// ✅ OBTENER EL NOMBRE DE LA SALA
+// OBTENER EL NOMBRE DE LA SALA
 // ============================================
 try {
     $stmt = $pdo->prepare("SELECT name FROM rooms WHERE id = ?");
     $stmt->execute([$room_id]);
     $room = $stmt->fetch();
-    
+
     if (!$room) {
         echo json_encode(['error' => 'Sala no encontrada']);
         exit;
     }
-    
+
     $room_name = htmlspecialchars($room['name'], ENT_QUOTES, 'UTF-8');
-    
 } catch (PDOException $e) {
     error_log("Error en check_conflict.php: " . $e->getMessage());
     echo json_encode(['error' => 'Error interno del servidor']);
@@ -85,9 +84,9 @@ try {
         echo json_encode(['error' => 'Función de verificación no disponible']);
         exit;
     }
-    
+
     $result = checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration, $exclude_id);
-    
+
     // Agregar mensaje personalizado según el resultado
     if (!$result['conflict']) {
         if (empty($result['message'])) {
@@ -99,26 +98,24 @@ try {
             $result['message'] = str_replace('sala sala', 'sala', $result['message']);
         }
     }
-    
+
     if (isset($result['message'])) {
         $result['message'] = htmlspecialchars($result['message'], ENT_QUOTES, 'UTF-8');
     }
-    
+
     if (isset($result['conflicting_showtime']['title'])) {
         $result['conflicting_showtime']['title'] = htmlspecialchars($result['conflicting_showtime']['title'], ENT_QUOTES, 'UTF-8');
     }
     if (isset($result['conflicting_showtime']['room_name'])) {
         $result['conflicting_showtime']['room_name'] = htmlspecialchars($result['conflicting_showtime']['room_name'], ENT_QUOTES, 'UTF-8');
     }
-    
+
     unset($result['debug']);
-    
+
     echo json_encode($result);
     exit;
-    
 } catch (Exception $e) {
     error_log("Error verificando conflictos: " . $e->getMessage());
     echo json_encode(['error' => 'Error al verificar conflictos: ' . $e->getMessage()]);
     exit;
 }
-?>

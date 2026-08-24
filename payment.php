@@ -3,13 +3,13 @@ require_once 'config.php';
 // ✅ Verificar sesión expirada
 checkSessionExpired();
 if (!isset($_SESSION['user_id'])) {
-header('Location: login.php');
-exit;
+    header('Location: login.php');
+    exit;
 }
 $showtimeId = isset($_GET['showtime_id']) ? intval($_GET['showtime_id']) : 0;
 if ($showtimeId <= 0) {
-header('Location: index.php');
-exit;
+    header('Location: index.php');
+    exit;
 }
 // ✅ Verificar sesión expirada específica para este showtime
 checkSessionExpired($showtimeId);
@@ -21,39 +21,63 @@ $sessionSeatsKey = 'food_seats_' . $showtimeId;
 $sessionTimeoutKey = 'food_timeout_' . $showtimeId;
 $sessionFoodKey = 'food_order_' . $showtimeId;
 if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true) {
-header('Location: seats.php?showtime_id=' . $showtimeId . '&error=session_expired');
-exit;
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=session_expired');
+    exit;
 }
 if (isset($_SESSION[$sessionTimeoutKey]) && $_SESSION[$sessionTimeoutKey] <= 0) {
-header('Location: index.php?timeout=1');
-exit;
+    header('Location: index.php?timeout=1');
+    exit;
 }
 // Verificar token
 $token = $_SESSION['purchase_token_' . $showtimeId] ?? '';
 if (!verifyPurchaseToken($token, $showtimeId)) {
-header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
-exit;
+    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=Token+inválido+o+expirado');
+    exit;
 }
 $seats = $_SESSION[$sessionSeatsKey] ?? '';
 if (empty($seats)) {
-header('Location: seats.php?showtime_id=' . $showtimeId . '&error=no_seats');
-exit;
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=no_seats');
+    exit;
 }
 $seatsArray = explode(',', $seats);
 $ticketCount = count($seatsArray);
+// ============================================
+// ✅ NUEVO: VERIFICAR Y RESTAURAR LA RESERVA EN BD (MODO GRACIA)
+// Si venimos de un unload (gracia de 20 s), de un F5 o de "Volver a Comida",
+// la compra pending aún existe y la extendemos de nuevo a 10 minutos.
+// Si ya no existe, regresamos a comida (que a su vez redirige a asientos).
+// ============================================
+$stmtPending = $pdo->prepare("
+    SELECT id FROM purchases
+    WHERE user_id = ? AND showtime_id = ? AND status = 'pending' AND expires_at > NOW()
+");
+$stmtPending->execute([$_SESSION['user_id'], $showtimeId]);
+$pendingPurchase = $stmtPending->fetch();
+if (!$pendingPurchase) {
+    error_log("⚠️ payment.php - Reserva no vigente para showtime $showtimeId. Regresando a comida.");
+    header('Location: food_menu.php?showtime_id=' . $showtimeId . '&from=payment');
+    exit;
+}
+// ✅ Cancela la gracia y restaura la reserva (10 min)
+try {
+    $stmtRestore = $pdo->prepare("UPDATE purchases SET expires_at = DATE_ADD(NOW(), INTERVAL 600 SECOND) WHERE id = ?");
+    $stmtRestore->execute([$pendingPurchase['id']]);
+} catch (Exception $e) {
+    error_log("⚠️ payment.php: Error extendiendo reserva: " . $e->getMessage());
+}
 // Obtener datos del showtime
 $stmt = $pdo->prepare("
-SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.duration, r.name as room_name
-FROM showtimes s
-JOIN movies m ON s.movie_id = m.id
-JOIN rooms r ON s.room_id = r.id
-WHERE s.id = ? AND s.is_active = 1
+    SELECT s.*, m.id as movie_id, m.title, m.poster_url, m.duration, r.name as room_name
+    FROM showtimes s
+    JOIN movies m ON s.movie_id = m.id
+    JOIN rooms r ON s.room_id = r.id
+    WHERE s.id = ? AND s.is_active = 1
 ");
 $stmt->execute([$showtimeId]);
 $showtime = $stmt->fetch();
 if (!$showtime) {
-header('Location: index.php');
-exit;
+    header('Location: index.php');
+    exit;
 }
 // ============================================
 // ✅ CORREGIDO: VALIDAR QUE EL SHOWTIME NO HAYA PASADO
@@ -61,34 +85,34 @@ exit;
 $showtimeDateTime = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']);
 $currentDateTime = time();
 if ($showtimeDateTime < $currentDateTime) {
-error_log("❌ payment.php: Intento de acceder a showtime pasado");
-header('Location: index.php?error=Este+horario+ya+no+está+disponible');
-exit;
+    error_log("❌ payment.php: Intento de acceder a showtime pasado");
+    header('Location: index.php?error=Este+horario+ya+no+está+disponible');
+    exit;
 }
 // Validar con margen de seguridad (15 minutos antes del inicio)
 $safetyMargin = 15 * 60;
 if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
-error_log("⚠️ payment.php: Showtime muy próximo a iniciar");
-header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Este+horario+está+por+iniciar.+Selecciona+otro');
-exit;
+    error_log("⚠️ payment.php: Showtime muy próximo a iniciar");
+    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Este+horario+está+por+iniciar.+Selecciona+otro');
+    exit;
 }
 // Obtener datos de boletos
 $ticketsData = $_SESSION['ticket_quantities_' . $showtimeId] ?? null;
 // Calcular subtotal base
 $baseSubtotal = 0;
 if ($ticketsData) {
-$priceAdult = floatval($showtime['price_adult'] ?? $showtime['price'] ?? 0);
-$priceChild = floatval($showtime['price_child'] ?? 0);
-$priceSenior = floatval($showtime['price_senior'] ?? 0);
-$promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
-if (in_array('lunes_mitad', $promotions) && date('N') == 1) {
-$priceAdult /= 2; $priceChild /= 2; $priceSenior /= 2;
-}
-$baseSubtotal = (intval($ticketsData['adult'] ?? 0) * $priceAdult) +
-(intval($ticketsData['child'] ?? 0) * $priceChild) +
-(intval($ticketsData['senior'] ?? 0) * $priceSenior);
+    $priceAdult = floatval($showtime['price_adult'] ?? $showtime['price'] ?? 0);
+    $priceChild = floatval($showtime['price_child'] ?? 0);
+    $priceSenior = floatval($showtime['price_senior'] ?? 0);
+    $promotions = $showtime['promotions'] ? explode(',', $showtime['promotions']) : [];
+    if (in_array('lunes_mitad', $promotions) && date('N') == 1) {
+        $priceAdult /= 2; $priceChild /= 2; $priceSenior /= 2;
+    }
+    $baseSubtotal = (intval($ticketsData['adult'] ?? 0) * $priceAdult) +
+        (intval($ticketsData['child'] ?? 0) * $priceChild) +
+        (intval($ticketsData['senior'] ?? 0) * $priceSenior);
 } else {
-$baseSubtotal = $ticketCount * getShowtimePrice($showtime);
+    $baseSubtotal = $ticketCount * getShowtimePrice($showtime);
 }
 $stmt = $pdo->query("SELECT tax_rate FROM tax_config WHERE is_active = 1 LIMIT 1");
 $tax = $stmt->fetch();
@@ -98,31 +122,31 @@ $foodOrder = isset($_SESSION[$sessionFoodKey]) ? json_decode($_SESSION[$sessionF
 $totalFoodPrice = 0;
 $foodItems = [];
 if (!empty($foodOrder)) {
-$foodIds = array_column($foodOrder, 'id');
-if (!empty($foodIds)) {
-$placeholders = implode(',', array_fill(0, count($foodIds), '?'));
-$stmt = $pdo->prepare("SELECT * FROM food_items WHERE id IN ($placeholders) AND is_active = 1");
-$stmt->execute($foodIds);
-$availableFood = $stmt->fetchAll();
-foreach ($availableFood as $item) {
-foreach ($foodOrder as $order) {
-if ($order['id'] == $item['id']) {
-$qty = intval($order['quantity']);
-if ($qty > 0) {
-$foodItems[] = [
-'id' => $item['id'],
-'name' => $item['name'],
-'quantity' => $qty,
-'price' => $item['price'],
-'total' => $item['price'] * $qty
-];
-$totalFoodPrice += $item['price'] * $qty;
-}
-break;
-}
-}
-}
-}
+    $foodIds = array_column($foodOrder, 'id');
+    if (!empty($foodIds)) {
+        $placeholders = implode(',', array_fill(0, count($foodIds), '?'));
+        $stmt = $pdo->prepare("SELECT * FROM food_items WHERE id IN ($placeholders) AND is_active = 1");
+        $stmt->execute($foodIds);
+        $availableFood = $stmt->fetchAll();
+        foreach ($availableFood as $item) {
+            foreach ($foodOrder as $order) {
+                if ($order['id'] == $item['id']) {
+                    $qty = intval($order['quantity']);
+                    if ($qty > 0) {
+                        $foodItems[] = [
+                            'id' => $item['id'],
+                            'name' => $item['name'],
+                            'quantity' => $qty,
+                            'price' => $item['price'],
+                            'total' => $item['price'] * $qty
+                        ];
+                        $totalFoodPrice += $item['price'] * $qty;
+                    }
+                    break;
+                }
+            }
+        }
+    }
 }
 $subtotalWithFood = $baseSubtotal + $totalFoodPrice;
 $taxAmountWithFood = $subtotalWithFood * ($taxRate / 100);
@@ -147,12 +171,12 @@ require_once 'header.php';
 body { background-color: #ffffff !important; color: #1f2937 !important; }
 .bg-\[\#14141e\] { background-color: #ffffff !important; }
 .border-\[\#1e1e2e\] { border-color: #e2e8f0 !important; }
-.timeout-warning { padding: 16px 24px; border-radius: 10px; font-size: 1rem; margin-top: 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 14px; position: sticky; top: 90px; z-index: 50; backdrop-filter: blur(12px); transition: all 0.5s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+.timeout-warning { padding: 16px 24px; border-radius: 10px; font-size: 1rem; margin-top: 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 14px; position: sticky; top: 90px; z-index: 40; backdrop-filter: blur(12px); transition: all 0.5s ease; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
 .timeout-warning.normal { background: #eef2ff; border: 1px solid #c7d2fe; color: #3730a3; }
 .timeout-warning.warning { background: #fef3c7; border: 1px solid #fde68a; color: #92400e; }
 .timeout-warning.danger { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; animation: pulse-danger 1s ease-in-out infinite; }
 @keyframes pulse-danger { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } }
-.timeout-warning .countdown { font-weight: 700; font-size: 1.3rem; min-width: 60px; text-align: center; }
+.timeout-warning .countdown { font-weight: 700; font-size: 1.3rem; min-width: 95px; text-align: center; }
 .timeout-warning.normal .countdown { color: #4338ca; }
 .timeout-warning.warning .countdown { color: #b45309; }
 .timeout-warning.danger .countdown { color: #dc2626; animation: pulse-countdown 0.5s ease-in-out infinite; }
@@ -174,7 +198,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .payment-methods { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
 .payment-method { background: #ffffff; border: 2px solid #e2e8f0; border-radius: 12px; padding: 24px 20px; cursor: pointer; transition: all 0.3s ease; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
 .payment-method:hover { border-color: #6366f1; transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.08); }
-.payment-method.selected { border-color: #4f46e5; background: #f5f3ff; box-shadow: 0 0 20px rgba(99, 102, 241, 0.15); }
+.payment-method.selected { border-color: #4f46e5; background: #f5f3ff; box-shadow: 0 0 20px rgba(99,102,241,0.15); }
 .payment-method .icon { font-size: 2.5rem; margin-bottom: 8px; display: block; }
 .payment-method .name { color: #0f172a; font-weight: 700; font-size: 1.1rem; }
 .payment-method .description { color: #475569; font-size: 0.9rem; margin-top: 4px; }
@@ -183,9 +207,9 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .payment-details.active { display: block; }
 .payment-details label { color: #334155; font-size: 0.95rem; font-weight: 600; display: block; margin-bottom: 6px; }
 .payment-details input, .payment-details select { width: 100%; padding: 12px 14px; background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px; color: #0f172a; font-size: 1rem; margin-bottom: 16px; transition: border-color 0.3s ease; }
-.payment-details input:focus, .payment-details select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
+.payment-details input:focus, .payment-details select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
 .btn-pay { background: linear-gradient(135deg, #22c55e, #16a34a); color: white; padding: 14px 30px; border-radius: 8px; font-weight: 700; border: none; cursor: pointer; transition: all 0.3s ease; width: 100%; font-size: 1.15rem; margin-top: 24px; }
-.btn-pay:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(34, 197, 94, 0.3); }
+.btn-pay:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(34,197,94,0.3); }
 .btn-pay:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
 .btn-back { background: #ffffff; border: 1px solid #cbd5e1; color: #334155 !important; padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 0.95rem; transition: all 0.3s ease; cursor: pointer; width: 100%; text-align: center; text-decoration: none; display: block; }
 .btn-back:hover { border-color: #6366f1; color: #4f46e5 !important; background: #eef2ff; }
@@ -202,15 +226,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .payment-methods { grid-template-columns: 1fr 1fr; gap: 12px; }
 .payment-method { padding: 18px 12px; }
 .card-summary { padding: 18px; }
-.timeout-warning {
-top: 85px;
-flex-direction: column;
-align-items: center;
-justify-content: center;
-text-align: center;
-gap: 6px;
-padding: 16px 18px;
-}
+.timeout-warning { top: 85px; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; padding: 16px 18px; }
 .timeout-warning .countdown { min-width: auto; }
 }
 </style>
@@ -218,11 +234,10 @@ padding: 16px 18px;
 <div class="timeout-warning normal" id="timeoutWarning">
 <div class="flex items-center gap-2">
 <i class="fas fa-clock" id="timeoutIcon"></i>
-<span>Tu sesión expirará en <span class="countdown" id="countdownTimer">10:00</span></span>
+<span>Tu sesión expirará en <span class="countdown" id="countdownTimer">10:00 min</span></span>
 </div>
 <span class="md:ml-auto text-xs sm:text-sm" id="timeoutStatus">Los asientos se liberarán automáticamente</span>
 </div>
-
 <div class="flex flex-col lg:flex-row gap-6">
 <div class="flex-1 min-w-0">
 <h2 class="text-2xl font-bold text-gray-800 mb-1">💳 Método de Pago</h2>
@@ -309,14 +324,14 @@ padding: 16px 18px;
 $ticketTypes = ['adult' => 'Adulto', 'child' => 'Niño', 'senior' => 'Tercera Edad'];
 $hasTickets = false;
 if ($ticketsData) {
-foreach ($ticketTypes as $key => $label) {
-$qty = $ticketsData[$key] ?? 0;
-if ($qty > 0) {
-$hasTickets = true;
-$price = ${'price' . ucfirst($key)} ?? 0;
-echo '<div class="ticket-summary-item"><span class="ticket-type">' . $qty . ' x ' . $label . '</span><span class="ticket-total">' . formatCurrency($qty * $price, $siteConfig) . '</span></div>';
-}
-}
+    foreach ($ticketTypes as $key => $label) {
+        $qty = $ticketsData[$key] ?? 0;
+        if ($qty > 0) {
+            $hasTickets = true;
+            $price = ${'price' . ucfirst($key)} ?? 0;
+            echo '<div class="ticket-summary-item"><span class="ticket-type">' . $qty . ' x ' . $label . '</span><span class="ticket-total">' . formatCurrency($qty * $price, $siteConfig) . '</span></div>';
+        }
+    }
 }
 if (!$hasTickets) echo '<p class="text-sm text-gray-500">No hay boletos seleccionados</p>';
 ?>
@@ -348,9 +363,7 @@ if (!$hasTickets) echo '<p class="text-sm text-gray-500">No hay boletos seleccio
 </div>
 </div>
 <?php require_once 'footer.php'; ?>
-
 <script src="timeout_manager.js"></script>
-
 <script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
 const showtimeId = <?= $showtimeId ?>;
 const seats = '<?= $seats ?>';
@@ -358,73 +371,94 @@ const purchaseToken = '<?= htmlspecialchars($token) ?>';
 let selectedPayment = null;
 // ✅ Bandera para evitar liberar asientos al pagar
 let skipUnloadRelease = false;
+// ============================================
+// ✅ NUEVO: GRACIA AL SALIR (cerrar pestaña / navegador)
+// NO liberamos de inmediato: marcamos la compra para expirar en 20 s.
+// - Si recargan (F5) o vuelven ("Volver a Comida"), el PHP restaura la reserva.
+// - Si cerraron pestaña/navegador, la compra expira y la limpieza libera.
+// ============================================
+let unloadReleaseSent = false;
+function releaseSeatsOnUnload() {
+    if (skipUnloadRelease || unloadReleaseSent) return;
+    unloadReleaseSent = true;
+    const formData = new FormData();
+    formData.append('showtime_id', showtimeId);
+    formData.append('action', 'grace');
+    if (navigator.sendBeacon) {
+        navigator.sendBeacon('liberar_asientos.php', formData);
+    } else {
+        fetch('liberar_asientos.php', { method: 'POST', body: formData, keepalive: true });
+    }
+}
+window.addEventListener('pagehide', releaseSeatsOnUnload);
+window.addEventListener('beforeunload', releaseSeatsOnUnload);
 document.addEventListener('DOMContentLoaded', function() {
-if (window.TimeoutManager) {
-TimeoutManager.init({
-showtimeId: showtimeId,
-seats: seats,
-initialTimeout: 600,
-syncInterval: 10000,
-redirectOnExpire: true,
-redirectUrl: 'index.php?timeout=1'
-});
-}
-// ============================================
-// ✅ CORREGIDO: Event listeners para métodos de pago
-// Reemplaza los onclick inline que eran bloqueados por CSP
-// ============================================
-document.querySelectorAll('.payment-method[data-payment-method]').forEach(function(methodCard) {
-methodCard.addEventListener('click', function() {
-const method = this.getAttribute('data-payment-method');
-if (method) {
-selectPayment(method);
-}
-});
-});
-// Listener para el submit del formulario de pago
-const paymentForm = document.getElementById('paymentForm');
-if (paymentForm) {
-paymentForm.addEventListener('submit', function(e) {
-if (!selectedPayment) {
-e.preventDefault();
-alert('Por favor, selecciona un método de pago.');
-return false;
-}
-// Activar bandera para evitar liberar asientos al pagar
-skipUnloadRelease = true;
-return true;
-});
-}
+    if (window.TimeoutManager) {
+        TimeoutManager.init({
+            showtimeId: showtimeId,
+            seats: seats,
+            initialTimeout: 600,
+            syncInterval: 10000,
+            redirectOnExpire: true,
+            redirectUrl: 'index.php?timeout=1'
+        });
+    }
+    // ============================================
+    // CORREGIDO: Event listeners para métodos de pago
+    // Reemplaza los onclick inline que eran bloqueados por CSP
+    // ============================================
+    document.querySelectorAll('.payment-method[data-payment-method]').forEach(function(methodCard) {
+        methodCard.addEventListener('click', function() {
+            const method = this.getAttribute('data-payment-method');
+            if (method) {
+                selectPayment(method);
+            }
+        });
+    });
+    // Listener para el submit del formulario de pago
+    const paymentForm = document.getElementById('paymentForm');
+    if (paymentForm) {
+        paymentForm.addEventListener('submit', function(e) {
+            if (!selectedPayment) {
+                e.preventDefault();
+                alert('Por favor, selecciona un método de pago.');
+                return false;
+            }
+            // Activar bandera para evitar liberar asientos al pagar
+            skipUnloadRelease = true;
+            return true;
+        });
+    }
 });
 function selectPayment(method) {
-selectedPayment = method;
-const paymentMethodInput = document.getElementById('paymentMethodInput');
-if (paymentMethodInput) {
-paymentMethodInput.value = method;
-}
-// Remover selección de todos los métodos
-document.querySelectorAll('.payment-method').forEach(function(el) {
-el.classList.remove('selected');
-});
-// Seleccionar el método elegido
-const selectedMethod = document.getElementById('method-' + method);
-if (selectedMethod) {
-selectedMethod.classList.add('selected');
-}
-// Ocultar todos los detalles de pago
-document.querySelectorAll('.payment-details').forEach(function(el) {
-el.classList.remove('active');
-});
-// Mostrar los detalles del método seleccionado
-const selectedDetails = document.getElementById('details-' + method);
-if (selectedDetails) {
-selectedDetails.classList.add('active');
-}
-// Habilitar botón de pago
-const btnPay = document.getElementById('btnPay');
-if (btnPay) {
-btnPay.disabled = false;
-}
+    selectedPayment = method;
+    const paymentMethodInput = document.getElementById('paymentMethodInput');
+    if (paymentMethodInput) {
+        paymentMethodInput.value = method;
+    }
+    // Remover selección de todos los métodos
+    document.querySelectorAll('.payment-method').forEach(function(el) {
+        el.classList.remove('selected');
+    });
+    // Seleccionar el método elegido
+    const selectedMethod = document.getElementById('method-' + method);
+    if (selectedMethod) {
+        selectedMethod.classList.add('selected');
+    }
+    // Ocultar todos los detalles de pago
+    document.querySelectorAll('.payment-details').forEach(function(el) {
+        el.classList.remove('active');
+    });
+    // Mostrar los detalles del método seleccionado
+    const selectedDetails = document.getElementById('details-' + method);
+    if (selectedDetails) {
+        selectedDetails.classList.add('active');
+    }
+    // Habilitar botón de pago
+    const btnPay = document.getElementById('btnPay');
+    if (btnPay) {
+        btnPay.disabled = false;
+    }
 }
 </script>
 </body>

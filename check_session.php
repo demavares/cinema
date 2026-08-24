@@ -2,7 +2,7 @@
 require_once 'config.php';
 
 // ============================================
-// ✅ CONFIGURAR RESPUESTA JSON
+// CONFIGURAR RESPUESTA JSON
 // ============================================
 header('Content-Type: application/json');
 header('Cache-Control: no-cache, no-store, must-revalidate');
@@ -10,7 +10,7 @@ header('Pragma: no-cache');
 header('Expires: 0');
 
 // ============================================
-// ✅ VERIFICAR AUTENTICACIÓN
+// VERIFICAR AUTENTICACIÓN
 // ============================================
 if (!isset($_SESSION['user_id'])) {
     echo json_encode(['valid' => false, 'reason' => 'no_session']);
@@ -20,7 +20,7 @@ if (!isset($_SESSION['user_id'])) {
 $userId = $_SESSION['user_id'];
 
 // ============================================
-// ✅ VALIDAR PARÁMETROS
+// VALIDAR PARÁMETROS
 // ============================================
 $showtimeId = isset($_GET['showtime_id']) ? intval($_GET['showtime_id']) : 0;
 
@@ -31,7 +31,7 @@ if ($showtimeId <= 0) {
 
 try {
     // ============================================
-    // ✅ VERIFICAR QUE EL SHOWTIME EXISTE Y ESTÁ ACTIVO
+    // VERIFICAR QUE EL SHOWTIME EXISTE Y ESTÁ ACTIVO
     // ============================================
     $stmt = $pdo->prepare("
         SELECT s.id, s.is_active, s.show_date, s.show_time
@@ -52,7 +52,7 @@ try {
     }
 
     // ============================================
-    // ✅ CLAVES DE SESIÓN
+    // CLAVES DE SESIÓN
     // ============================================
     $sessionValidKey = 'food_valid_' . $showtimeId;
     $sessionKey = 'food_timeout_' . $showtimeId;
@@ -61,7 +61,7 @@ try {
     $sessionFoodOrderKey = 'food_order_' . $showtimeId;
 
     // ============================================
-    // ✅ VERIFICAR SESIÓN DE COMIDA VÁLIDA
+    // VERIFICAR SESIÓN DE COMIDA VÁLIDA
     // ============================================
     if (!isset($_SESSION[$sessionValidKey]) || $_SESSION[$sessionValidKey] !== true) {
         echo json_encode(['valid' => false, 'reason' => 'invalid_food_session']);
@@ -69,32 +69,32 @@ try {
     }
 
     // ============================================
-    // ✅ CALCULAR TIEMPO RESTANTE (LÓGICA UNIFICADA)
+    // CALCULAR TIEMPO RESTANTE (LÓGICA UNIFICADA)
     // ============================================
     $maxTimeout = 600; // 10 minutos
     $timeLeft = 0;
 
     if (isset($_SESSION[$sessionCreatedKey])) {
-        // ✅ Método principal: calcular desde el timestamp de creación
+        // Método principal: calcular desde el timestamp de creación
         $elapsed = time() - $_SESSION[$sessionCreatedKey];
         $timeLeft = max(0, $maxTimeout - $elapsed);
     } elseif (isset($_SESSION[$sessionKey])) {
-        // ✅ Fallback: usar el valor guardado (compatibilidad con sesiones antiguas)
+        // Fallback: usar el valor guardado (compatibilidad con sesiones antiguas)
         $timeLeft = max(0, intval($_SESSION[$sessionKey]));
     } else {
-        // ✅ Si no hay datos de timeout, asumir sesión inválida
+        // Si no hay datos de timeout, asumir sesión inválida
         echo json_encode(['valid' => false, 'reason' => 'timeout_data_missing']);
         exit;
     }
 
-    // ✅ Sincronizar el valor en sesión
+    // Sincronizar el valor en sesión
     $_SESSION[$sessionKey] = $timeLeft;
 
     // ============================================
-    // ✅ SI EL TIMEOUT EXPIRÓ: LIMPIAR SESIONES
+    // SI EL TIMEOUT EXPIRÓ: LIMPIAR SESIONES
     // ============================================
     if ($timeLeft <= 0) {
-        // ✅ Limpiar TODAS las sesiones relacionadas
+        // Limpiar TODAS las sesiones relacionadas
         $keysToClean = [
             $sessionValidKey,
             $sessionKey,
@@ -117,7 +117,7 @@ try {
             }
         }
 
-        // ✅ Limpiar compra pendiente en BD si existe
+        // Limpiar compra pendiente en BD si existe
         try {
             $stmt = $pdo->prepare("
                 UPDATE purchases 
@@ -127,7 +127,7 @@ try {
                 AND status = 'pending'
             ");
             $stmt->execute([$userId, $showtimeId]);
-            
+
             if ($stmt->rowCount() > 0) {
                 error_log(sprintf(
                     "⏰ Sesión expirada limpiada: user_id=%d, showtime_id=%d",
@@ -152,7 +152,7 @@ try {
     // ✅ OBTENER ASIENTOS Y DATOS ADICIONALES
     // ============================================
     $seats = $_SESSION[$sessionSeatsKey] ?? '';
-    
+
     // ✅ Validar que los asientos no estén vacíos
     if (empty($seats)) {
         echo json_encode(['valid' => false, 'reason' => 'no_seats_selected']);
@@ -178,10 +178,10 @@ try {
         ");
         $stmt->execute([$userId, $showtimeId]);
         $pendingPurchase = $stmt->fetch();
-        
+
         if ($pendingPurchase) {
             $hasPendingPurchase = true;
-            
+
             // ✅ Verificar si la compra en BD también expiró
             if (strtotime($pendingPurchase['expires_at']) < time()) {
                 $stmt = $pdo->prepare("
@@ -211,7 +211,6 @@ try {
         'maxTimeout' => $maxTimeout
     ]);
     exit;
-
 } catch (PDOException $e) {
     error_log("Error en check_session.php: " . $e->getMessage());
     http_response_code(500);
@@ -223,4 +222,3 @@ try {
     echo json_encode(['valid' => false, 'reason' => 'unexpected_error']);
     exit;
 }
-?>

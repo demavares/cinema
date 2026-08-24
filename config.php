@@ -5,34 +5,52 @@
 date_default_timezone_set('America/Caracas');
 
 // ============================================
-// ✅ CSP CON NONCE
+// ✅ CSP CON NONCE (PÚBLICO) / COMPATIBLE (ADMIN)
 // ============================================
 function getCSPNonce(): string {
     static $nonce = null;
-
     if ($nonce === null) {
         $nonce = base64_encode(random_bytes(16));
     }
-
     return $nonce;
 }
-
 $cspNonce = getCSPNonce();
 
 if (!headers_sent()) {
-    $cspDirectives = [
-        "default-src 'self'",
-        "script-src 'self' 'nonce-" . $cspNonce . "' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com",
-        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
-        "img-src 'self' data: https: blob:",
-        "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com",
-        "connect-src 'self'",
-        "object-src 'none'",
-        "base-uri 'self'",
-        "form-action 'self'",
-        "frame-ancestors 'none'",
-        "upgrade-insecure-requests"
-    ];
+    $currentScript = basename($_SERVER['SCRIPT_NAME'] ?? '');
+    $adminScripts = ['admin.php', 'room_builder.php'];
+
+    if (in_array($currentScript, $adminScripts, true)) {
+        // ✅ PANEL ADMIN: compatibilidad con scripts/handlers inline legacy
+        $cspDirectives = [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com",
+            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+            "img-src 'self' data: https: blob:",
+            "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com",
+            "connect-src 'self'",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+            "upgrade-insecure-requests"
+        ];
+    } else {
+        // ✅ PÁGINAS PÚBLICAS: CSP estricta con nonce
+        $cspDirectives = [
+            "default-src 'self'",
+            "script-src 'self' 'nonce-" . $cspNonce . "' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com",
+            "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+            "img-src 'self' data: https: blob:",
+            "font-src 'self' data: https://cdnjs.cloudflare.com https://fonts.gstatic.com",
+            "connect-src 'self'",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'",
+            "frame-ancestors 'none'",
+            "upgrade-insecure-requests"
+        ];
+    }
 
     header("Content-Security-Policy: " . implode('; ', $cspDirectives));
 }
@@ -74,7 +92,8 @@ if (!headers_sent()) {
 // ============================================
 // CARGAR VARIABLES DE ENTORNO DESDE .env
 // ============================================
-function loadEnv($path = '.env') {
+function loadEnv($path = '.env')
+{
     if (!file_exists($path)) {
         error_log("❌ Error: El archivo .env no existe en: " . $path);
         return false;
@@ -98,7 +117,8 @@ function loadEnv($path = '.env') {
             $value = trim($value);
 
             if ((substr($value, 0, 1) === '"' && substr($value, -1) === '"') ||
-                (substr($value, 0, 1) === "'" && substr($value, -1) === "'")) {
+                (substr($value, 0, 1) === "'" && substr($value, -1) === "'")
+            ) {
                 $value = substr($value, 1, -1);
             }
 
@@ -112,7 +132,8 @@ function loadEnv($path = '.env') {
     return true;
 }
 
-function env($key, $default = null) {
+function env($key, $default = null)
+{
     $value = getenv($key);
 
     if ($value === false) {
@@ -145,7 +166,8 @@ function env($key, $default = null) {
  * Registra datos en el log de errores de forma segura,
  * omitiendo campos sensibles.
  */
-function secure_log($data, $message = "Datos procesados") {
+function secure_log($data, $message = "Datos procesados")
+{
     $sensitiveKeys = [
         'password',
         'confirm_password',
@@ -208,7 +230,8 @@ try {
 // ============================================
 // CONFIGURACIÓN DEL SITIO
 // ============================================
-function getSiteConfig($pdo) {
+function getSiteConfig($pdo)
+{
     static $config = null;
 
     if ($config !== null) {
@@ -259,7 +282,8 @@ function getSiteConfig($pdo) {
     }
 }
 
-function getFaviconHref($siteConfig) {
+function getFaviconHref($siteConfig)
+{
     $favicon = trim($siteConfig['site_favicon'] ?? ($siteConfig['favicon'] ?? ''));
 
     if ($favicon === '') {
@@ -283,7 +307,8 @@ function getFaviconHref($siteConfig) {
 // ============================================
 // FORMATEAR MONEDA
 // ============================================
-function formatCurrency($amount, $config = null) {
+function formatCurrency($amount, $config = null)
+{
     if ($config === null) {
         global $pdo;
         $config = getSiteConfig($pdo);
@@ -303,7 +328,8 @@ function formatCurrency($amount, $config = null) {
 // ============================================
 // TMDb
 // ============================================
-function getMovieFromTMDB($title, $year = null) {
+function getMovieFromTMDB($title, $year = null)
+{
     $api_key = TMDB_API_KEY;
 
     if (empty($api_key)) {
@@ -434,7 +460,8 @@ function getMovieFromTMDB($title, $year = null) {
 // ============================================
 // LIBERAR ASIENTOS EXPIRADOS
 // ============================================
-function releaseExpiredSeats($pdo) {
+function releaseExpiredSeats($pdo)
+{
     $currentDateTime = date('Y-m-d H:i:s');
     $total_released = 0;
 
@@ -494,7 +521,8 @@ function releaseExpiredSeats($pdo) {
     return $total_released;
 }
 
-function releaseExpiredSeatsOptimized($pdo) {
+function releaseExpiredSeatsOptimized($pdo)
+{
     $cacheKey = 'last_seat_release_time';
     $cacheInterval = 60;
 
@@ -517,7 +545,8 @@ $released_count = releaseExpiredSeatsOptimized($pdo);
 // ============================================
 // LIMPIEZA AUTOMÁTICA
 // ============================================
-function cleanupExpiredPurchasesPeriodic($pdo) {
+function cleanupExpiredPurchasesPeriodic($pdo)
+{
     try {
         $lastCleanupKey = 'last_cleanup_expired_purchases';
 
@@ -611,7 +640,8 @@ cleanupExpiredPurchasesPeriodic($pdo);
 // ============================================
 // CSRF
 // ============================================
-function generateCSRFToken() {
+function generateCSRFToken()
+{
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
         $_SESSION['csrf_token_created'] = time();
@@ -620,7 +650,8 @@ function generateCSRFToken() {
     return $_SESSION['csrf_token'];
 }
 
-function verifyCSRFToken($token) {
+function verifyCSRFToken($token)
+{
     if (!isset($_SESSION['csrf_token']) || !hash_equals($_SESSION['csrf_token'], $token)) {
         return false;
     }
@@ -631,7 +662,8 @@ function verifyCSRFToken($token) {
     return true;
 }
 
-function isCSRFTokenExpired() {
+function isCSRFTokenExpired()
+{
     if (!isset($_SESSION['csrf_token_created'])) {
         return true;
     }
@@ -644,11 +676,13 @@ function isCSRFTokenExpired() {
 // ============================================
 // TOKENS DE COMPRA
 // ============================================
-function generatePurchaseToken() {
+function generatePurchaseToken()
+{
     return bin2hex(random_bytes(32));
 }
 
-function generatePurchaseTokenWithTimeout($showtimeId, $timeout = 900) {
+function generatePurchaseTokenWithTimeout($showtimeId, $timeout = 900)
+{
     $token = generatePurchaseToken();
 
     $_SESSION['purchase_token_' . $showtimeId] = $token;
@@ -657,7 +691,8 @@ function generatePurchaseTokenWithTimeout($showtimeId, $timeout = 900) {
     return $token;
 }
 
-function verifyPurchaseToken($token, $showtimeId) {
+function verifyPurchaseToken($token, $showtimeId)
+{
     if (empty($token) || empty($showtimeId)) {
         return false;
     }
@@ -679,7 +714,8 @@ function verifyPurchaseToken($token, $showtimeId) {
     return true;
 }
 
-function isPurchaseTokenExpired($showtimeId) {
+function isPurchaseTokenExpired($showtimeId)
+{
     $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
 
     if ($expiresAt === 0) {
@@ -689,7 +725,8 @@ function isPurchaseTokenExpired($showtimeId) {
     return time() > $expiresAt;
 }
 
-function getPurchaseTokenTimeLeft($showtimeId) {
+function getPurchaseTokenTimeLeft($showtimeId)
+{
     $expiresAt = $_SESSION['purchase_expires_at_' . $showtimeId] ?? 0;
 
     if ($expiresAt === 0) {
@@ -699,11 +736,13 @@ function getPurchaseTokenTimeLeft($showtimeId) {
     return max(0, $expiresAt - time());
 }
 
-function markPurchaseTokenAsUsed($showtimeId) {
+function markPurchaseTokenAsUsed($showtimeId)
+{
     $_SESSION['purchase_token_used_' . $showtimeId] = true;
 }
 
-function clearPurchaseSession($showtimeId) {
+function clearPurchaseSession($showtimeId)
+{
     $keys = [
         'purchase_token_' . $showtimeId,
         'purchase_expires_at_' . $showtimeId,
@@ -728,14 +767,16 @@ function clearPurchaseSession($showtimeId) {
     }
 }
 
-function generateTransactionId() {
+function generateTransactionId()
+{
     return 'TXN-' . date('Ymd') . '-' . strtoupper(substr(uniqid(), -8));
 }
 
 // ============================================
 // CONFLICTOS DE HORARIOS
 // ============================================
-function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration, $exclude_id = null) {
+function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration, $exclude_id = null)
+{
     $cleanup_time = 15;
 
     $start_minutes = strtotime($show_time) / 60;
@@ -801,7 +842,8 @@ function checkShowtimeConflict($pdo, $room_id, $show_date, $show_time, $duration
 // ============================================
 // SESIÓN EXPIRADA
 // ============================================
-function checkSessionExpired($showtimeId = null) {
+function checkSessionExpired($showtimeId = null)
+{
     $limite_inactividad = 1800;
 
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $limite_inactividad)) {
@@ -840,25 +882,30 @@ function checkSessionExpired($showtimeId = null) {
 // ============================================
 // FECHAS
 // ============================================
-function getCurrentDate() {
+function getCurrentDate()
+{
     return date('Y-m-d');
 }
 
-function getCurrentDateTime() {
+function getCurrentDateTime()
+{
     return date('Y-m-d H:i:s');
 }
 
-function formatTimeVenezuela($time) {
+function formatTimeVenezuela($time)
+{
     if (empty($time)) return '';
     return date('h:i A', strtotime($time));
 }
 
-function formatDateShort($date) {
+function formatDateShort($date)
+{
     if (empty($date)) return '';
     return date('d/m/Y', strtotime($date));
 }
 
-function formatDateVenezuela($date) {
+function formatDateVenezuela($date)
+{
     if (empty($date)) return '';
 
     $months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -874,7 +921,8 @@ function formatDateVenezuela($date) {
     return "$dayName, $day de $month de $year";
 }
 
-function getDateInSpanish($date) {
+function getDateInSpanish($date)
+{
     if (empty($date)) return '';
 
     $timestamp = strtotime($date);
@@ -890,7 +938,8 @@ function getDateInSpanish($date) {
     return "$dayName, $day de $month de $year";
 }
 
-function formatDuration($minutes) {
+function formatDuration($minutes)
+{
     if ($minutes <= 0) return 'No disponible';
 
     $hours = floor($minutes / 60);
@@ -905,11 +954,13 @@ function formatDuration($minutes) {
     }
 }
 
-function isDatePast($date) {
+function isDatePast($date)
+{
     return strtotime($date) < strtotime(date('Y-m-d'));
 }
 
-function formatDateDayMonth($date) {
+function formatDateDayMonth($date)
+{
     $timestamp = strtotime($date);
 
     $months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -925,7 +976,8 @@ function formatDateDayMonth($date) {
 // ============================================
 // PRECIOS
 // ============================================
-function getShowtimePrice($showtime) {
+function getShowtimePrice($showtime)
+{
     $currentDay = date('N');
 
     if (isset($showtime['half_price_monday']) && $showtime['half_price_monday'] == 1 && $currentDay == 1) {
@@ -935,7 +987,8 @@ function getShowtimePrice($showtime) {
     return $showtime['price'];
 }
 
-function getTicketPrice($movie) {
+function getTicketPrice($movie)
+{
     if (!isset($movie['price'])) {
         return 0;
     }
@@ -949,7 +1002,8 @@ function getTicketPrice($movie) {
     return $movie['price'];
 }
 
-function getTicketPriceByType($showtime, $type) {
+function getTicketPriceByType($showtime, $type)
+{
     $prices = [
         'adult' => $showtime['price_adult'] ?? $showtime['price'] ?? 0,
         'child' => $showtime['price_child'] ?? 0,
@@ -1000,20 +1054,24 @@ if (!defined('LOGIN_WARNING_FAILED_ATTEMPTS')) {
     define('LOGIN_WARNING_FAILED_ATTEMPTS', 4);
 }
 
-function getLoginIp(): string {
+function getLoginIp(): string
+{
     return $_SERVER['REMOTE_ADDR'] ?? 'unknown';
 }
 
-function getLoginIpKey(string $ip): string {
+function getLoginIpKey(string $ip): string
+{
     return 'ip:' . $ip;
 }
 
-function getLoginAccountKey(string $email): string {
+function getLoginAccountKey(string $email): string
+{
     $normalized = strtolower(trim($email));
     return 'account:' . hash('sha256', $normalized);
 }
 
-function getRateLimitRow(PDO $pdo, string $key): ?array {
+function getRateLimitRow(PDO $pdo, string $key): ?array
+{
     $stmt = $pdo->prepare('
         SELECT *
         FROM login_rate_limits
@@ -1279,7 +1337,8 @@ function consumeRateLimitKey(
     return true;
 }
 
-function resetRateLimitKey(PDO $pdo, string $key): void {
+function resetRateLimitKey(PDO $pdo, string $key): void
+{
     $stmt = $pdo->prepare('
         DELETE FROM login_rate_limits
         WHERE rate_limit_key = ?
@@ -1288,7 +1347,8 @@ function resetRateLimitKey(PDO $pdo, string $key): void {
     $stmt->execute([$key]);
 }
 
-function checkLoginRateLimit(PDO $pdo, string $ip, string $email): array {
+function checkLoginRateLimit(PDO $pdo, string $ip, string $email): array
+{
     $ipCheck = checkRateLimitKey(
         $pdo,
         getLoginIpKey($ip),
@@ -1310,7 +1370,8 @@ function checkLoginRateLimit(PDO $pdo, string $ip, string $email): array {
     );
 }
 
-function getLoginRateLimitStatus(PDO $pdo, string $ip, string $email): array {
+function getLoginRateLimitStatus(PDO $pdo, string $ip, string $email): array
+{
     $ipCheck = checkRateLimitKey(
         $pdo,
         getLoginIpKey($ip),
@@ -1401,7 +1462,8 @@ function getLoginRateLimitStatus(PDO $pdo, string $ip, string $email): array {
     ];
 }
 
-function recordFailedLogin(PDO $pdo, string $ip, string $email): void {
+function recordFailedLogin(PDO $pdo, string $ip, string $email): void
+{
     recordRateLimitFailureForKey(
         $pdo,
         getLoginIpKey($ip),
@@ -1419,14 +1481,16 @@ function recordFailedLogin(PDO $pdo, string $ip, string $email): void {
     );
 }
 
-function resetLoginRateLimit(PDO $pdo, string $ip, string $email): void {
+function resetLoginRateLimit(PDO $pdo, string $ip, string $email): void
+{
     resetRateLimitKey(
         $pdo,
         getLoginAccountKey($email)
     );
 }
 
-function cleanupLoginRateLimits(PDO $pdo, int $olderThanSeconds = 86400): int {
+function cleanupLoginRateLimits(PDO $pdo, int $olderThanSeconds = 86400): int
+{
     $stmt = $pdo->prepare('
         DELETE FROM login_rate_limits
         WHERE last_attempt_at < ?
@@ -1437,7 +1501,8 @@ function cleanupLoginRateLimits(PDO $pdo, int $olderThanSeconds = 86400): int {
     return $stmt->rowCount();
 }
 
-function canGenerateToken($showtimeId) {
+function canGenerateToken($showtimeId)
+{
     if (!isset($_SESSION['user_id'])) {
         return false;
     }
@@ -1462,7 +1527,8 @@ function canGenerateToken($showtimeId) {
     return true;
 }
 
-function checkRateLimit($action, $maxAttempts = 10, $windowMinutes = 5) {
+function checkRateLimit($action, $maxAttempts = 10, $windowMinutes = 5)
+{
     global $pdo;
 
     $key = 'action:' . $action . ':ip:' . getLoginIp();
@@ -1479,7 +1545,8 @@ function checkRateLimit($action, $maxAttempts = 10, $windowMinutes = 5) {
 // ============================================
 // VALIDAR Y RECALCULAR PRECIOS
 // ============================================
-function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
+function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData)
+{
     $stmt = $pdo->prepare("
         SELECT s.*, m.duration
         FROM showtimes s
@@ -1609,4 +1676,3 @@ function validateAndRecalculatePrices($pdo, $showtimeId, $ticketsData) {
         'available_seats' => $totalAvailable
     ];
 }
-?>

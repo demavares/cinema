@@ -1,185 +1,155 @@
 <?php
 require_once 'config.php';
-
 if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit;
+header('Location: login.php');
+exit;
 }
-
 $showtimeId = isset($_GET['showtime_id']) ? intval($_GET['showtime_id']) : 0;
-
 if ($showtimeId <= 0) {
-    header('Location: index.php');
-    exit;
+header('Location: index.php');
+exit;
 }
-
 checkSessionExpired($showtimeId);
-
 $fromFood = isset($_GET['from']) && $_GET['from'] === 'food';
-
 $ticketsKey = 'ticket_quantities_' . $showtimeId;
 $totalSeatsKey = 'total_seats_' . $showtimeId;
-
 $ticketsData = $_SESSION[$ticketsKey] ?? null;
 $totalSeats = $_SESSION[$totalSeatsKey] ?? 0;
-
 if (!$ticketsData || $totalSeats <= 0) {
-    header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=No+hay+boletos+seleccionados');
-    exit;
+header('Location: price_selection.php?showtime_id=' . $showtimeId . '&error=No+hay+boletos+seleccionados');
+exit;
 }
-
 $subtotal = $_SESSION['subtotal_' . $showtimeId] ?? 0;
 $taxAmount = $_SESSION['tax_amount_' . $showtimeId] ?? 0;
 $totalAmount = $_SESSION['total_amount_' . $showtimeId] ?? 0;
 $taxRate = $_SESSION['tax_rate_' . $showtimeId] ?? 16;
-
 $stmt = $pdo->prepare("
-    SELECT s.*, m.title, m.poster_url, r.name as room_name, r.seat_layout
-    FROM showtimes s
-    JOIN movies m ON s.movie_id = m.id
-    JOIN rooms r ON s.room_id = r.id
-    WHERE s.id = ? AND s.is_active = 1
+SELECT s.*, m.title, m.poster_url, r.name as room_name, r.seat_layout
+FROM showtimes s
+JOIN movies m ON s.movie_id = m.id
+JOIN rooms r ON s.room_id = r.id
+WHERE s.id = ? AND s.is_active = 1
 ");
 $stmt->execute([$showtimeId]);
 $showtime = $stmt->fetch();
-
 if (!$showtime) {
-    header('Location: index.php?error=Función+no+encontrada');
-    exit;
+header('Location: index.php?error=Función+no+encontrada');
+exit;
 }
-
 $showtimeDateTime = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']);
 $currentDateTime = time();
 $safetyMargin = 15 * 60;
-
 if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
-    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Este+horario+está+por+iniciar.+Selecciona+otro');
-    exit;
+header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Este+horario+está+por+iniciar.+Selecciona+otro');
+exit;
 }
-
 // ============================================
 // 🧹 UNIFICADO: Limpiar reservas 'hold' huérfanas (sin compra pending válida)
 // ============================================
 try {
-    $stmtCleanZombies = $pdo->prepare("
-        DELETE t FROM tickets t
-        WHERE t.showtime_id = ?
-        AND t.status = 'hold'
-        AND NOT EXISTS (
-            SELECT 1 FROM purchases p
-            WHERE p.user_id = t.user_id
-            AND p.showtime_id = t.showtime_id
-            AND p.status = 'pending'
-            AND p.expires_at > NOW()
-        )
-    ");
-    $stmtCleanZombies->execute([$showtimeId]);
-    $zombiesDeleted = $stmtCleanZombies->rowCount();
-
-    if ($zombiesDeleted > 0) {
-        error_log("🧹 seats.php: Limpiadas $zombiesDeleted reservas hold huérfanas del showtime $showtimeId");
-    }
-} catch (Exception $e) {
-    error_log("⚠️ seats.php: Error limpiando reservas hold: " . $e->getMessage());
+$stmtCleanZombies = $pdo->prepare("
+DELETE t FROM tickets t
+WHERE t.showtime_id = ?
+AND t.status = 'hold'
+AND NOT EXISTS (
+SELECT 1 FROM purchases p
+WHERE p.user_id = t.user_id
+AND p.showtime_id = t.showtime_id
+AND p.status = 'pending'
+AND p.expires_at > NOW()
+)
+");
+$stmtCleanZombies->execute([$showtimeId]);
+$zombiesDeleted = $stmtCleanZombies->rowCount();
+if ($zombiesDeleted > 0) {
+error_log("🧹 seats.php: Limpiadas $zombiesDeleted reservas hold huérfanas del showtime $showtimeId");
 }
-
+} catch (Exception $e) {
+error_log("⚠️ seats.php: Error limpiando reservas hold: " . $e->getMessage());
+}
 // ============================================
 // ✅ UNIFICADO: Asientos ocupados = cualquier ticket activo de OTRO usuario
 // ============================================
 $stmtOccupied = $pdo->prepare("
-    SELECT DISTINCT seat_code FROM tickets
-    WHERE showtime_id = ? AND user_id != ?
-    AND status IN ('hold', 'confirmed')
+SELECT DISTINCT seat_code FROM tickets
+WHERE showtime_id = ? AND user_id != ?
+AND status IN ('hold', 'confirmed')
 ");
 $stmtOccupied->execute([$showtimeId, $_SESSION['user_id']]);
 $occupiedSeats = $stmtOccupied->fetchAll(PDO::FETCH_COLUMN);
-
 // Asientos ya comprados (confirmed) por el propio usuario
 $stmtCompleted = $pdo->prepare("
-    SELECT seat_code FROM tickets
-    WHERE showtime_id = ? AND user_id = ? AND status = 'confirmed'
+SELECT seat_code FROM tickets
+WHERE showtime_id = ? AND user_id = ? AND status = 'confirmed'
 ");
 $stmtCompleted->execute([$showtimeId, $_SESSION['user_id']]);
 $userCompletedSeats = $stmtCompleted->fetchAll(PDO::FETCH_COLUMN);
-
 $occupiedSeats = array_unique(array_merge($occupiedSeats, $userCompletedSeats));
-
 // Recuperar reservas 'hold' activas del propio usuario (compras pending válidas)
 $userPendingSeats = [];
 $stmtUserPendingPurchases = $pdo->prepare("
-    SELECT seats FROM purchases
-    WHERE showtime_id = ? AND user_id = ? AND status = 'pending' AND expires_at > NOW()
+SELECT seats FROM purchases
+WHERE showtime_id = ? AND user_id = ? AND status = 'pending' AND expires_at > NOW()
 ");
 $stmtUserPendingPurchases->execute([$showtimeId, $_SESSION['user_id']]);
 $userPendingPurchases = $stmtUserPendingPurchases->fetchAll(PDO::FETCH_COLUMN);
-
 foreach ($userPendingPurchases as $seatsString) {
-    if (!empty($seatsString)) {
-        $seatsArray = array_map('trim', explode(',', $seatsString));
-        $seatsArray = array_map(function($seat) { return str_replace('♿', '', $seat); }, $seatsArray);
-        $userPendingSeats = array_merge($userPendingSeats, $seatsArray);
-    }
+if (!empty($seatsString)) {
+$seatsArray = array_map('trim', explode(',', $seatsString));
+$seatsArray = array_map(function($seat) { return str_replace('♿', '', $seat); }, $seatsArray);
+$userPendingSeats = array_merge($userPendingSeats, $seatsArray);
+}
 }
 $userPendingSeats = array_unique($userPendingSeats);
 $userPendingSeats = array_diff($userPendingSeats, $userCompletedSeats);
 $userPendingSeats = array_values($userPendingSeats);
-
 if ($fromFood) {
-    // ✅ UNIFICADO: Recuperar asientos 'hold' del propio usuario
-    $stmtRecover = $pdo->prepare("
-        SELECT seat_code FROM tickets
-        WHERE showtime_id = ? AND user_id = ? AND status = 'hold'
-    ");
-    $stmtRecover->execute([$showtimeId, $_SESSION['user_id']]);
-    $recoveredSeats = $stmtRecover->fetchAll(PDO::FETCH_COLUMN);
-
-    if (!empty($recoveredSeats)) {
-        $recoveredSeats = array_diff($recoveredSeats, $userCompletedSeats);
-        $userPendingSeats = array_merge($userPendingSeats, $recoveredSeats);
-        $userPendingSeats = array_unique($userPendingSeats);
-    }
+// ✅ UNIFICADO: Recuperar asientos 'hold' del propio usuario
+$stmtRecover = $pdo->prepare("
+SELECT seat_code FROM tickets
+WHERE showtime_id = ? AND user_id = ? AND status = 'hold'
+");
+$stmtRecover->execute([$showtimeId, $_SESSION['user_id']]);
+$recoveredSeats = $stmtRecover->fetchAll(PDO::FETCH_COLUMN);
+if (!empty($recoveredSeats)) {
+$recoveredSeats = array_diff($recoveredSeats, $userCompletedSeats);
+$userPendingSeats = array_merge($userPendingSeats, $recoveredSeats);
+$userPendingSeats = array_unique($userPendingSeats);
 }
-
+}
 $seatLayout = null;
 if (!empty($showtime['seat_layout'])) {
-    $seatLayout = json_decode($showtime['seat_layout'], true);
+$seatLayout = json_decode($showtime['seat_layout'], true);
 }
-
 if (!$seatLayout || !isset($seatLayout['rows']) || !isset($seatLayout['seatMap'])) {
-    $rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
-    $seatsPerRow = 21;
-
-    $seatLayout = [
-        'rows' => $rows,
-        'seatsPerRow' => $seatsPerRow,
-        'seatMap' => [],
-        'totalSeats' => count($rows) * $seatsPerRow,
-        'blockedSeats' => [],
-        'wheelchairSeats' => []
-    ];
-
-    foreach ($rows as $row) {
-        $seatLayout['seatMap'][$row] = range(1, $seatsPerRow);
-    }
+$rows = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
+$seatsPerRow = 21;
+$seatLayout = [
+'rows' => $rows,
+'seatsPerRow' => $seatsPerRow,
+'seatMap' => [],
+'totalSeats' => count($rows) * $seatsPerRow,
+'blockedSeats' => [],
+'wheelchairSeats' => []
+];
+foreach ($rows as $row) {
+$seatLayout['seatMap'][$row] = range(1, $seatsPerRow);
 }
-
+}
 $blockedSeats = $seatLayout['blockedSeats'] ?? [];
 $accessibleSeats = $seatLayout['wheelchairSeats'] ?? ($seatLayout['accessibleSeats'] ?? []);
 $totalSeatsRoom = $seatLayout['totalSeats'] ?? 0;
 $availableSeatsCount = $totalSeatsRoom - count($blockedSeats);
 $occupiedCount = count($occupiedSeats);
 $realAvailable = $availableSeatsCount - $occupiedCount;
-
 if ($realAvailable < $totalSeats) {
-    $userPendingCount = count($userPendingSeats);
-    $availableForUser = $realAvailable + $userPendingCount;
-
-    if ($availableForUser < $totalSeats) {
-        header('Location: index.php?error=No+hay+suficientes+asientos+disponibles');
-        exit;
-    }
+$userPendingCount = count($userPendingSeats);
+$availableForUser = $realAvailable + $userPendingCount;
+if ($availableForUser < $totalSeats) {
+header('Location: index.php?error=No+hay+suficientes+asientos+disponibles');
+exit;
 }
-
+}
 $csrf_token = generateCSRFToken();
 $tmdb_data = getMovieFromTMDB($showtime['title']);
 $tmdb_poster = $tmdb_data['poster_path'] ?? null;
@@ -193,41 +163,32 @@ $formatClass = 'format-' . strtolower(str_replace([' ', '/'], '-', $format));
 $pageTitle = "Selección de Asientos - " . $showtime['title'];
 $backUrl = 'price_selection.php?showtime_id=' . $showtimeId;
 $siteConfig = getSiteConfig($pdo);
-
 if (!isset($_SESSION['purchase_token_' . $showtimeId]) || isPurchaseTokenExpired($showtimeId)) {
-    $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
-    $_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
+$purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
+$_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
 } else {
-    $purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
+$purchaseToken = $_SESSION['purchase_token_' . $showtimeId];
 }
-
 $timeLeft = getPurchaseTokenTimeLeft($showtimeId);
 if ($timeLeft < 60 && $timeLeft > 0) {
-    clearPurchaseSession($showtimeId);
-
-    $purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
-    $_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
-
-    $_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
-    $_SESSION['total_seats_' . $showtimeId] = $totalSeats;
-    $_SESSION['subtotal_' . $showtimeId] = $subtotal;
-    $_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
-    $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
-    $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
+clearPurchaseSession($showtimeId);
+$purchaseToken = generatePurchaseTokenWithTimeout($showtimeId, 900);
+$_SESSION['purchase_token_' . $showtimeId] = $purchaseToken;
+$_SESSION['ticket_quantities_' . $showtimeId] = $ticketsData;
+$_SESSION['total_seats_' . $showtimeId] = $totalSeats;
+$_SESSION['subtotal_' . $showtimeId] = $subtotal;
+$_SESSION['tax_amount_' . $showtimeId] = $taxAmount;
+$_SESSION['total_amount_' . $showtimeId] = $totalAmount;
+$_SESSION['tax_rate_' . $showtimeId] = $taxRate;
 }
-
 $selectedSeats = $userPendingSeats;
-
 require_once 'header.php';
 ?>
-
 <style>
 body { background-color: #ffffff !important; color: #1f2937 !important; }
 .bg-\[\#14141e\] { background-color: #ffffff !important; }
 .border-\[\#1e1e2e\] { border-color: #e2e8f0 !important; }
-
 :root { --seat-size: clamp(1.2rem, 2.2vw, 1.8rem); }
-
 .seat { width: var(--seat-size); height: var(--seat-size); border-radius: 0.3rem 0.3rem 0.2rem 0.2rem; transition: all 0.2s ease; cursor: pointer; border: none !important; position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0 !important; overflow: hidden; }
 .seat:disabled { cursor: not-allowed; }
 .seat-available { background-color: #cbd5e1 !important; }
@@ -240,23 +201,17 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .seat-blocked .seat-label { display: none !important; }
 .seat-label { font-size: calc(var(--seat-size) * 0.35); color: #0f172a; text-align: center; position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); font-weight: bold; white-space: nowrap; }
 .seat-selected .seat-label, .seat-occupied .seat-label { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
-
 .seat-occupied .seat-label { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
 .seat-accessible.seat-occupied { background-color: #ef4444 !important; opacity: 0.9; }
 .seat-accessible.seat-occupied .seat-label { font-size: calc(var(--seat-size) * 0.6) !important; }
-
 .cinema-screen { background: #1a1a1a !important; color: #6b7280; text-align: center; padding: 3px; border-radius: 8px; margin-top: 28px; font-weight: bold; letter-spacing: 4px; font-size: clamp(0.7rem, 2vw, 1rem); width: 100%; cursor: default; }
-
 .legend { display: flex; gap: clamp(8px, 2vw, 20px); justify-content: center; flex-wrap: wrap; margin-top: 20px; }
 .legend-item { display: flex; align-items: center; gap: 6px; font-size: clamp(0.65rem, 1.2vw, 0.8rem); color: #475569; font-weight: 500; }
 .legend-item .color-box { width: clamp(14px, 2vw, 20px); height: clamp(14px, 2vw, 20px); border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; }
-
 .seat-row { display: flex; gap: clamp(2px, 0.4vw, 4px); align-items: center; justify-content: center; flex-wrap: nowrap; }
 .row-label { width: clamp(20px, 2.5vw, 28px); font-size: clamp(0.6rem, 1vw, 0.75rem); color: #475569; font-weight: bold; text-align: right; padding-right: clamp(4px, 0.6vw, 8px); flex-shrink: 0; position: sticky; left: 0; background: #ffffff; z-index: 5; }
-
 .seat-grid-scroll-wrapper { width: 100%; overflow: auto; padding: 8px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
 .seat-grid-container { display: grid; gap: clamp(2px, 0.4vw, 4px); padding: clamp(4px, 0.8vw, 10px); width: max-content; margin: 0 auto; }
-
 .card-summary { background: #ffffff !important; border: 1px solid #cbd5e1 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important; border-radius: 12px !important; padding: 24px; }
 .summary-dotted-line { border-top: 2px dashed #94a3b8; margin: 14px 0; }
 .summary-solid-line { border-top: 2px solid #6366f1; margin: 14px 0; }
@@ -264,27 +219,21 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .summary-plain-row.bold-row { font-weight: 800; font-size: 1.15rem; }
 .summary-movie-poster { width: 80px; height: 120px; object-fit: cover; border-radius: 8px; flex-shrink: 0; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
 .summary-movie-title { font-weight: 700; color: #0f172a; font-size: 1.1rem; line-height: 1.3; }
-
 .promo-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; border: 1px solid; }
 .promo-tag .promo-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
 .promo-tag.monday { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
 .promo-tag.monday .promo-dot { background: #15803d; }
 .promo-tag.presale { background: #fef3c7; color: #b45309; border-color: #fde68a; }
 .promo-tag.presale .promo-dot { background: #b45309; }
-
 .format-badge { display: inline-flex; align-items: center; justify-content: center; padding: 2px 10px; border-radius: 5px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.4; background: transparent !important; border: 1px solid #4f5e71; color: #4f5e71; }
-
 .btn-continue-food { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff !important; padding: 14px 20px; border-radius: 8px; font-weight: 700; font-size: 1.1rem; border: none; cursor: pointer; transition: all 0.3s ease; width: 100%; text-align: center; display: block; }
 .btn-continue-food:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79,70,229,0.25); }
 .btn-continue-food:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
-
 .btn-back { background: #ffffff; border: 1px solid #cbd5e1; color: #334155 !important; padding: 11px 20px; border-radius: 8px; font-weight: 600; font-size: 0.95rem; transition: all 0.3s ease; cursor: pointer; width: 100%; text-align: center; text-decoration: none; display: block; }
 .btn-back:hover { border-color: #6366f1; color: #4f46e5 !important; background: #eef2ff; }
-
 .selected-info { background: #f1f5f9 !important; border: 1px solid #e2e8f0 !important; border-radius: 8px !important; padding: 14px !important; margin-top: 12px; margin-bottom: 16px; }
 .selected-info .text-sm { font-size: 0.9rem !important; }
 .selected-info .font-bold { font-weight: 700 !important; }
-
 .notification-container { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; max-width: 500px; padding: 0 20px; }
 .notification-container .notification { pointer-events: auto; padding: 10px 22px; border-radius: 16px; font-size: 1.2rem; font-weight: 700; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.25); animation: notifFadeIn 0.4s ease, notifPulse 1.5s ease-in-out 0.4s 2; width: 100%; display: flex; align-items: center; justify-content: center; gap: 14px; }
 .notification-container .notification .notif-icon { font-size: 1.8rem; flex-shrink: 0; }
@@ -292,122 +241,106 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .notification-container .notification.success { background: #16a34a; color: #ffffff; border: 2px solid #4ade80; }
 .notification-container .notification.warning { background: #d97706; color: #ffffff; }
 .notification-container .notification.error { background: #dc2626; color: #ffffff; border: 2px solid #f87171; }
-
 @keyframes notifFadeIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
 @keyframes notifPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
 .notification-container .notification.fade-out { animation: notifFadeOut 0.3s ease forwards; }
 @keyframes notifFadeOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.9); } }
-
 @media (min-width: 1024px) { .card-summary { position: sticky; top: 100px; } }
 @media (max-width: 768px) { .card-summary { padding: 16px; position: relative; top: auto; } .summary-movie-poster { width: 60px; height: 90px; } .seat-grid-scroll-wrapper { max-height: 50vh; } }
 </style>
-
 <div class="container mx-auto px-2 sm:px-4 py-4 sm:py-8 max-w-7xl">
-    <div class="notification-container" id="notificationContainer"></div>
-
-    <div class="flex flex-col xl:flex-row gap-4 sm:gap-8 mt-2">
-        <div class="flex-1 bg-[#14141e] p-3 sm:p-6 rounded-xl border border-[#1e1e2e]">
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
-                <div>
-                    <h2 class="text-xl font-bold section-title">🎫 Selecciona tus asientos</h2>
-                    <p class="text-sm section-subtitle"><?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?></p>
-                </div>
-                <span><?= $realAvailable + count($userPendingSeats) ?> asientos disponibles</span>
-            </div>
-
-            <div class="seats-container">
-                <div class="seat-grid-scroll-wrapper">
-                    <div class="seat-grid-container">
-                        <?php
-                        $rows = $seatLayout['rows'] ?? [];
-                        $seatMap = $seatLayout['seatMap'] ?? [];
-                        $reversedRows = array_reverse($rows);
-
-                        foreach ($reversedRows as $row):
-                            $seatNumbers = $seatMap[$row] ?? range(1, 21);
-                        ?>
-                            <div class="seat-row">
-                                <span class="row-label"><?= $row ?></span>
-                                <?php foreach ($seatNumbers as $seatNumber):
-                                    $seatId = $row . $seatNumber;
-                                    $isOccupied = in_array($seatId, $occupiedSeats);
-                                    $isBlocked = in_array($seatId, $blockedSeats);
-                                    $isAccessible = in_array($seatId, $accessibleSeats);
-                                    $isUserPending = in_array($seatId, $userPendingSeats);
-
-                                    $seatClass = 'seat-available';
-                                    if ($isBlocked) $seatClass = 'seat-blocked';
-                                    elseif ($isOccupied) $seatClass = 'seat-occupied';
-                                    elseif ($isUserPending) $seatClass = 'seat-selected';
-                                    elseif ($isAccessible) $seatClass = 'seat-accessible';
-                                ?>
-                                    <button data-seat="<?= $seatId ?>" class="seat <?= $seatClass ?> <?= ($isAccessible && $isOccupied) ? 'seat-accessible' : '' ?>" <?= ($isOccupied || $isBlocked) ? 'disabled' : '' ?>>
-                                        <?php if(!$isBlocked): ?>
-                                            <span class="seat-label"><?= $isAccessible ? '♿' : $seatNumber ?></span>
-                                        <?php endif; ?>
-                                    </button>
-                                <?php endforeach; ?>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-                <div class="cinema-screen">PANTALLA</div>
-            </div>
-
-            <div class="legend">
-                <div class="legend-item"><div class="color-box" style="background-color: #cbd5e1;"></div> Disponible</div>
-                <div class="legend-item"><div class="color-box bg-sky-600">♿</div> Discapacidad</div>
-                <div class="legend-item"><div class="color-box bg-indigo-500"></div> Seleccionado</div>
-                <div class="legend-item"><div class="color-box bg-red-600"></div> Ocupado</div>
-            </div>
-        </div>
-
-        <div class="w-full xl:w-96 card-summary">
-            <div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
-                <?php if (!empty($showtime['poster_url'])): ?>
-                    <img src="<?= htmlspecialchars($showtime['poster_url']) ?>" alt="<?= htmlspecialchars($showtime['title']) ?>" class="summary-movie-poster">
-                <?php endif; ?>
-
-                <div class="flex flex-col justify-start text-left text-gray-900 flex-1 min-w-0">
-                    <div class="summary-movie-title"><?= htmlspecialchars($showtime['title']) ?></div>
-                    <div class="text-sm text-gray-700 font-medium mt-1.5">Idioma: <?= htmlspecialchars($lang_label) ?></div>
-                    <div class="text-sm text-gray-700 font-medium mt-1"><?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?></div>
-                    <div class="mt-1.5"><span class="format-badge"><?= htmlspecialchars($format) ?></span></div>
-
-                    <div class="flex flex-col gap-2 mt-3 items-start">
-                        <?php if ($hasMondayPromo): ?><span class="promo-tag monday"><span class="promo-dot"></span> Lunes a mitad de precio</span><?php endif; ?>
-                        <?php if ($hasPresale): ?><span class="promo-tag presale"><span class="promo-dot"></span> Preventa</span><?php endif; ?>
-                    </div>
-                </div>
-            </div>
-
-            <div class="selected-info">
-                <p class="text-sm text-gray-600">Asientos elegidos: <span id="selected-seats-list" class="font-bold text-slate-900">-</span></p>
-                <p class="text-sm text-gray-600 mt-1">Cantidad de boletos: <span id="ticket-count" class="font-bold text-slate-900">0 de <?= $totalSeats ?></span></p>
-            </div>
-
-            <div class="summary-dotted-line"></div>
-            <div class="summary-plain-row"><span>Subtotal</span><span id="subtotalAmount"><?= formatCurrency($subtotal, $siteConfig) ?></span></div>
-            <div class="summary-plain-row"><span>IVA (<?= $taxRate ?>%)</span><span id="taxAmount"><?= formatCurrency($taxAmount, $siteConfig) ?></span></div>
-            <div class="summary-solid-line"></div>
-            <div class="summary-plain-row bold-row"><span>Total a Pagar</span><span id="totalAmount"><?= formatCurrency($totalAmount, $siteConfig) ?></span></div>
-
-            <div class="flex flex-col gap-2.5 mt-6">
-                <form action="create_food_session.php" method="POST" id="foodForm">
-                    <input type="hidden" name="showtime_id" value="<?= $showtime['id'] ?>">
-                    <input type="hidden" name="seats" id="seats-input" value="">
-                    <input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
-                    <input type="hidden" name="purchase_token" id="purchaseTokenInput" value="<?= htmlspecialchars($purchaseToken) ?>">
-                    <button type="submit" id="btn-continue" disabled class="btn-continue-food"><i class="fas fa-chair mr-2"></i> Selecciona <span id="btnSeatsCount">0</span> asiento(s)</button>
-                </form>
-                <button type="button" class="btn-back" id="btnBackToPrices"><i class="fas fa-arrow-left mr-2"></i> Volver a Boletos</button>
-            </div>
-        </div>
-    </div>
+<div class="notification-container" id="notificationContainer"></div>
+<div class="flex flex-col xl:flex-row gap-4 sm:gap-8 mt-2">
+<div class="flex-1 bg-[#14141e] p-3 sm:p-6 rounded-xl border border-[#1e1e2e]">
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-2">
+<div>
+<h2 class="text-xl font-bold section-title">🎫 Selecciona tus asientos</h2>
+<p class="text-sm section-subtitle"><?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?></p>
 </div>
-
+<span><?= $realAvailable + count($userPendingSeats) ?> asientos disponibles</span>
+</div>
+<div class="seats-container">
+<div class="seat-grid-scroll-wrapper">
+<div class="seat-grid-container">
+<?php
+$rows = $seatLayout['rows'] ?? [];
+$seatMap = $seatLayout['seatMap'] ?? [];
+$reversedRows = array_reverse($rows);
+foreach ($reversedRows as $row):
+$seatNumbers = $seatMap[$row] ?? range(1, 21);
+?>
+<div class="seat-row">
+<span class="row-label"><?= $row ?></span>
+<?php foreach ($seatNumbers as $seatNumber):
+$seatId = $row . $seatNumber;
+$isOccupied = in_array($seatId, $occupiedSeats);
+$isBlocked = in_array($seatId, $blockedSeats);
+$isAccessible = in_array($seatId, $accessibleSeats);
+$isUserPending = in_array($seatId, $userPendingSeats);
+$seatClass = 'seat-available';
+if ($isBlocked) $seatClass = 'seat-blocked';
+elseif ($isOccupied) $seatClass = 'seat-occupied';
+elseif ($isUserPending) $seatClass = 'seat-selected';
+elseif ($isAccessible) $seatClass = 'seat-accessible';
+?>
+<button data-seat="<?= $seatId ?>" class="seat <?= $seatClass ?> <?= ($isAccessible && $isOccupied) ? 'seat-accessible' : '' ?>" <?= ($isOccupied || $isBlocked) ? 'disabled' : '' ?>>
+<?php if(!$isBlocked): ?>
+<span class="seat-label"><?= $isAccessible ? '♿' : $seatNumber ?></span>
+<?php endif; ?>
+</button>
+<?php endforeach; ?>
+</div>
+<?php endforeach; ?>
+</div>
+</div>
+<div class="cinema-screen">PANTALLA</div>
+</div>
+<div class="legend">
+<div class="legend-item"><div class="color-box" style="background-color: #cbd5e1;"></div> Disponible</div>
+<div class="legend-item"><div class="color-box bg-sky-600">♿</div> Discapacidad</div>
+<div class="legend-item"><div class="color-box bg-indigo-500"></div> Seleccionado</div>
+<div class="legend-item"><div class="color-box bg-red-600"></div> Ocupado</div>
+</div>
+</div>
+<div class="w-full xl:w-96 card-summary">
+<div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
+<?php if (!empty($showtime['poster_url'])): ?>
+<img src="<?= htmlspecialchars($showtime['poster_url']) ?>" alt="<?= htmlspecialchars($showtime['title']) ?>" class="summary-movie-poster">
+<?php endif; ?>
+<div class="flex flex-col justify-start text-left text-gray-900 flex-1 min-w-0">
+<div class="summary-movie-title"><?= htmlspecialchars($showtime['title']) ?></div>
+<div class="text-sm text-gray-700 font-medium mt-1.5">Idioma: <?= htmlspecialchars($lang_label) ?></div>
+<div class="text-sm text-gray-700 font-medium mt-1"><?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?></div>
+<div class="mt-1.5"><span class="format-badge"><?= htmlspecialchars($format) ?></span></div>
+<div class="flex flex-col gap-2 mt-3 items-start">
+<?php if ($hasMondayPromo): ?><span class="promo-tag monday"><span class="promo-dot"></span> Lunes a mitad de precio</span><?php endif; ?>
+<?php if ($hasPresale): ?><span class="promo-tag presale"><span class="promo-dot"></span> Preventa</span><?php endif; ?>
+</div>
+</div>
+</div>
+<div class="selected-info">
+<p class="text-sm text-gray-600">Asientos elegidos: <span id="selected-seats-list" class="font-bold text-slate-900">-</span></p>
+<p class="text-sm text-gray-600 mt-1">Cantidad de boletos: <span id="ticket-count" class="font-bold text-slate-900">0 de <?= $totalSeats ?></span></p>
+</div>
+<div class="summary-dotted-line"></div>
+<div class="summary-plain-row"><span>Subtotal</span><span id="subtotalAmount"><?= formatCurrency($subtotal, $siteConfig) ?></span></div>
+<div class="summary-plain-row"><span>IVA (<?= $taxRate ?>%)</span><span id="taxAmount"><?= formatCurrency($taxAmount, $siteConfig) ?></span></div>
+<div class="summary-solid-line"></div>
+<div class="summary-plain-row bold-row"><span>Total a Pagar</span><span id="totalAmount"><?= formatCurrency($totalAmount, $siteConfig) ?></span></div>
+<div class="flex flex-col gap-2.5 mt-6">
+<form action="create_food_session.php" method="POST" id="foodForm">
+<input type="hidden" name="showtime_id" value="<?= $showtime['id'] ?>">
+<input type="hidden" name="seats" id="seats-input" value="">
+<input type="hidden" name="csrf_token" value="<?= $csrf_token ?>">
+<input type="hidden" name="purchase_token" id="purchaseTokenInput" value="<?= htmlspecialchars($purchaseToken) ?>">
+<button type="submit" id="btn-continue" disabled class="btn-continue-food"><i class="fas fa-chair mr-2"></i> Selecciona <span id="btnSeatsCount">0</span> asiento(s)</button>
+</form>
+<button type="button" class="btn-back" id="btnBackToPrices"><i class="fas fa-arrow-left mr-2"></i> Volver a Boletos</button>
+</div>
+</div>
+</div>
+</div>
 <?php require_once 'footer.php'; ?>
-
 <script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
 const totalSeatsNeeded = <?= $totalSeats ?>;
 const showtimeId = <?= $showtime['id'] ?>;
@@ -421,313 +354,274 @@ const accessibleSeats = <?= json_encode($accessibleSeats) ?>;
 const userPendingSeats = <?= json_encode($userPendingSeats) ?>;
 let purchaseToken = '<?= htmlspecialchars($purchaseToken) ?>';
 const fromFood = <?= $fromFood ? 'true' : 'false' ?>;
-
 const currencyConfig = {
-    symbol: '<?= $siteConfig['currency_symbol'] ?? '$' ?>',
-    position: '<?= $siteConfig['currency_position'] ?? 'left' ?>',
-    thousands: '<?= $siteConfig['thousands_separator'] ?? '.' ?>',
-    decimal: '<?= $siteConfig['decimal_separator'] ?? ',' ?>',
-    decimals: <?= intval($siteConfig['decimal_places'] ?? 2) ?>
+symbol: '<?= $siteConfig['currency_symbol'] ?? '$' ?>',
+position: '<?= $siteConfig['currency_position'] ?? 'left' ?>',
+thousands: '<?= $siteConfig['thousands_separator'] ?? '.' ?>',
+decimal: '<?= $siteConfig['decimal_separator'] ?? ',' ?>',
+decimals: <?= intval($siteConfig['decimal_places'] ?? 2) ?>
 };
-
 let selectedSeats = [...userPendingSeats];
 const maxSeats = totalSeatsNeeded;
-
 let skipUnloadRelease = false;
-
 function formatCurrency(amount) {
-    if (typeof amount !== 'number' || isNaN(amount)) amount = 0;
-    const formatted = amount.toFixed(currencyConfig.decimals)
-        .replace('.', currencyConfig.decimal)
-        .replace(/\B(?=(\d{3})+(?!\d))/g, currencyConfig.thousands);
-    return currencyConfig.position === 'left' ? currencyConfig.symbol + formatted : formatted + ' ' + currencyConfig.symbol;
+if (typeof amount !== 'number' || isNaN(amount)) amount = 0;
+const formatted = amount.toFixed(currencyConfig.decimals)
+.replace('.', currencyConfig.decimal)
+.replace(/\B(?=(\d{3})+(?!\d))/g, currencyConfig.thousands);
+return currencyConfig.position === 'left' ? currencyConfig.symbol + formatted : formatted + ' ' + currencyConfig.symbol;
 }
-
 function showNotification(message, type = 'info', duration = 3000) {
-    const container = document.getElementById('notificationContainer');
-    if (!container) return;
-
-    container.innerHTML = '';
-
-    const notif = document.createElement('div');
-    notif.className = 'notification ' + type;
-
-    const icons = { info: 'fa-info-circle', success: 'fa-check-circle', warning: 'fa-exclamation-triangle', error: 'fa-times-circle' };
-    notif.innerHTML = `<span class="notif-icon"><i class="fas ${icons[type] || icons.info}"></i></span><span>${message}</span>`;
-
-    container.appendChild(notif);
-
-    setTimeout(() => {
-        notif.classList.add('fade-out');
-        setTimeout(() => { if (notif.parentNode) notif.remove(); }, 300);
-    }, duration);
+const container = document.getElementById('notificationContainer');
+if (!container) return;
+container.innerHTML = '';
+const notif = document.createElement('div');
+notif.className = 'notification ' + type;
+const icons = { info: 'fa-info-circle', success: 'fa-check-circle', warning: 'fa-exclamation-triangle', error: 'fa-times-circle' };
+notif.innerHTML = `<span class="notif-icon"><i class="fas ${icons[type] || icons.info}"></i></span><span>${message}</span>`;
+container.appendChild(notif);
+setTimeout(() => {
+notif.classList.add('fade-out');
+setTimeout(() => { if (notif.parentNode) notif.remove(); }, 300);
+}, duration);
 }
-
 function saveSeatsToStorage() {
-    try {
-        sessionStorage.setItem('selected_seats_' + showtimeId, JSON.stringify(selectedSeats));
-        sessionStorage.setItem('selected_seats_count_' + showtimeId, selectedSeats.length);
-        sessionStorage.setItem('purchase_token_' + showtimeId, purchaseToken);
-    } catch (e) {}
+try {
+sessionStorage.setItem('selected_seats_' + showtimeId, JSON.stringify(selectedSeats));
+sessionStorage.setItem('selected_seats_count_' + showtimeId, selectedSeats.length);
+sessionStorage.setItem('purchase_token_' + showtimeId, purchaseToken);
+} catch (e) {}
 }
-
 function loadSeatsFromStorage() {
-    try {
-        const saved = sessionStorage.getItem('selected_seats_' + showtimeId);
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-                const validSeats = parsed.filter(seat => !occupiedSeats.includes(seat) && !blockedSeats.includes(seat));
-                if (validSeats.length > 0) {
-                    selectedSeats = validSeats;
-                    return true;
-                }
-            }
-        }
-    } catch (e) {}
-    return false;
+try {
+const saved = sessionStorage.getItem('selected_seats_' + showtimeId);
+if (saved) {
+const parsed = JSON.parse(saved);
+if (Array.isArray(parsed) && parsed.length > 0) {
+const validSeats = parsed.filter(seat => !occupiedSeats.includes(seat) && !blockedSeats.includes(seat));
+if (validSeats.length > 0) {
+selectedSeats = validSeats;
+return true;
 }
-
+}
+}
+} catch (e) {}
+return false;
+}
 function liberarAsientos(callback) {
-    const formData = new FormData();
-    formData.append('showtime_id', showtimeId);
-    fetch('liberar_asientos.php', { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-        .then(response => response.json())
-        .then(data => { if (callback) callback(data.success); })
-        .catch(() => { if (callback) callback(false); });
+const formData = new FormData();
+formData.append('showtime_id', showtimeId);
+fetch('liberar_asientos.php', { method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+.then(response => response.json())
+.then(data => { if (callback) callback(data.success); })
+.catch(() => { if (callback) callback(false); });
 }
-
-function updateSummary() {
-    const count = selectedSeats.length;
-
-    const selectedSeatsList = document.getElementById('selected-seats-list');
-    const ticketCountEl = document.getElementById('ticket-count');
-    const seatsInput = document.getElementById('seats-input');
-    const btnContinue = document.getElementById('btn-continue');
-    const btnSeatsCount = document.getElementById('btnSeatsCount');
-
-    if (selectedSeatsList) selectedSeatsList.innerText = count > 0 ? selectedSeats.join(', ') : '-';
-    if (ticketCountEl) ticketCountEl.innerText = count + ' de ' + maxSeats;
-    if (btnSeatsCount) btnSeatsCount.textContent = count;
-    if (seatsInput) seatsInput.value = selectedSeats.join(',');
-
-    const subtotalEl = document.getElementById('subtotalAmount');
-    const taxEl = document.getElementById('taxAmount');
-    const totalEl = document.getElementById('totalAmount');
-
-    if (subtotalEl) subtotalEl.textContent = formatCurrency(subtotal);
-    if (taxEl) taxEl.textContent = formatCurrency(taxAmount);
-    if (totalEl) totalEl.textContent = formatCurrency(totalAmount);
-
-    if (btnContinue) {
-        if (count === maxSeats) {
-            btnContinue.disabled = false;
-            btnContinue.innerHTML = '<i class="fas fa-utensils mr-2"></i> Continuar a Comida';
-            btnContinue.classList.remove('opacity-50', 'cursor-not-allowed');
-        } else {
-            btnContinue.disabled = true;
-            btnContinue.classList.add('opacity-50', 'cursor-not-allowed');
-            const remaining = maxSeats - count;
-            btnContinue.innerHTML = `<i class="fas fa-chair mr-2"></i> Selecciona ${remaining} asiento${remaining !== 1 ? 's' : ''}`;
-        }
-    }
-
-    saveSeatsToStorage();
+// ============================================
+// ✅ LIBERAR ASIENTOS AL CERRAR NAVEGADOR / PESTAÑA
+// pagehide es el evento confiable; beforeunload queda como respaldo.
+// ============================================
+let unloadReleaseSent = false;
+function releaseSeatsOnUnload() {
+if (skipUnloadRelease || unloadReleaseSent) return;
+unloadReleaseSent = true;
+const formData = new FormData();
+formData.append('showtime_id', showtimeId);
+if (navigator.sendBeacon) {
+navigator.sendBeacon('liberar_asientos.php', formData);
+} else {
+fetch('liberar_asientos.php', { method: 'POST', body: formData, keepalive: true });
 }
-
-document.getElementById('btnBackToPrices').addEventListener('click', function() {
-    if (!confirm('¿Estás seguro? Se liberarán los asientos seleccionados.')) return;
-
-    liberarAsientos(function(success) {
-        if (success) {
-            skipUnloadRelease = true;
-            window.location.href = 'price_selection.php?showtime_id=' + showtimeId;
-        } else {
-            alert('Error al liberar asientos. Intenta nuevamente.');
-        }
-    });
-});
-
+}
+window.addEventListener('pagehide', releaseSeatsOnUnload);
+window.addEventListener('beforeunload', releaseSeatsOnUnload);
+// ============================================
+// ✅ F5 / RECARGA: liberar y redirigir con un solo F5
+// ============================================
 window.addEventListener('pageshow', function(event) {
-    // Detectar recarga (F5) o restauración desde bfcache (botón atrás)
-    const navEntry = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || null;
-    const isReload = event.persisted
-        || (navEntry && navEntry.type === 'reload')
-        || (window.performance && window.performance.navigation && window.performance.navigation.type === 2);
-
-    if (isReload) {
-        // CORREGIDO: Con un solo F5, liberar asientos y redirigir
-        // inmediatamente a index con el aviso "¡Sesión Expirada!".
-        // (Antes el beacon se procesaba después del render y hacía falta un segundo F5)
-        skipUnloadRelease = true; // evita un beacon duplicado durante el redirect
-        liberarAsientos(function() {
-            window.location.replace('index.php?expired=1');
-        });
-    }
+const navEntry = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || null;
+const isReload = event.persisted ||
+(navEntry && navEntry.type === 'reload') ||
+(window.performance && window.performance.navigation && window.performance.navigation.type === 2);
+if (isReload) {
+skipUnloadRelease = true; // evita un beacon duplicado durante el redirect
+liberarAsientos(function() {
+window.location.replace('index.php?expired=1');
 });
-
-window.addEventListener('beforeunload', function() {
-    if (skipUnloadRelease) return;
-
-    const formData = new FormData();
-    formData.append('showtime_id', showtimeId);
-    navigator.sendBeacon('liberar_asientos.php', formData);
+}
 });
-
+function updateSummary() {
+const count = selectedSeats.length;
+const selectedSeatsList = document.getElementById('selected-seats-list');
+const ticketCountEl = document.getElementById('ticket-count');
+const seatsInput = document.getElementById('seats-input');
+const btnContinue = document.getElementById('btn-continue');
+const btnSeatsCount = document.getElementById('btnSeatsCount');
+if (selectedSeatsList) selectedSeatsList.innerText = count > 0 ? selectedSeats.join(', ') : '-';
+if (ticketCountEl) ticketCountEl.innerText = count + ' de ' + maxSeats;
+if (btnSeatsCount) btnSeatsCount.textContent = count;
+if (seatsInput) seatsInput.value = selectedSeats.join(',');
+const subtotalEl = document.getElementById('subtotalAmount');
+const taxEl = document.getElementById('taxAmount');
+const totalEl = document.getElementById('totalAmount');
+if (subtotalEl) subtotalEl.textContent = formatCurrency(subtotal);
+if (taxEl) taxEl.textContent = formatCurrency(taxAmount);
+if (totalEl) totalEl.textContent = formatCurrency(totalAmount);
+if (btnContinue) {
+if (count === maxSeats) {
+btnContinue.disabled = false;
+btnContinue.innerHTML = '<i class="fas fa-utensils mr-2"></i> Continuar a Comida';
+btnContinue.classList.remove('opacity-50', 'cursor-not-allowed');
+} else {
+btnContinue.disabled = true;
+btnContinue.classList.add('opacity-50', 'cursor-not-allowed');
+const remaining = maxSeats - count;
+btnContinue.innerHTML = `<i class="fas fa-chair mr-2"></i> Selecciona ${remaining} asiento${remaining !== 1 ? 's' : ''}`;
+}
+}
+saveSeatsToStorage();
+}
+document.getElementById('btnBackToPrices').addEventListener('click', function() {
+if (!confirm('¿Estás seguro? Se liberarán los asientos seleccionados.')) return;
+liberarAsientos(function(success) {
+if (success) {
+skipUnloadRelease = true;
+window.location.href = 'price_selection.php?showtime_id=' + showtimeId;
+} else {
+alert('Error al liberar asientos. Intenta nuevamente.');
+}
+});
+});
 document.getElementById('foodForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-
-    const count = selectedSeats.length;
-    if (count === 0) {
-        showNotification('⚠️ Por favor, selecciona al menos un asiento.', 'warning');
-        return false;
-    }
-
-    if (count !== maxSeats) {
-        showNotification(`⚠️ Debes seleccionar ${maxSeats} asientos. Has seleccionado ${count}.`, 'warning');
-        return false;
-    }
-
-    const form = this;
-    const btnContinue = document.getElementById('btn-continue');
-    const tokenInput = document.getElementById('purchaseTokenInput');
-    const seatsInput = document.getElementById('seats-input');
-
-    if (seatsInput) {
-        seatsInput.value = selectedSeats.join(',');
-    }
-
-    btnContinue.disabled = true;
-    btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Obteniendo token...';
-
-    fetch('get_purchase_token.php?showtime_id=' + showtimeId + '&t=' + Date.now())
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.token) {
-                if (tokenInput) {
-                    tokenInput.value = data.token;
-                }
-
-                purchaseToken = data.token;
-                btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Reservando asientos...';
-
-                const formData = new FormData(form);
-
-                fetch('create_food_session.php', {
-                    method: 'POST',
-                    body: formData,
-                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                })
-                .then(response => response.json())
-                .then(sessionData => {
-                    if (sessionData.success && sessionData.redirect) {
-                        skipUnloadRelease = true;
-                        window.location.href = sessionData.redirect;
-                    } else {
-                        showNotification('⚠️ ' + (sessionData.error || 'Error al procesar la compra'), 'error');
-                        btnContinue.disabled = false;
-                        btnContinue.innerHTML = '<i class="fas fa-chair mr-2"></i> Selecciona ' + count + ' asiento(s)';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showNotification('⚠️ Error de conexión al reservar.', 'error');
-                    btnContinue.disabled = false;
-                    btnContinue.innerHTML = '<i class="fas fa-chair mr-2"></i> Selecciona ' + count + ' asiento(s)';
-                });
-            } else {
-                btnContinue.disabled = false;
-                btnContinue.innerHTML = '<i class="fas fa-chair mr-2"></i> Selecciona ' + count + ' asiento(s)';
-                showNotification('⚠️ Error al obtener token. Intenta nuevamente.', 'error');
-            }
-        })
-        .catch(error => {
-            console.error('Error obteniendo token:', error);
-            btnContinue.disabled = false;
-            btnContinue.innerHTML = '<i class="fas fa-chair mr-2"></i> Selecciona ' + count + ' asiento(s)';
-            showNotification('⚠️ Error de conexión. Intenta nuevamente.', 'error');
-        });
+e.preventDefault();
+const count = selectedSeats.length;
+if (count === 0) {
+showNotification('⚠️ Por favor, selecciona al menos un asiento.', 'warning');
+return false;
+}
+if (count !== maxSeats) {
+showNotification(`⚠️ Debes seleccionar ${maxSeats} asientos. Has seleccionado ${count}.`, 'warning');
+return false;
+}
+const form = this;
+const btnContinue = document.getElementById('btn-continue');
+const tokenInput = document.getElementById('purchaseTokenInput');
+const seatsInput = document.getElementById('seats-input');
+if (seatsInput) {
+seatsInput.value = selectedSeats.join(',');
+}
+btnContinue.disabled = true;
+btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Obteniendo token...';
+fetch('get_purchase_token.php?showtime_id=' + showtimeId + '&t=' + Date.now())
+.then(response => response.json())
+.then(data => {
+if (data.success && data.token) {
+if (tokenInput) {
+tokenInput.value = data.token;
+}
+purchaseToken = data.token;
+btnContinue.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i> Reservando asientos...';
+const formData = new FormData(form);
+fetch('create_food_session.php', {
+method: 'POST',
+body: formData,
+headers: { 'X-Requested-With': 'XMLHttpRequest' }
+})
+.then(response => response.json())
+.then(sessionData => {
+if (sessionData.success && sessionData.redirect) {
+skipUnloadRelease = true;
+window.location.href = sessionData.redirect;
+} else {
+showNotification('⚠️ ' + (sessionData.error || 'Error al procesar la compra'), 'error');
+btnContinue.disabled = false;
+btnContinue.innerHTML = '<i class="fas fa-chair mr-2"></i> Selecciona ' + count + ' asiento(s)';
+}
+})
+.catch(error => {
+console.error('Error:', error);
+showNotification('⚠️ Error de conexión al reservar.', 'error');
+btnContinue.disabled = false;
+btnContinue.innerHTML = '<i class="fas fa-chair mr-2"></i> Selecciona ' + count + ' asiento(s)';
 });
-
+} else {
+btnContinue.disabled = false;
+btnContinue.innerHTML = '<i class="fas fa-chair mr-2"></i> Selecciona ' + count + ' asiento(s)';
+showNotification('⚠️ Error al obtener token. Intenta nuevamente.', 'error');
+}
+})
+.catch(error => {
+console.error('Error obteniendo token:', error);
+btnContinue.disabled = false;
+btnContinue.innerHTML = '<i class="fas fa-chair mr-2"></i> Selecciona ' + count + ' asiento(s)';
+showNotification('⚠️ Error de conexión. Intenta nuevamente.', 'error');
+});
+});
 document.addEventListener('DOMContentLoaded', function() {
-    const seats = document.querySelectorAll('.seat:not(.seat-blocked)');
-
-    if (fromFood) loadSeatsFromStorage();
-
-    seats.forEach(seat => {
-        const seatId = seat.getAttribute('data-seat');
-        if (selectedSeats.includes(seatId)) {
-            seat.classList.add('seat-selected');
-            seat.classList.remove('seat-available', 'seat-accessible');
-        }
-    });
-
-    updateSummary();
-
-    seats.forEach(seat => {
-        seat.addEventListener('click', function() {
-            const seatId = this.getAttribute('data-seat');
-
-            if (blockedSeats.includes(seatId)) {
-                showNotification('🚫 Este es un pasillo, no se puede seleccionar', 'warning');
-                return;
-            }
-
-            if (occupiedSeats.includes(seatId) && !userPendingSeats.includes(seatId)) {
-                showNotification('❌ Este asiento ya ha sido reservado.', 'error');
-                return;
-            }
-
-            const index = selectedSeats.indexOf(seatId);
-            const isAccessible = accessibleSeats.includes(seatId);
-
-            if (index > -1) {
-                selectedSeats.splice(index, 1);
-                this.classList.remove('seat-selected');
-                this.classList.add(isAccessible ? 'seat-accessible' : 'seat-available');
-            } else {
-                if (selectedSeats.length >= maxSeats) {
-                    showNotification(`Ya tienes ${maxSeats} asientos seleccionados.`, 'warning', 4000);
-                    return;
-                }
-
-                selectedSeats.push(seatId);
-                this.classList.remove('seat-available', 'seat-accessible');
-                this.classList.add('seat-selected');
-            }
-
-            updateSummary();
-        });
-    });
-
-    setInterval(function() {
-        fetch('check_seats.php?showtime_id=' + showtimeId)
-            .then(response => response.json())
-            .then(data => {
-                if (data.occupied) {
-                    data.occupied.forEach(seatId => {
-                        const seatEl = document.querySelector('[data-seat="' + seatId + '"]');
-                        if (seatEl && !seatEl.classList.contains('seat-occupied')) {
-                            const isAccessibleSeat = accessibleSeats.includes(seatId);
-                            seatEl.classList.remove('seat-selected', 'seat-available');
-                            seatEl.classList.add('seat-occupied');
-                            if (isAccessibleSeat) seatEl.classList.add('seat-accessible');
-                            seatEl.disabled = true;
-
-                            const index = selectedSeats.indexOf(seatId);
-                            if (index > -1) {
-                                selectedSeats.splice(index, 1);
-                                showNotification('⚠️ El asiento ' + seatId + ' acaba de ser reservado.', 'warning');
-                            }
-                        }
-                    });
-                    updateSummary();
-                }
-            })
-            .catch(err => console.log('Error checking seats:', err));
-    }, 15000);
+const seats = document.querySelectorAll('.seat:not(.seat-blocked)');
+if (fromFood) loadSeatsFromStorage();
+seats.forEach(seat => {
+const seatId = seat.getAttribute('data-seat');
+if (selectedSeats.includes(seatId)) {
+seat.classList.add('seat-selected');
+seat.classList.remove('seat-available', 'seat-accessible');
+}
+});
+updateSummary();
+seats.forEach(seat => {
+seat.addEventListener('click', function() {
+const seatId = this.getAttribute('data-seat');
+if (blockedSeats.includes(seatId)) {
+showNotification('🚫 Este es un pasillo, no se puede seleccionar', 'warning');
+return;
+}
+if (occupiedSeats.includes(seatId) && !userPendingSeats.includes(seatId)) {
+showNotification('❌ Este asiento ya ha sido reservado.', 'error');
+return;
+}
+const index = selectedSeats.indexOf(seatId);
+const isAccessible = accessibleSeats.includes(seatId);
+if (index > -1) {
+selectedSeats.splice(index, 1);
+this.classList.remove('seat-selected');
+this.classList.add(isAccessible ? 'seat-accessible' : 'seat-available');
+} else {
+if (selectedSeats.length >= maxSeats) {
+showNotification(`⚠️ Ya tienes ${maxSeats} asientos seleccionados.`, 'warning', 4000);
+return;
+}
+selectedSeats.push(seatId);
+this.classList.remove('seat-available', 'seat-accessible');
+this.classList.add('seat-selected');
+}
+updateSummary();
+});
+});
+setInterval(function() {
+fetch('check_seats.php?showtime_id=' + showtimeId)
+.then(response => response.json())
+.then(data => {
+if (data.occupied) {
+data.occupied.forEach(seatId => {
+const seatEl = document.querySelector('[data-seat="' + seatId + '"]');
+if (seatEl && !seatEl.classList.contains('seat-occupied')) {
+const isAccessibleSeat = accessibleSeats.includes(seatId);
+seatEl.classList.remove('seat-selected', 'seat-available');
+seatEl.classList.add('seat-occupied');
+if (isAccessibleSeat) seatEl.classList.add('seat-accessible');
+seatEl.disabled = true;
+const index = selectedSeats.indexOf(seatId);
+if (index > -1) {
+selectedSeats.splice(index, 1);
+showNotification('⚠️ El asiento ' + seatId + ' acaba de ser reservado.', 'warning');
+}
+}
+});
+updateSummary();
+}
+})
+.catch(err => console.log('Error checking seats:', err));
+}, 15000);
 });
 </script>
-
 </body>
 </html>

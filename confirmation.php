@@ -139,7 +139,7 @@ foreach ($foodOrders as $food) {
 $taxRate = floatval($purchase['tax_rate'] ?? 16);
 
 // ============================================
-// ✅ UNIFICADO: Desglose por tipo usando price_paid
+// UNIFICADO: Desglose por tipo usando price_paid
 // ============================================
 $ticketTypes = [];
 $ticketTotal = 0;
@@ -327,363 +327,532 @@ require_once 'header.php';
 ?>
 
 <style>
-body {
-    background-color: #ffffff !important;
-    color: #1f2937 !important;
-}
+    body {
+        background-color: #ffffff !important;
+        color: #1f2937 !important;
+    }
 
-.bg-\[\#14141e\] { background-color: #ffffff !important; }
-.border-\[\#1e1e2e\] { border-color: #e2e8f0 !important; }
+    .bg-\[\#14141e\] {
+        background-color: #ffffff !important;
+    }
 
-.confirmation-card {
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 16px;
-    padding: 32px;
-    max-width: 680px;
-    margin: 0 auto;
-    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
-}
+    .border-\[\#1e1e2e\] {
+        border-color: #e2e8f0 !important;
+    }
 
-.success-icon {
-    width: 72px;
-    height: 72px;
-    background: #dcfce7;
-    border: 2px solid #86efac;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 32px;
-    color: #16a34a;
-    margin: 0 auto 20px auto;
-}
+    .confirmation-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 32px;
+        max-width: 680px;
+        margin: 0 auto;
+        box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);
+    }
 
-.confirmation-title {
-    color: #0f172a;
-    font-size: 1.75rem;
-    font-weight: 800;
-    text-align: center;
-}
+    .success-icon {
+        width: 72px;
+        height: 72px;
+        background: #dcfce7;
+        border: 2px solid #86efac;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        color: #16a34a;
+        margin: 0 auto 20px auto;
+    }
 
-.confirmation-subtitle {
-    color: #475569;
-    text-align: center;
-    font-size: 0.95rem;
-    margin-bottom: 24px;
-}
+    .confirmation-title {
+        color: #0f172a;
+        font-size: 1.75rem;
+        font-weight: 800;
+        text-align: center;
+    }
 
-.card-summary {
-    background: #ffffff !important;
-    border: 1px solid #cbd5e1 !important;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important;
-    border-radius: 12px !important;
-    padding: 24px;
-    margin-bottom: 20px;
-}
+    .confirmation-subtitle {
+        color: #475569;
+        text-align: center;
+        font-size: 0.95rem;
+        margin-bottom: 24px;
+    }
 
-.summary-dotted-line { border-top: 2px dashed #94a3b8; margin: 14px 0; }
-.summary-solid-line { border-top: 2px solid #6366f1; margin: 14px 0; }
+    .card-summary {
+        background: #ffffff !important;
+        border: 1px solid #cbd5e1 !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06) !important;
+        border-radius: 12px !important;
+        padding: 24px;
+        margin-bottom: 20px;
+    }
 
-.summary-plain-row {
-    display: flex;
-    justify-content: space-between;
-    font-size: 1rem;
-    color: #1f2937;
-    margin-bottom: 8px;
-}
+    .summary-dotted-line {
+        border-top: 2px dashed #94a3b8;
+        margin: 14px 0;
+    }
 
-.summary-plain-row.bold-row {
-    font-weight: 800;
-    font-size: 1.15rem;
-}
+    .summary-solid-line {
+        border-top: 2px solid #6366f1;
+        margin: 14px 0;
+    }
 
-.summary-movie-poster {
-    width: 80px;
-    height: 120px;
-    object-fit: cover;
-    border-radius: 8px;
-    flex-shrink: 0;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-}
+    .summary-plain-row {
+        display: flex;
+        justify-content: space-between;
+        font-size: 1rem;
+        color: #1f2937;
+        margin-bottom: 8px;
+    }
 
-.summary-movie-title {
-    font-weight: 700;
-    color: #0f172a;
-    font-size: 1.1rem;
-    line-height: 1.3;
-}
+    .summary-plain-row.bold-row {
+        font-weight: 800;
+        font-size: 1.15rem;
+    }
 
-.promo-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 14px;
-    border-radius: 20px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    border: 1px solid;
-}
+    .summary-movie-poster {
+        width: 80px;
+        height: 120px;
+        object-fit: cover;
+        border-radius: 8px;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
 
-.promo-tag .promo-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    display: inline-block;
-    flex-shrink: 0;
-}
+    .summary-movie-title {
+        font-weight: 700;
+        color: #0f172a;
+        font-size: 1.1rem;
+        line-height: 1.3;
+    }
 
-.promo-tag.monday { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
-.promo-tag.monday .promo-dot { background: #15803d; }
-.promo-tag.presale { background: #fef3c7; color: #b45309; border-color: #fde68a; }
-.promo-tag.presale .promo-dot { background: #b45309; }
+    .promo-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        border: 1px solid;
+    }
 
-.format-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2px 10px;
-    border-radius: 5px;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    line-height: 1.4;
-    background: transparent !important;
-    border: 1px solid #4f5e71;
-    color: #4f5e71;
-}
+    .promo-tag .promo-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        display: inline-block;
+        flex-shrink: 0;
+    }
 
-.ticket-summary-item {
-    display: flex;
-    justify-content: space-between;
-    font-size: 0.9rem;
-    color: #1f2937;
-    padding: 2px 0;
-}
+    .promo-tag.monday {
+        background: #dcfce7;
+        color: #15803d;
+        border-color: #bbf7d0;
+    }
 
-.ticket-summary-item .ticket-type { font-weight: 500; color: #1f2937; }
-.ticket-summary-item .ticket-total { font-weight: 600; color: #16a34a; }
+    .promo-tag.monday .promo-dot {
+        background: #15803d;
+    }
 
-.cart-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 6px 0;
-    border-bottom: 1px solid #e2e8f0;
-    font-size: 0.95rem;
-}
+    .promo-tag.presale {
+        background: #fef3c7;
+        color: #b45309;
+        border-color: #fde68a;
+    }
 
-.cart-item:last-child { border-bottom: none; }
-.cart-item .item-name { color: #1f2937; flex: 1; word-break: break-word; font-weight: 500; }
-.cart-item .item-price { color: #16a34a; font-weight: 600; font-size: 0.95rem; }
+    .promo-tag.presale .promo-dot {
+        background: #b45309;
+    }
 
-.seats-display { font-size: 0.95rem; font-weight: 500; color: #1f2937; word-break: break-word; }
+    .format-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 10px;
+        border-radius: 5px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        line-height: 1.4;
+        background: transparent !important;
+        border: 1px solid #4f5e71;
+        color: #4f5e71;
+    }
 
-.seat-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px 12px;
-    margin-top: 4px;
-}
+    .ticket-summary-item {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.9rem;
+        color: #1f2937;
+        padding: 2px 0;
+    }
 
-.seat-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    font-weight: 600;
-    color: #0f172a;
-    background: #f1f5f9;
-    padding: 2px 10px 2px 8px;
-    border-radius: 6px;
-    border: 1px solid #e2e8f0;
-    font-size: 0.85rem;
-}
+    .ticket-summary-item .ticket-type {
+        font-weight: 500;
+        color: #1f2937;
+    }
 
-.seat-item.accessible {
-    color: #1d4ed8;
-    border-color: #bfdbfe;
-    background: #dbeafe;
-}
+    .ticket-summary-item .ticket-total {
+        font-weight: 600;
+        color: #16a34a;
+    }
 
-.seat-item .accessible-icon { font-size: 0.8rem; }
-.seat-item .seat-label { font-weight: 700; }
+    .cart-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid #e2e8f0;
+        font-size: 0.95rem;
+    }
 
-.payment-box {
-    background: #f8fafc;
-    border-radius: 12px;
-    padding: 16px;
-    border: 1px solid #e2e8f0;
-    margin-top: 16px;
-}
+    .cart-item:last-child {
+        border-bottom: none;
+    }
 
-.payment-box .payment-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding-bottom: 8px;
-    border-bottom: 1px solid #e2e8f0;
-}
+    .cart-item .item-name {
+        color: #1f2937;
+        flex: 1;
+        word-break: break-word;
+        font-weight: 500;
+    }
 
-.payment-box .payment-header .payment-label { color: #1f2937; font-size: 0.9rem; font-weight: 600; }
-.payment-box .payment-header .payment-value { color: #0f172a; font-weight: 700; font-size: 0.95rem; }
+    .cart-item .item-price {
+        color: #16a34a;
+        font-weight: 600;
+        font-size: 0.95rem;
+    }
 
-.payment-box .payment-detail {
-    display: flex;
-    justify-content: space-between;
-    padding: 6px 0;
-    font-size: 0.85rem;
-    color: #1f2937;
-    border-bottom: 1px solid #f1f5f9;
-}
+    .seats-display {
+        font-size: 0.95rem;
+        font-weight: 500;
+        color: #1f2937;
+        word-break: break-word;
+    }
 
-.payment-box .payment-detail:last-child { border-bottom: none; }
-.payment-box .payment-detail .detail-label { color: #4b5563; font-weight: 500; }
-.payment-box .payment-detail .detail-value { color: #0f172a; font-weight: 600; }
+    .seat-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 12px;
+        margin-top: 4px;
+    }
 
-.btn-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 24px;
-}
+    .seat-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        font-weight: 600;
+        color: #0f172a;
+        background: #f1f5f9;
+        padding: 2px 10px 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #e2e8f0;
+        font-size: 0.85rem;
+    }
 
-.btn-actions .btn-primary {
-    background: linear-gradient(135deg, #4f46e5, #7c3aed);
-    color: #ffffff !important;
-    padding: 12px 20px;
-    border-radius: 8px;
-    font-weight: 700;
-    font-size: 1rem;
-    text-align: center;
-    transition: all 0.3s ease;
-    border: none;
-    cursor: pointer;
-    text-decoration: none;
-    display: block;
-}
+    .seat-item.accessible {
+        color: #1d4ed8;
+        border-color: #bfdbfe;
+        background: #dbeafe;
+    }
 
-.btn-actions .btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
-}
+    .seat-item .accessible-icon {
+        font-size: 0.8rem;
+    }
 
-.btn-actions .btn-secondary {
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
-    color: #334155 !important;
-    padding: 11px 20px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 0.95rem;
-    text-align: center;
-    transition: all 0.3s ease;
-    text-decoration: none;
-    display: block;
-}
+    .seat-item .seat-label {
+        font-weight: 700;
+    }
 
-.btn-actions .btn-secondary:hover {
-    border-color: #6366f1;
-    color: #4f46e5 !important;
-    background: #eef2ff;
-}
+    .payment-box {
+        background: #f8fafc;
+        border-radius: 12px;
+        padding: 16px;
+        border: 1px solid #e2e8f0;
+        margin-top: 16px;
+    }
 
-.purchase-id {
-    font-family: 'Courier New', monospace;
-    background: #f1f5f9;
-    padding: 4px 14px;
-    border-radius: 6px;
-    color: #4f46e5;
-    font-size: 0.9rem;
-    font-weight: 700;
-    border: 1px solid #e2e8f0;
-}
+    .payment-box .payment-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 8px;
+        border-bottom: 1px solid #e2e8f0;
+    }
 
-.info-box {
-    padding: 12px 16px;
-    background: #eef2ff;
-    border: 1px solid #c7d2fe;
-    border-radius: 10px;
-    font-size: 0.8rem;
-    color: #3730a3;
-}
+    .payment-box .payment-header .payment-label {
+        color: #1f2937;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
 
-.info-box strong { color: #1e1b4b; }
-.info-box .text-sky-400 { color: #0369a1; }
+    .payment-box .payment-header .payment-value {
+        color: #0f172a;
+        font-weight: 700;
+        font-size: 0.95rem;
+    }
 
-.print-btn {
-    background: #ffffff;
-    border: 1px solid #cbd5e1;
-    color: #334155 !important;
-    padding: 11px 20px;
-    border-radius: 8px;
-    font-weight: 600;
-    font-size: 0.95rem;
-    text-align: center;
-    transition: all 0.3s ease;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-}
+    .payment-box .payment-detail {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+        font-size: 0.85rem;
+        color: #1f2937;
+        border-bottom: 1px solid #f1f5f9;
+    }
 
-.print-btn:hover {
-    border-color: #6366f1;
-    color: #4f46e5 !important;
-    background: #eef2ff;
-}
+    .payment-box .payment-detail:last-child {
+        border-bottom: none;
+    }
 
-.section-label {
-    color: #1f2937 !important;
-    font-weight: 700 !important;
-    font-size: 0.8rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
+    .payment-box .payment-detail .detail-label {
+        color: #4b5563;
+        font-weight: 500;
+    }
 
-.integrity-warning {
-    background: #fef3c7;
-    border: 1px solid #f59e0b;
-    border-radius: 8px;
-    padding: 12px 16px;
-    color: #92400e;
-    font-size: 0.85rem;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-}
+    .payment-box .payment-detail .detail-value {
+        color: #0f172a;
+        font-weight: 600;
+    }
 
-.integrity-warning .warning-icon { font-size: 1.2rem; flex-shrink: 0; margin-top: 1px; }
-.integrity-warning .warning-text { flex: 1; }
-.integrity-warning .warning-text strong { color: #78350f; }
+    .btn-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-top: 24px;
+    }
 
-@media (max-width: 640px) {
-    .confirmation-card { padding: 20px; margin: 0 8px; border-radius: 12px; }
-    .success-icon { width: 56px; height: 56px; font-size: 24px; margin-bottom: 14px; }
-    .confirmation-title { font-size: 1.3rem; }
-    .confirmation-subtitle { font-size: 0.85rem; margin-bottom: 18px; }
-    .card-summary { padding: 16px; }
-    .summary-movie-poster { width: 60px; height: 90px; }
-    .summary-movie-title { font-size: 0.95rem; }
-    .payment-box { padding: 12px; margin-top: 12px; }
-    .btn-actions { gap: 8px; margin-top: 18px; }
-    .btn-actions .btn-primary, .btn-actions .btn-secondary, .print-btn { padding: 10px; font-size: 0.85rem; }
-    .seat-list { gap: 4px 8px; }
-    .seat-item { padding: 1px 8px 1px 6px; font-size: 0.75rem; }
-    .ticket-summary-item { font-size: 0.8rem; }
-    .payment-box .payment-detail { font-size: 0.75rem; }
-    .integrity-warning { font-size: 0.75rem; padding: 10px 12px; }
-}
+    .btn-actions .btn-primary {
+        background: linear-gradient(135deg, #4f46e5, #7c3aed);
+        color: #ffffff !important;
+        padding: 12px 20px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 1rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        border: none;
+        cursor: pointer;
+        text-decoration: none;
+        display: block;
+    }
 
-@media print {
-    body { background: white !important; }
-    .btn-actions, .print-btn, header, footer { display: none !important; }
-    .confirmation-card { box-shadow: none !important; border: 1px solid #000 !important; max-width: 100% !important; }
-    .card-summary { box-shadow: none !important; border: 1px solid #ccc !important; }
-    .integrity-warning { display: none !important; }
-}
+    .btn-actions .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25);
+    }
+
+    .btn-actions .btn-secondary {
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        color: #334155 !important;
+        padding: 11px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: block;
+    }
+
+    .btn-actions .btn-secondary:hover {
+        border-color: #6366f1;
+        color: #4f46e5 !important;
+        background: #eef2ff;
+    }
+
+    .purchase-id {
+        font-family: 'Courier New', monospace;
+        background: #f1f5f9;
+        padding: 4px 14px;
+        border-radius: 6px;
+        color: #4f46e5;
+        font-size: 0.9rem;
+        font-weight: 700;
+        border: 1px solid #e2e8f0;
+    }
+
+    .info-box {
+        padding: 12px 16px;
+        background: #eef2ff;
+        border: 1px solid #c7d2fe;
+        border-radius: 10px;
+        font-size: 0.8rem;
+        color: #3730a3;
+    }
+
+    .info-box strong {
+        color: #1e1b4b;
+    }
+
+    .info-box .text-sky-400 {
+        color: #0369a1;
+    }
+
+    .print-btn {
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        color: #334155 !important;
+        padding: 11px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.95rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .print-btn:hover {
+        border-color: #6366f1;
+        color: #4f46e5 !important;
+        background: #eef2ff;
+    }
+
+    .section-label {
+        color: #1f2937 !important;
+        font-weight: 700 !important;
+        font-size: 0.8rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .integrity-warning {
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        border-radius: 8px;
+        padding: 12px 16px;
+        color: #92400e;
+        font-size: 0.85rem;
+        margin-bottom: 16px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .integrity-warning .warning-icon {
+        font-size: 1.2rem;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+
+    .integrity-warning .warning-text {
+        flex: 1;
+    }
+
+    .integrity-warning .warning-text strong {
+        color: #78350f;
+    }
+
+    @media (max-width: 640px) {
+        .confirmation-card {
+            padding: 20px;
+            margin: 0 8px;
+            border-radius: 12px;
+        }
+
+        .success-icon {
+            width: 56px;
+            height: 56px;
+            font-size: 24px;
+            margin-bottom: 14px;
+        }
+
+        .confirmation-title {
+            font-size: 1.3rem;
+        }
+
+        .confirmation-subtitle {
+            font-size: 0.85rem;
+            margin-bottom: 18px;
+        }
+
+        .card-summary {
+            padding: 16px;
+        }
+
+        .summary-movie-poster {
+            width: 60px;
+            height: 90px;
+        }
+
+        .summary-movie-title {
+            font-size: 0.95rem;
+        }
+
+        .payment-box {
+            padding: 12px;
+            margin-top: 12px;
+        }
+
+        .btn-actions {
+            gap: 8px;
+            margin-top: 18px;
+        }
+
+        .btn-actions .btn-primary,
+        .btn-actions .btn-secondary,
+        .print-btn {
+            padding: 10px;
+            font-size: 0.85rem;
+        }
+
+        .seat-list {
+            gap: 4px 8px;
+        }
+
+        .seat-item {
+            padding: 1px 8px 1px 6px;
+            font-size: 0.75rem;
+        }
+
+        .ticket-summary-item {
+            font-size: 0.8rem;
+        }
+
+        .payment-box .payment-detail {
+            font-size: 0.75rem;
+        }
+
+        .integrity-warning {
+            font-size: 0.75rem;
+            padding: 10px 12px;
+        }
+    }
+
+    @media print {
+        body {
+            background: white !important;
+        }
+
+        .btn-actions,
+        .print-btn,
+        header,
+        footer {
+            display: none !important;
+        }
+
+        .confirmation-card {
+            box-shadow: none !important;
+            border: 1px solid #000 !important;
+            max-width: 100% !important;
+        }
+
+        .card-summary {
+            box-shadow: none !important;
+            border: 1px solid #ccc !important;
+        }
+
+        .integrity-warning {
+            display: none !important;
+        }
+    }
 </style>
 
 <div class="container mx-auto px-4 py-6 sm:py-10 max-w-4xl">
@@ -720,9 +889,9 @@ body {
             <div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
                 <?php if (!empty($display_poster)): ?>
                     <img src="<?= htmlspecialchars($display_poster) ?>"
-                         alt="<?= htmlspecialchars($showtime['title']) ?>"
-                         class="summary-movie-poster"
-                         onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        alt="<?= htmlspecialchars($showtime['title']) ?>"
+                        class="summary-movie-poster"
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
                     <div class="summary-movie-poster flex items-center justify-center text-4xl bg-gray-100 text-gray-400" style="display:none;">
                         🎬
                     </div>
@@ -916,48 +1085,49 @@ body {
 <?php require_once 'footer.php'; ?>
 
 <script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
-document.addEventListener('DOMContentLoaded', function() {
-    const showtimeId = <?= intval($showtimeId) ?>;
+    document.addEventListener('DOMContentLoaded', function() {
+        const showtimeId = <?= intval($showtimeId) ?>;
 
-    console.log('🗑️ Limpiando sessionStorage para showtime:', showtimeId);
+        console.log('🗑️ Limpiando sessionStorage para showtime:', showtimeId);
 
-    const keysToRemove = [];
-    for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (key && (
-            key.startsWith('selected_seats_' + showtimeId) ||
-            key.startsWith('selected_seats_count_' + showtimeId) ||
-            key.startsWith('food_timeout_' + showtimeId) ||
-            key.startsWith('food_seats_' + showtimeId) ||
-            key.startsWith('ticket_selection_' + showtimeId) ||
-            key.startsWith('food_order_' + showtimeId) ||
-            key.startsWith('purchase_token_' + showtimeId)
-        )) {
-            keysToRemove.push(key);
+        const keysToRemove = [];
+        for (let i = 0; i < sessionStorage.length; i++) {
+            const key = sessionStorage.key(i);
+            if (key && (
+                    key.startsWith('selected_seats_' + showtimeId) ||
+                    key.startsWith('selected_seats_count_' + showtimeId) ||
+                    key.startsWith('food_timeout_' + showtimeId) ||
+                    key.startsWith('food_seats_' + showtimeId) ||
+                    key.startsWith('ticket_selection_' + showtimeId) ||
+                    key.startsWith('food_order_' + showtimeId) ||
+                    key.startsWith('purchase_token_' + showtimeId)
+                )) {
+                keysToRemove.push(key);
+            }
         }
-    }
 
-    keysToRemove.forEach(key => {
-        sessionStorage.removeItem(key);
-        console.log('🗑️ Eliminado:', key);
+        keysToRemove.forEach(key => {
+            sessionStorage.removeItem(key);
+            console.log('🗑️ Eliminado:', key);
+        });
+
+        if (keysToRemove.length === 0) {
+            console.log('✅ No hay claves de sessionStorage para limpiar');
+        } else {
+            console.log('✅ SessionStorage limpiado correctamente (' + keysToRemove.length + ' claves)');
+        }
+
+        if (window.history && window.history.replaceState) {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('purchase_id')) {
+                url.searchParams.delete('purchase_id');
+                window.history.replaceState({}, document.title, url.toString());
+                console.log('🧹 URL limpiada (purchase_id removido)');
+            }
+        }
     });
-
-    if (keysToRemove.length === 0) {
-        console.log('✅ No hay claves de sessionStorage para limpiar');
-    } else {
-        console.log('✅ SessionStorage limpiado correctamente (' + keysToRemove.length + ' claves)');
-    }
-
-    if (window.history && window.history.replaceState) {
-        const url = new URL(window.location.href);
-        if (url.searchParams.has('purchase_id')) {
-            url.searchParams.delete('purchase_id');
-            window.history.replaceState({}, document.title, url.toString());
-            console.log('🧹 URL limpiada (purchase_id removido)');
-        }
-    }
-});
 </script>
 
 </body>
+
 </html>

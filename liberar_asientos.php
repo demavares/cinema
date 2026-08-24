@@ -1,17 +1,28 @@
 <?php
 // ============================================
-// liberar_asientos.php - Liberar asientos reservados
+// liberar_asientos.php - Libera holds y expira compras pending
 // ============================================
-header('Content-Type: application/json');
-error_reporting(E_ALL);
-ini_set('display_errors', 0);
+// Acepta POST normal (fetch) y navigator.sendBeacon().
+// El beacon NO permite cabeceras personalizadas, por lo que
+// este script NO exige X-Requested-With ni similares.
+//
+// MODOS:
+//   action=full  (por defecto) → Liberación INMEDIATA.
+//       Se usa en: botón "Volver a Boletos" y seats.php.
+//       Expira la compra pending, elimina los holds y limpia la sesión.
+//
+//   action=grace → Liberación DIFERIDA (cerrar pestaña/navegador).
+//       Marca la compra pending para expirar en 20 segundos.
+//       - Si el usuario RECARGA (F5) o vuelve al flujo, la página
+//         restaura la reserva (cancela la gracia) y todo continúa.
+//       - Si el usuario CERRÓ la pestaña/navegador, nadie cancela la
+//         gracia: la compra expira y la limpieza automática libera
+//         los asientos (y quedan libres para otros usuarios al instante
+//         pasado ese lapso).
+// ============================================
 require_once 'config.php';
 
-if (!isset($_SESSION['user_id'])) {
-    http_response_code(403);
-    echo json_encode(['success' => false, 'error' => 'No autenticado']);
-    exit;
-}
+header('Content-Type: application/json');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -19,62 +30,73 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-$showtimeId = isset($_POST['showtime_id']) ? intval($_POST['showtime_id']) : 0;
-
+$showtimeId = intval($_POST['showtime_id'] ?? 0);
 if ($showtimeId <= 0) {
-    http_response_code(400);
-    echo json_encode(['success' => false, 'error' => 'Showtime inválido']);
+    echo json_encode(['success' => false, 'error' => 'showtime_id inválido']);
     exit;
 }
 
+if (!isset($_SESSION['user_id'])) {
+    echo json_encode(['success' => false, 'error' => 'No autenticado']);
+    exit;
+}
+
+$userId = (int)$_SESSION['user_id'];
+$action = $_POST['action'] ?? 'full';
+
 try {
+    // ============================================
+    // MODO GRACE (unload: cerrar / recargar / navegar)
+    // ============================================
+    if ($action === 'grace') {
+        $stmtGrace = $pdo->prepare("
+            UPDATE purchases
+            SET expires_at = DATE_ADD(NOW(), INTERVAL 20 SECOND)
+            WHERE user_id = ?
+              AND showtime_id = ?
+              AND status = 'pending'
+        ");
+        $stmtGrace->execute([$userId, $showtimeId]);
+
+        echo json_encode(['success' => true, 'mode' => 'grace']);
+        exit;
+    }
+
+    // ============================================
+    // MODO FULL (liberación inmediata)
+    // ============================================
     $pdo->beginTransaction();
 
-    // ============================================
-    // Marcar compras pendientes como expiradas
-    // ============================================
-    $stmt = $pdo->prepare("
+    // 1) Expirar compras 'pending' del usuario en este showtime
+    $stmtExpire = $pdo->prepare("
         UPDATE purchases
         SET status = 'expired', expires_at = NOW()
-        WHERE user_id = ? AND showtime_id = ? AND status = 'pending'
+        WHERE user_id = ?
+          AND showtime_id = ?
+          AND status = 'pending'
     ");
-    $stmt->execute([$_SESSION['user_id'], $showtimeId]);
-    $expiredCount = $stmt->rowCount();
+    $stmtExpire->execute([$userId, $showtimeId]);
 
-    // ============================================
-    // UNIFICADO: Eliminar SOLO reservas temporales (status='hold')
-    // Sin NOT EXISTS redundante. status='hold' garantiza que nunca
-    // se toca un ticket confirmado (pagado).
-    // ============================================
-    $stmt = $pdo->prepare("
+    // 2) Eliminar tickets 'hold' del usuario en este showtime
+    $stmtDelete = $pdo->prepare("
         DELETE FROM tickets
-        WHERE showtime_id = ? AND user_id = ?
-        AND status = 'hold'
+        WHERE user_id = ?
+          AND showtime_id = ?
+          AND status = 'hold'
     ");
-    $stmt->execute([$showtimeId, $_SESSION['user_id']]);
-    $deletedCount = $stmt->rowCount();
+    $stmtDelete->execute([$userId, $showtimeId]);
+    $released = $stmtDelete->rowCount();
 
     $pdo->commit();
 
-    // Limpiar sesión
+    // 3) Limpiar claves de sesión del flujo
     clearPurchaseSession($showtimeId);
-    unset($_SESSION['food_valid_' . $showtimeId]);
-    unset($_SESSION['food_seats_' . $showtimeId]);
-    unset($_SESSION['food_timeout_' . $showtimeId]);
-    unset($_SESSION['food_order_' . $showtimeId]);
 
-    echo json_encode([
-        'success' => true,
-        'expired_purchases' => $expiredCount,
-        'deleted_tickets' => $deletedCount
-    ]);
-    exit;
-
+    echo json_encode(['success' => true, 'released' => $released]);
 } catch (Exception $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     error_log("❌ liberar_asientos.php: " . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
-    exit;
+    echo json_encode(['success' => false, 'error' => 'Error interno']);
 }
-?>

@@ -2,7 +2,7 @@
 require_once 'config.php';
 
 // ============================================
-// ✅ REGISTRAR LOGOUT ANTES DE DESTRUIR LA SESIÓN
+// REGISTRAR LOGOUT ANTES DE DESTRUIR LA SESIÓN
 // ============================================
 $userId = $_SESSION['user_id'] ?? null;
 $userName = $_SESSION['user_name'] ?? 'Desconocido';
@@ -20,7 +20,7 @@ if ($userId) {
 }
 
 // ============================================
-// ✅ LIMPIAR SESIONES DE COMPRA Y COMIDA (AUTOCONTENIDO)
+// LIMPIAR SESIONES DE COMPRA Y COMIDA (AUTOCONTENIDO)
 // ============================================
 $sessionPrefixes = ['food_', 'purchase_', 'ticket_', 'total_', 'subtotal_', 'tax_', 'payment_'];
 
@@ -34,7 +34,7 @@ foreach ($_SESSION as $key => $value) {
 }
 
 // ============================================
-// ✅ ACTUALIZAR COMPRAS PENDIENTES DEL USUARIO
+// ACTUALIZAR COMPRAS PENDIENTES DEL USUARIO
 // ============================================
 if ($userId) {
     try {
@@ -47,7 +47,7 @@ if ($userId) {
             AND expires_at < NOW()
         ");
         $stmt->execute([$userId]);
-        
+
         // Limpiar tokens de sesión activos
         $stmt = $pdo->prepare("
             UPDATE purchases 
@@ -56,7 +56,6 @@ if ($userId) {
             AND status = 'pending'
         ");
         $stmt->execute([$userId]);
-        
     } catch (PDOException $e) {
         error_log("Error limpiando compras pendientes en logout: " . $e->getMessage());
     }
@@ -103,4 +102,3 @@ $_SESSION['logout_time'] = time();
 // ============================================
 header('Location: index.php?logout=1');
 exit;
-?>

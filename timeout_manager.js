@@ -1,7 +1,6 @@
 // ============================================
 // TIMEOUT MANAGER - Gestión unificada del timeout
 // ============================================
-
 const TimeoutManager = {
     // Configuración
     config: {
@@ -13,7 +12,7 @@ const TimeoutManager = {
         redirectOnExpire: true,
         redirectUrl: 'index.php?timeout=1'
     },
-    
+
     // Estado
     state: {
         timeoutSeconds: 600,
@@ -27,44 +26,44 @@ const TimeoutManager = {
         iconEl: null,
         sessionValidated: false
     },
-    
+
     // ============================================
     // INICIALIZAR TIMEOUT
     // ============================================
     init(config) {
         this.config = { ...this.config, ...config };
-        
+
         // Buscar elementos DOM
         this.state.countdownEl = document.getElementById('countdownTimer');
         this.state.warningEl = document.getElementById('timeoutWarning');
         this.state.statusEl = document.getElementById('timeoutStatus');
         this.state.iconEl = document.getElementById('timeoutIcon');
-        
+
         if (!this.state.countdownEl) {
             console.warn('TimeoutManager: Elementos DOM no encontrados');
             return this;
         }
-        
+
         // Intentar restaurar desde sessionStorage ANTES de verificar con el servidor
         const savedTime = this.restoreFromSessionStorage();
         if (savedTime !== null && savedTime > 0) {
             this.state.timeoutSeconds = savedTime;
             this.updateDisplay();
         }
-        
+
         // Verificar con el servidor (fuente de verdad)
         this.verifySession();
-        
+
         return this;
     },
-    
+
     // ============================================
     // RESTAURAR DESDE SESSIONSTORAGE (para evitar parpadeo)
     // ============================================
     restoreFromSessionStorage() {
         const showtimeId = this.config.showtimeId;
         if (!showtimeId) return null;
-        
+
         try {
             const savedTime = sessionStorage.getItem('food_timeout_' + showtimeId);
             if (savedTime !== null) {
@@ -79,7 +78,7 @@ const TimeoutManager = {
         }
         return null;
     },
-    
+
     // ============================================
     // VERIFICAR SESIÓN EN EL SERVIDOR (ÚNICA FUENTE DE VERDAD)
     // ============================================
@@ -90,38 +89,39 @@ const TimeoutManager = {
             this.redirectTo('index.php');
             return;
         }
-        
+
         console.log('TimeoutManager: Verificando sesión en el servidor...');
-        
+
         fetch('check_session.php?showtime_id=' + showtimeId + '&t=' + Date.now())
             .then(response => response.json())
             .then(data => {
                 console.log('TimeoutManager: Respuesta del servidor:', data);
-                
+
                 if (!data.valid) {
                     console.log('TimeoutManager: Sesión inválida, redirigiendo...');
                     this.handleInvalidSession(data.reason);
                     return;
                 }
-                
+
                 // Verificar que los asientos coincidan (si se proporcionaron)
                 if (this.config.seats && data.seats && data.seats !== this.config.seats) {
                     console.warn('TimeoutManager: Asientos no coinciden');
                     this.redirectTo('index.php');
                     return;
                 }
-                
+
                 // SIEMPRE usar el tiempo del servidor, NO el initialTimeout
                 if (data.timeLeft !== undefined && data.timeLeft > 0) {
                     this.state.timeoutSeconds = data.timeLeft;
                     this.state.sessionValidated = true;
-                    
+
                     // Guardar en sessionStorage para persistencia
                     sessionStorage.setItem('food_timeout_' + showtimeId, data.timeLeft.toString());
                     sessionStorage.setItem('food_seats_' + showtimeId, data.seats || this.config.seats || '');
-                    
+
                     this.updateDisplay();
                     this.start();
+
                     console.log('TimeoutManager: Sesión válida, tiempo restante del servidor:', data.timeLeft);
                 } else {
                     this.handleExpiredSession();
@@ -129,6 +129,7 @@ const TimeoutManager = {
             })
             .catch(error => {
                 console.error('TimeoutManager: Error verificando sesión', error);
+
                 // Si hay error de red, usar el tiempo local si existe
                 const savedTime = this.restoreFromSessionStorage();
                 if (savedTime !== null && savedTime > 0) {
@@ -140,48 +141,48 @@ const TimeoutManager = {
                 }
             });
     },
-    
+
     // ============================================
     // INICIAR CONTADORES
     // ============================================
     start() {
         if (this.state.isRunning) return this;
-        
         this.state.isRunning = true;
-        
+
         // Iniciar tick cada segundo
         this.state.timerId = setInterval(() => {
             if (!this.state.timeoutExpired) {
                 this.state.timeoutSeconds--;
                 this.updateDisplay();
-                
+
                 // Guardar en sessionStorage cada segundo
                 const showtimeId = this.config.showtimeId;
                 if (showtimeId) {
                     sessionStorage.setItem('food_timeout_' + showtimeId, this.state.timeoutSeconds.toString());
                 }
-                
+
                 if (this.state.timeoutSeconds <= 0) {
                     this.handleExpiredSession();
                 }
             }
         }, this.config.tickInterval);
-        
+
         // Iniciar sincronización con el servidor
         this.state.syncId = setInterval(() => {
             this.syncWithServer();
         }, this.config.syncInterval);
-        
+
         return this;
     },
-    
+
     // ============================================
     // SINCRONIZAR CON EL SERVIDOR
     // ============================================
     syncWithServer() {
         if (this.state.timeoutExpired) return;
-        
+
         const showtimeId = this.config.showtimeId;
+
         fetch('check_session.php?showtime_id=' + showtimeId + '&t=' + Date.now())
             .then(response => response.json())
             .then(data => {
@@ -189,6 +190,7 @@ const TimeoutManager = {
                     this.handleInvalidSession(data.reason);
                     return;
                 }
+
                 if (data.timeLeft !== undefined && data.timeLeft > 0) {
                     // Usar el tiempo del servidor, NO sobrescribir con initialTimeout
                     this.state.timeoutSeconds = data.timeLeft;
@@ -200,39 +202,40 @@ const TimeoutManager = {
             })
             .catch(() => {});
     },
-    
+
     // ============================================
     // MANEJAR SESIÓN INVÁLIDA
     // ============================================
     handleInvalidSession(reason) {
         this.stop();
+
         const showtimeId = this.config.showtimeId;
         if (showtimeId) {
             sessionStorage.removeItem('food_timeout_' + showtimeId);
             sessionStorage.removeItem('food_seats_' + showtimeId);
         }
+
         if (reason === 'timeout_expired') {
             this.redirectTo('index.php?timeout=1');
         } else {
             this.redirectTo('index.php');
         }
     },
-    
+
     // ============================================
     // MANEJAR SESIÓN EXPIRADA
     // ============================================
     handleExpiredSession() {
         if (this.state.timeoutExpired) return;
-        
         this.state.timeoutExpired = true;
         this.stop();
-        
+
         const showtimeId = this.config.showtimeId;
         if (showtimeId) {
             sessionStorage.removeItem('food_timeout_' + showtimeId);
             sessionStorage.removeItem('food_seats_' + showtimeId);
         }
-        
+
         fetch('clear_seats_session.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -243,7 +246,7 @@ const TimeoutManager = {
             }
         });
     },
-    
+
     // ============================================
     // DETENER CONTADORES
     // ============================================
@@ -259,7 +262,7 @@ const TimeoutManager = {
         this.state.isRunning = false;
         return this;
     },
-    
+
     // ============================================
     // ACTUALIZAR PANTALLA
     // ============================================
@@ -267,14 +270,18 @@ const TimeoutManager = {
         const seconds = this.state.timeoutSeconds;
         const mins = String(Math.floor(seconds / 60)).padStart(2, '0');
         const secs = String(seconds % 60).padStart(2, '0');
-        
+
         if (this.state.countdownEl) {
-            this.state.countdownEl.textContent = `${mins}:${secs}`;
+            // ✅ CORREGIDO: unidad dinámica en el lado derecho
+            // Muestra "min" mientras haya minutos (ej: 07:20 min)
+            // y cambia a "seg" cuando solo quedan segundos (ej: 00:25 seg)
+            const unit = Math.floor(seconds / 60) > 0 ? 'min' : 'seg';
+            this.state.countdownEl.textContent = `${mins}:${secs} ${unit}`;
         }
-        
+
         this.updateColors();
     },
-    
+
     // ============================================
     // ACTUALIZAR COLORES DEL WARNING
     // ============================================
@@ -283,11 +290,11 @@ const TimeoutManager = {
         const warning = this.state.warningEl;
         const status = this.state.statusEl;
         const icon = this.state.iconEl;
-        
+
         if (!warning) return;
-        
+
         warning.classList.remove('normal', 'warning', 'danger');
-        
+
         if (seconds > 60) {
             warning.classList.add('normal');
             if (status) status.textContent = 'Los asientos se liberarán automáticamente';
@@ -306,28 +313,28 @@ const TimeoutManager = {
             if (icon) icon.className = 'fas fa-hourglass-end';
         }
     },
-    
+
     // ============================================
     // REDIRIGIR
     // ============================================
     redirectTo(url) {
         window.location.href = url;
     },
-    
+
     // ============================================
     // OBTENER TIEMPO RESTANTE
     // ============================================
     getTimeLeft() {
         return this.state.timeoutSeconds;
     },
-    
+
     // ============================================
     // VERIFICAR SI ESTÁ EXPIRADO
     // ============================================
     isExpired() {
         return this.state.timeoutExpired;
     },
-    
+
     // ============================================
     // DESTRUIR
     // ============================================
