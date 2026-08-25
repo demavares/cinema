@@ -182,6 +182,9 @@ $_SESSION['total_amount_' . $showtimeId] = $totalAmount;
 $_SESSION['tax_rate_' . $showtimeId] = $taxRate;
 }
 $selectedSeats = $userPendingSeats;
+// ✅ NUEVO: Ilustración personalizada de asientos (solo si este horario tiene imagen subida)
+$customSeatMap = $showtime['seat_map_image'] ?? '';
+$hasCustomSeatMap = !empty($customSeatMap) && file_exists($customSeatMap);
 require_once 'header.php';
 ?>
 <style>
@@ -212,6 +215,9 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .row-label { width: clamp(20px, 2.5vw, 28px); font-size: clamp(0.6rem, 1vw, 0.75rem); color: #475569; font-weight: bold; text-align: right; padding-right: clamp(4px, 0.6vw, 8px); flex-shrink: 0; position: sticky; left: 0; background: #ffffff; z-index: 5; }
 .seat-grid-scroll-wrapper { width: 100%; overflow: auto; padding: 8px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
 .seat-grid-container { display: grid; gap: clamp(2px, 0.4vw, 4px); padding: clamp(4px, 0.8vw, 10px); width: max-content; margin: 0 auto; }
+/* ✅ NUEVO: Ilustración personalizada de asientos */
+.custom-seat-map { text-align: center; margin-bottom: 16px; }
+.custom-seat-map-img { max-width: 100%; max-height: 280px; object-fit: contain; border-radius: 12px; border: 1px solid #1e1e2e; background: #0f172a; padding: 8px; }
 .card-summary { background: #ffffff !important; border: 1px solid #cbd5e1 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.06) !important; border-radius: 12px !important; padding: 24px; }
 .summary-dotted-line { border-top: 2px dashed #94a3b8; margin: 14px 0; }
 .summary-solid-line { border-top: 2px solid #6366f1; margin: 14px 0; }
@@ -260,6 +266,13 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 <span><?= $realAvailable + count($userPendingSeats) ?> asientos disponibles</span>
 </div>
 <div class="seats-container">
+<!-- ✅ NUEVO: Ilustración personalizada (solo si este horario tiene imagen subida) -->
+<?php if ($hasCustomSeatMap): ?>
+<div class="custom-seat-map">
+<img src="<?= htmlspecialchars($customSeatMap) ?>?v=<?= filemtime($customSeatMap) ?>"
+alt="Ilustración de la sala" class="custom-seat-map-img">
+</div>
+<?php endif; ?>
 <div class="seat-grid-scroll-wrapper">
 <div class="seat-grid-container">
 <?php
@@ -418,7 +431,6 @@ fetch('liberar_asientos.php', { method: 'POST', body: formData, headers: { 'X-Re
 }
 // ============================================
 // ✅ LIBERAR ASIENTOS AL CERRAR NAVEGADOR / PESTAÑA
-// pagehide es el evento confiable; beforeunload queda como respaldo.
 // ============================================
 let unloadReleaseSent = false;
 function releaseSeatsOnUnload() {
@@ -443,7 +455,7 @@ const isReload = event.persisted ||
 (navEntry && navEntry.type === 'reload') ||
 (window.performance && window.performance.navigation && window.performance.navigation.type === 2);
 if (isReload) {
-skipUnloadRelease = true; // evita un beacon duplicado durante el redirect
+skipUnloadRelease = true;
 liberarAsientos(function() {
 window.location.replace('index.php?expired=1');
 });

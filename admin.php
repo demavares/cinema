@@ -487,6 +487,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $format = sanitizeInput($_POST['format'] ?? '2D');
             $price_adult = filter_var($_POST['price_adult'] ?? 0, FILTER_VALIDATE_FLOAT);
 
+            // ✅ CORREGIDO: Manejar precios de niño y tercera edad
             $enable_child_price = isset($_POST['enable_child_price']) ? 1 : 0;
             $enable_senior_price = isset($_POST['enable_senior_price']) ? 1 : 0;
 
@@ -528,41 +529,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if ($conflict['conflict']) {
                         $error = "❌ " . $conflict['message'];
                     } else {
-                        // ✅ NUEVO: Subir ilustración personalizada del mapa de asientos
-                        $seat_map_image = '';
-                        if (isset($_FILES['seat_map_image']) && $_FILES['seat_map_image']['error'] === UPLOAD_ERR_OK) {
-                            $upload_result = secureFileUpload($_FILES['seat_map_image'], ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'], 2097152);
-                            if ($upload_result['success']) {
-                                $upload_dir = 'uploads/';
-                                if (!is_dir($upload_dir)) {
-                                    mkdir($upload_dir, 0755, true);
-                                }
-                                $filename = 'seatmap_' . time() . '_' . uniqid() . '.' . $upload_result['extension'];
-                                $destination = $upload_dir . $filename;
-                                if (move_uploaded_file($_FILES['seat_map_image']['tmp_name'], $destination)) {
-                                    $seat_map_image = $destination;
-                                } else {
-                                    $error = "Error al subir la imagen del mapa de asientos.";
-                                }
-                            } else {
-                                $error = $upload_result['error'];
-                            }
-                        }
                         try {
                             $stmt = $pdo->prepare("
                                 INSERT INTO showtimes (
                                     movie_id, room_id, show_date, show_time,
                                     price, price_adult, price_child, price_senior,
                                     enable_child_price, enable_senior_price,
-                                    half_price_monday, promotions, language, format, seat_map_image
-                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    half_price_monday, promotions, language, format
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             ");
                             $stmt->execute([
                                 $movie_id, $room_id, $show_date, $show_time,
                                 $price_adult, $price_adult, $price_child, $price_senior,
                                 $enable_child_price, $enable_senior_price,
                                 $half_price_monday, $promotions_str, $language,
-                                $format, $seat_map_image
+                                $format
                             ]);
                             header("Location: admin.php?tab=showtimes&msg=" . urlencode("Horario agregado exitosamente."));
                             exit;
@@ -581,9 +562,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         elseif (isset($_POST['edit_showtime'])) {
             $old_id = filter_var($_POST['showtime_id'] ?? 0, FILTER_VALIDATE_INT);
 
+            // ✅ CORREGIDO: Obtener precios actuales ANTES de procesar para no destruirlos
             $old_prices = ['price_child' => 0, 'price_senior' => 0, 'enable_child_price' => 0, 'enable_senior_price' => 0];
             if ($old_id > 0) {
-                $stmtOldPrices = $pdo->prepare("SELECT price_child, price_senior, enable_child_price, enable_senior_price, seat_map_image FROM showtimes WHERE id = ?");
+                $stmtOldPrices = $pdo->prepare("SELECT price_child, price_senior, enable_child_price, enable_senior_price FROM showtimes WHERE id = ?");
                 $stmtOldPrices->execute([$old_id]);
                 $tmpPrices = $stmtOldPrices->fetch();
                 if ($tmpPrices) {
@@ -598,21 +580,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $format = sanitizeInput($_POST['format'] ?? '2D');
             $price_adult = filter_var($_POST['price_adult'] ?? 0, FILTER_VALIDATE_FLOAT);
 
+            // ✅ CORREGIDO: Capturar switches
             $enable_child_price = isset($_POST['enable_child_price']) ? 1 : 0;
             $enable_senior_price = isset($_POST['enable_senior_price']) ? 1 : 0;
 
+            // ✅ CORREGIDO: No destruir precios si el input no fue enviado o viene vacío
             $posted_child = $_POST['price_child'] ?? '';
             $posted_senior = $_POST['price_senior'] ?? '';
 
             if ($enable_child_price) {
+                // Si está habilitado y el admin escribió un precio, usar ese precio.
+                // Si el campo vino vacío, conservar el precio anterior.
                 $price_child = is_numeric($posted_child) ? floatval($posted_child) : floatval($old_prices['price_child']);
             } else {
+                // ✅ Si el switch está apagado, conservamos el precio en BD,
+                // pero enable_child_price = 0 indica que no debe usarse.
                 $price_child = floatval($old_prices['price_child']);
             }
 
             if ($enable_senior_price) {
+                // Si está habilitado y el admin escribió un precio, usar ese precio.
+                // Si el campo vino vacío, conservar el precio anterior.
                 $price_senior = is_numeric($posted_senior) ? floatval($posted_senior) : floatval($old_prices['price_senior']);
             } else {
+                // ✅ Si el switch está apagado, conservamos el precio en BD,
+                // pero enable_senior_price = 0 indica que no debe usarse.
                 $price_senior = floatval($old_prices['price_senior']);
             }
 
@@ -639,36 +631,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$old_showtime) {
                     $error = "Horario no encontrado.";
                 } else {
-                    // ✅ NUEVO: Manejar ilustración personalizada
-                    $seat_map_image = $old_showtime['seat_map_image'] ?? '';
-                    if (isset($_POST['remove_seat_map_image']) && $_POST['remove_seat_map_image'] == '1') {
-                        if (!empty($seat_map_image) && file_exists($seat_map_image)) {
-                            @unlink($seat_map_image);
-                        }
-                        $seat_map_image = '';
-                    }
-                    if (isset($_FILES['seat_map_image']) && $_FILES['seat_map_image']['error'] === UPLOAD_ERR_OK) {
-                        $upload_result = secureFileUpload($_FILES['seat_map_image'], ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'], 2097152);
-                        if ($upload_result['success']) {
-                            $upload_dir = 'uploads/';
-                            if (!is_dir($upload_dir)) {
-                                mkdir($upload_dir, 0755, true);
-                            }
-                            $filename = 'seatmap_' . time() . '_' . uniqid() . '.' . $upload_result['extension'];
-                            $destination = $upload_dir . $filename;
-                            if (move_uploaded_file($_FILES['seat_map_image']['tmp_name'], $destination)) {
-                                if (!empty($seat_map_image) && file_exists($seat_map_image)) {
-                                    @unlink($seat_map_image);
-                                }
-                                $seat_map_image = $destination;
-                            } else {
-                                $error = "Error al subir la imagen del mapa de asientos.";
-                            }
-                        } else {
-                            $error = $upload_result['error'];
-                        }
-                    }
-
                     $has_schedule_change = (
                         $old_showtime['room_id'] != $room_id ||
                         $old_showtime['show_date'] != $show_date ||
@@ -685,8 +647,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $old_showtime['half_price_monday'] != $half_price_monday ||
                         $old_showtime['promotions'] != $promotions_str ||
                         ($old_showtime['language'] ?? 'español') != $language ||
-                        ($old_showtime['format'] ?? '2D') != $format ||
-                        ($old_showtime['seat_map_image'] ?? '') != $seat_map_image
+                        ($old_showtime['format'] ?? '2D') != $format
                     );
 
                     if (!$has_schedule_change && !$has_other_changes) {
@@ -698,14 +659,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 UPDATE showtimes SET
                                     movie_id = ?, price_adult = ?, price_child = ?, price_senior = ?,
                                     enable_child_price = ?, enable_senior_price = ?,
-                                    half_price_monday = ?, promotions = ?, language = ?, format = ?, seat_map_image = ?
+                                    half_price_monday = ?, promotions = ?, language = ?, format = ?
                                 WHERE id = ?
                             ");
                             $stmt->execute([
                                 $movie_id, $price_adult, $price_child, $price_senior,
                                 $enable_child_price, $enable_senior_price,
                                 $half_price_monday, $promotions_str, $language,
-                                $format, $seat_map_image, $old_id
+                                $format, $old_id
                             ]);
                             header("Location: admin.php?tab=showtimes&msg=" . urlencode("Horario actualizado exitosamente."));
                             exit;
@@ -737,15 +698,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                             movie_id, room_id, show_date, show_time,
                                             price, price_adult, price_child, price_senior,
                                             enable_child_price, enable_senior_price,
-                                            half_price_monday, promotions, language, is_active, format, seat_map_image
-                                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                            half_price_monday, promotions, language, is_active, format
+                                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
                                     ");
                                     $stmt->execute([
                                         $movie_id, $room_id, $show_date, $show_time,
                                         $price_adult, $price_adult, $price_child, $price_senior,
                                         $enable_child_price, $enable_senior_price,
                                         $half_price_monday, $promotions_str, $language,
-                                        $format, $seat_map_image
+                                        $format
                                     ]);
                                     $new_id = $pdo->lastInsertId();
 
@@ -905,11 +866,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($_POST['save_config'])) {
             try {
                 $config_keys = [
-                    'site_name', 'footer_copyright', 'currency_symbol', 'currency_position',
-                    'thousands_separator', 'decimal_separator', 'decimal_places',
-                    'address', 'phone', 'email',
-                    'instagram', 'facebook', 'twitter', 'telegram', 'whatsapp'
-                ];
+					'site_name', 'footer_copyright', 'currency_symbol', 'currency_position',
+					'thousands_separator', 'decimal_separator', 'decimal_places',
+					'address', 'phone', 'email',
+					'instagram', 'facebook', 'twitter', 'telegram', 'whatsapp'
+				];
 
                 foreach ($config_keys as $key) {
                     if (isset($_POST[$key])) {
@@ -1262,6 +1223,8 @@ if (isset($_GET['toggle_room']) && validateGetAction('toggle_room', $_GET['toggl
 if (isset($_GET['delete_showtime']) && validateGetAction('delete_showtime', $_GET['delete_showtime'])) {
     $id = intval($_GET['delete_showtime']);
     try {
+        // ✅ UNIFICADO: Solo contar tickets confirmados (pagados).
+        // Los tickets 'hold' (temporales) no deben impedir la eliminación.
         $stmt = $pdo->prepare("SELECT COUNT(*) FROM tickets WHERE showtime_id = ? AND status = 'confirmed'");
         $stmt->execute([$id]);
         $confirmedCount = $stmt->fetchColumn();
@@ -1269,6 +1232,7 @@ if (isset($_GET['delete_showtime']) && validateGetAction('delete_showtime', $_GE
         if ($confirmedCount > 0) {
             $error = "No se puede eliminar el horario porque tiene $confirmedCount boleto(s) confirmado(s). Mejor desactívalo.";
         } else {
+            // ✅ Limpiar tickets temporales 'hold' antes de eliminar el showtime
             $stmtClean = $pdo->prepare("DELETE FROM tickets WHERE showtime_id = ? AND status = 'hold'");
             $stmtClean->execute([$id]);
             $cleanedHolds = $stmtClean->rowCount();
@@ -2102,11 +2066,12 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
             </div>
 
             <?php
+            // ✅ CORREGIDO: Variables para controlar el estado de los campos de precio
             $child_checked = $edit_showtime && !empty($edit_showtime['enable_child_price']);
             $senior_checked = $edit_showtime && !empty($edit_showtime['enable_senior_price']);
             ?>
 
-            <form action="" method="POST" enctype="multipart/form-data" class="grid grid-cols-1 md:grid-cols-3 gap-4" id="showtimeForm">
+            <form action="" method="POST" class="grid grid-cols-1 md:grid-cols-3 gap-4" id="showtimeForm">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
                 <?php if($edit_showtime): ?>
                     <input type="hidden" name="showtime_id" id="showtimeIdInput" value="<?= htmlspecialchars($edit_showtime['id']) ?>">
@@ -2191,6 +2156,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                             </div>
                         </div>
 
+                        <!-- CORREGIDO: Campo Niño con estado condicional -->
                         <div>
                             <div class="flex items-center justify-between mb-1">
                                 <label class="block text-sm text-gray-400">Niño</label>
@@ -2211,6 +2177,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                             <p class="text-xs text-gray-500 mt-1">Menores de 12 años</p>
                         </div>
 
+                        <!-- CORREGIDO: Campo Tercera Edad con estado condicional -->
                         <div>
                             <div class="flex items-center justify-between mb-1">
                                 <label class="block text-sm text-gray-400">Tercera Edad</label>
@@ -2247,28 +2214,6 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                             <label for="preventa">🎫 Preventa</label>
                         </div>
                     </div>
-                </div>
-
-                <!-- ✅ NUEVO: Ilustración personalizada de asientos -->
-                <div class="md:col-span-3">
-                    <label class="block text-sm text-gray-400 mb-1">🖼️ Ilustración personalizada de asientos (opcional)</label>
-                    <input type="file" name="seat_map_image" accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
-                        class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-700">
-                    <p class="text-xs text-gray-500 mt-1">
-                        Si subes una imagen, se mostrará en la página de selección de asientos <strong>solo para este horario</strong>.
-                        Formatos: JPG, PNG, WEBP, GIF. Máx: 2MB.
-                    </p>
-                    <?php if($edit_showtime && !empty($edit_showtime['seat_map_image']) && file_exists($edit_showtime['seat_map_image'])): ?>
-                    <div class="mt-3 flex items-center gap-4 bg-gray-900/50 p-3 rounded-lg border border-gray-700">
-                        <img src="<?= htmlspecialchars($edit_showtime['seat_map_image']) . '?v=' . time() ?>" alt="Ilustración actual" class="h-20 w-auto object-contain rounded bg-gray-900">
-                        <div class="flex-1">
-                            <p class="text-xs text-gray-400">Ilustración actual del horario</p>
-                            <label class="text-xs text-red-400 hover:text-red-300 transition-colors mt-1 inline-flex items-center gap-1">
-                                <input type="checkbox" name="remove_seat_map_image" value="1"> Eliminar ilustración
-                            </label>
-                        </div>
-                    </div>
-                    <?php endif; ?>
                 </div>
 
                 <button type="submit" class="md:col-span-3 bg-indigo-600 hover:bg-indigo-700 p-3 rounded-lg font-bold transition-colors mt-2 shadow-md" id="submitBtn">
@@ -2349,12 +2294,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                             <td class="py-3 text-gray-400"><?= htmlspecialchars($s['room_name']) ?></td>
                             <td class="py-3 text-gray-400"><?= formatDateShort($s['show_date']) ?></td>
                             <td class="py-3 text-indigo-300 font-semibold time-display"><?= formatTimeVenezuela($s['show_time']) ?></td>
-                            <td class="py-3">
-                                <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($format) ?></span>
-                                <?php if (!empty($s['seat_map_image'])): ?>
-                                <span class="text-xs text-indigo-300 ml-1" title="Ilustración personalizada de asientos">🖼️</span>
-                                <?php endif; ?>
-                            </td>
+                            <td class="py-3"><span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($format) ?></span></td>
                             <td class="py-3 text-green-400 font-semibold"><?= formatCurrency($price_adult, $siteConfig) ?></td>
                             <td class="py-3 <?= $enable_child ? 'text-green-400' : 'text-gray-500' ?> font-semibold">
                                 <?= $enable_child ? formatCurrency($price_child, $siteConfig) : '—' ?>
@@ -2934,23 +2874,25 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
             $history_start_date = $_GET['history_start_date'] ?? '';
             $history_end_date = $_GET['history_end_date'] ?? '';
 
-            $history_sql = "
-            SELECT
-                s.id as showtime_id,
-                COALESCE(m.title, 'Película eliminada') as movie_title,
-                r.name as room_name,
-                s.show_date, s.show_time, m.duration,
-                DATE_ADD(CONCAT(s.show_date, ' ', s.show_time), INTERVAL m.duration MINUTE) as end_time,
-                (SELECT COUNT(*) FROM tickets t WHERE t.showtime_id = s.id AND t.status = 'confirmed') +
-                (SELECT COALESCE(SUM(ticket_count), 0) FROM ticket_logs tl WHERE tl.showtime_id = s.id) as tickets_sold,
-                (SELECT COALESCE(SUM(t.price_paid), 0) FROM tickets t WHERE t.showtime_id = s.id AND t.status = 'confirmed') +
-                (SELECT COALESCE(SUM(tl.ticket_count * s.price), 0) FROM ticket_logs tl WHERE tl.showtime_id = s.id) as total_revenue,
-                s.price as original_price, s.half_price_monday, s.promotions, s.is_active, s.language
-            FROM showtimes s
-            LEFT JOIN movies m ON s.movie_id = m.id
-            JOIN rooms r ON s.room_id = r.id
-            WHERE 1=1
-            ";
+            // ✅ UNIFICADO: Solo contar tickets confirmados (pagados).
+			// Los tickets 'hold' temporales no deben aparecer en las estadísticas de ventas.
+			$history_sql = "
+			SELECT
+				s.id as showtime_id,
+				COALESCE(m.title, 'Película eliminada') as movie_title,
+				r.name as room_name,
+				s.show_date, s.show_time, m.duration,
+				DATE_ADD(CONCAT(s.show_date, ' ', s.show_time), INTERVAL m.duration MINUTE) as end_time,
+				(SELECT COUNT(*) FROM tickets t WHERE t.showtime_id = s.id AND t.status = 'confirmed') +
+				(SELECT COALESCE(SUM(ticket_count), 0) FROM ticket_logs tl WHERE tl.showtime_id = s.id) as tickets_sold,
+				(SELECT COALESCE(SUM(t.price_paid), 0) FROM tickets t WHERE t.showtime_id = s.id AND t.status = 'confirmed') +
+				(SELECT COALESCE(SUM(tl.ticket_count * s.price), 0) FROM ticket_logs tl WHERE tl.showtime_id = s.id) as total_revenue,
+				s.price as original_price, s.half_price_monday, s.promotions, s.is_active, s.language
+			FROM showtimes s
+			LEFT JOIN movies m ON s.movie_id = m.id
+			JOIN rooms r ON s.room_id = r.id
+			WHERE 1=1
+			";
 
             $params = [];
             if (!empty($history_start_date) && !empty($history_end_date)) {
@@ -3088,19 +3030,20 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
                 </div>
 
                 <div>
-                    <label class="block text-sm text-gray-400 mb-1">Nombre del Sitio</label>
-                    <input type="text" name="site_name" value="<?= htmlspecialchars($config['site_name'] ?? 'Cinema Pro') ?>"
-                           class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                </div>
+					<label class="block text-sm text-gray-400 mb-1">Nombre del Sitio</label>
+					<input type="text" name="site_name" value="<?= htmlspecialchars($config['site_name'] ?? 'Cinema Pro') ?>"
+						   class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+				</div>
 
-                <div>
-                    <label class="block text-sm text-gray-400 mb-1">Copyright del Footer</label>
-                    <textarea name="footer_copyright" rows="2"
-                              class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                              placeholder="© {year} Cinema Pro. Todos los derechos reservados."
-                    ><?= htmlspecialchars($config['footer_copyright'] ?? '') ?></textarea>
-                    <p class="text-xs text-gray-500 mt-1">Usa <code class="bg-gray-600 px-1 rounded">{year}</code> para el año actual. Se mostrará en el pie de página.</p>
-                </div>
+				<!-- ✅ NUEVO CAMPO: Copyright del Footer -->
+				<div>
+					<label class="block text-sm text-gray-400 mb-1">Copyright del Footer</label>
+					<textarea name="footer_copyright" rows="2"
+							  class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+							  placeholder="© {year} Cinema Pro. Todos los derechos reservados."
+					><?= htmlspecialchars($config['footer_copyright'] ?? '') ?></textarea>
+					<p class="text-xs text-gray-500 mt-1">Usa <code class="bg-gray-600 px-1 rounded">{year}</code> para el año actual. Se mostrará en el pie de página.</p>
+				</div>
 
                 <div>
                     <label class="block text-sm text-gray-400 mb-1">Subir Logo del Header</label>
@@ -3388,6 +3331,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ============================================
     // ✅ CORREGIDO: Inicializar toggles de precio
+    // Ya NO borra el valor al apagar/encender el switch
     // ============================================
     const childCheckbox = document.getElementById('enable_child_price');
     const childInput = document.getElementById('price_child');
@@ -3400,9 +3344,11 @@ document.addEventListener('DOMContentLoaded', function() {
         input.classList.toggle('price-input-disabled', !checkbox.checked);
     }
 
+    // ✅ Sincronizar estado inicial al cargar la página
     syncPriceToggle(childCheckbox, childInput);
     syncPriceToggle(seniorCheckbox, seniorInput);
 
+    // ✅ Escuchar cambios sin borrar el precio
     if (childCheckbox) {
         childCheckbox.addEventListener('change', function() {
             syncPriceToggle(childCheckbox, childInput);
@@ -3555,6 +3501,7 @@ document.addEventListener('DOMContentLoaded', function() {
         setTimeout(checkConflicts, 300);
     }
 
+    // ✅ Validación adicional al enviar el formulario
     document.getElementById('showtimeForm')?.addEventListener('submit', function(e) {
         if (submitBtn && submitBtn.disabled) {
             e.preventDefault();
@@ -3566,6 +3513,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ============================================
 // ✅ CORREGIDO: TOGGLE PRECIO (Niño / Tercera Edad)
+// Ya NO borra el valor al apagar el switch
 // ============================================
 function togglePriceInput(checkbox, inputId) {
     const input = document.getElementById(inputId);
