@@ -28,12 +28,12 @@ $error = $_GET['error'] ?? '';
 
 <!-- Lista de Películas con buscador -->
 <div class="admin-card">
-    <div class="admin-card-header">
-        <h3 class="admin-card-title">📋 Todas las Películas</h3>
-        <a href="index.php?tab=movies&action=register" class="admin-card-link">
-            <i class="fas fa-plus-circle"></i> Registrar Película
-        </a>
-    </div>
+<div class="admin-card-header">
+    <h3 class="admin-card-title">📋 Todas las Películas</h3>
+    <a href="index.php?tab=movies&action=register" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md text-sm no-underline">
+        <i class="fas fa-plus-circle"></i> Registrar Película
+    </a>
+</div
     <div class="admin-card-body">
         <!-- Buscador -->
         <div class="search-box" data-tab="movies">
@@ -102,21 +102,15 @@ $error = $_GET['error'] ?? '';
                                 <div class="table-actions">
                                     <a href="index.php?tab=movies&action=register&edit_movie_id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
                                        class="action-btn action-edit">Editar</a>
-                                    <a href="../actions/movie_actions.php?action=update_movie&id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>&return=../index.php?tab=movies"
-                                       class="action-btn action-update"
-                                       onclick="return confirm('¿Actualizar los datos de la película desde TMDb?')">
-                                        <i class="fas fa-sync-alt"></i> Actualizar
-                                    </a>
-                                    <a href="../actions/movie_actions.php?action=toggle_movie&id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>&return=../index.php?tab=movies"
-                                       class="action-btn action-toggle"
-                                       onclick="return confirm('¿Cambiar estado de esta película?')">
-                                        <?= $m['is_active'] ? 'Ocultar' : 'Mostrar' ?>
-                                    </a>
-                                    <a href="../actions/movie_actions.php?action=delete_movie&id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>&return=../index.php?tab=movies"
-                                       class="action-btn action-delete"
-                                       onclick="return confirm('¿Eliminar esta película permanentemente? Se eliminarán también todos los horarios y boletos asociados.')">
-                                        Eliminar
-                                    </a>
+                                   <a href="modules/movie/movie_actions.php?action=update_movie&id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>&return=../../index.php?tab=movies" class="action-btn action-update" onclick="return confirm('¿Actualizar los datos de la película desde TMDb?')">
+    <i class="fas fa-sync-alt"></i> Actualizar
+</a>
+<a href="modules/movie/movie_actions.php?action=toggle_movie&id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>&return=../../index.php?tab=movies" class="action-btn action-toggle" onclick="return confirm('¿Cambiar estado de esta película?')">
+    <?= $m['is_active'] ? 'Ocultar' : 'Mostrar' ?>
+</a>
+<a href="modules/movie/movie_actions.php?action=delete_movie&id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>&return=../../index.php?tab=movies" class="action-btn action-delete" onclick="return confirm('¿Eliminar esta película permanentemente? Se eliminarán también todos los horarios y boletos asociados.')">
+    Eliminar
+</a>
                                 </div>
                             </td>
                         </tr>

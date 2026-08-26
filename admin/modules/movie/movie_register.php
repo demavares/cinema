@@ -40,15 +40,15 @@ $error = $_GET['error'] ?? '';
             <p class="mt-1 danger">⚠️ Los campos con <strong class="field-required">*</strong> son obligatorios.</p>
         </div>
 
-        <form action="../actions/movie_actions.php" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <form action="modules/movie/movie_actions.php" method="POST" class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrf_token) ?>">
             <?php if ($edit_movie): ?>
                 <input type="hidden" name="movie_id" value="<?= htmlspecialchars($edit_movie['id']) ?>">
                 <input type="hidden" name="action" value="edit_movie">
-                <input type="hidden" name="return" value="../index.php?tab=movies">
+                <input type="hidden" name="return" value="../../index.php?tab=movies">
             <?php else: ?>
                 <input type="hidden" name="action" value="add_movie">
-                <input type="hidden" name="return" value="../index.php?tab=movies">
+                <input type="hidden" name="return" value="../../index.php?tab=movies">
             <?php endif; ?>
 
             <!-- ============================================ -->

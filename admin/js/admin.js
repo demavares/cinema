@@ -57,30 +57,36 @@ document.addEventListener('DOMContentLoaded', function() {
             // Buscar si el clic fue en un submenu-toggle o en un elemento hijo
             const toggle = e.target.closest('.submenu-toggle');
             
-            if (toggle) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                console.log('🔄 Submenú clickeado');
-                
-                const parent = toggle.closest('.has-submenu');
-                if (!parent) {
-                    console.log('❌ No se encontró el contenedor .has-submenu');
-                    return;
-                }
-                
-                // Cerrar otros submenús abiertos
-                document.querySelectorAll('.has-submenu.open').forEach(function(item) {
-                    if (item !== parent) {
-                        item.classList.remove('open');
-                        console.log('🔒 Cerrando otro submenú');
-                    }
-                });
-                
-                // Toggle del submenú actual
-                parent.classList.toggle('open');
-                console.log('📂 Estado del submenú:', parent.classList.contains('open') ? 'abierto' : 'cerrado');
-            }
+           if (toggle) {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('🔄 Submenú clickeado');
+    
+    const parent = toggle.closest('.has-submenu');
+    if (!parent) {
+        console.log('❌ No se encontró el contenedor .has-submenu');
+        return;
+    }
+    
+    // 🔧 NUEVO: Si el sidebar está contraído, expandirlo primero
+    if (sidebar && sidebar.classList.contains('collapsed')) {
+        console.log('📖 Sidebar contraído, expandiendo...');
+        toggleSidebarCollapse();
+    }
+    
+    // Cerrar otros submenús abiertos
+    document.querySelectorAll('.has-submenu.open').forEach(function(item) {
+        if (item !== parent) {
+            item.classList.remove('open');
+            console.log('🔒 Cerrando otro submenú');
+        }
+    });
+    
+    // Toggle del submenú actual
+    parent.classList.toggle('open');
+    console.log('📂 Estado del submenú:', parent.classList.contains('open') ? 'abierto' : 'cerrado');
+}
         });
     } else {
         console.log('❌ No se encontró .sidebar-nav');

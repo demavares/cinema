@@ -328,7 +328,7 @@ body {
     opacity: 0;
 }
 
-.sidebar-menu .submenu.open {
+.sidebar-menu .has-submenu.open .submenu {
     max-height: 200px;
     opacity: 1;
 }
@@ -355,6 +355,35 @@ body {
 
 .sidebar.collapsed .has-submenu.open .submenu-arrow {
     transform: none;
+}
+
+/* ============================================
+   CORRECCIÓN: SIDEBAR COLAPSADO Y SUBMENÚS
+   (Soluciona el desalineamiento del icono)
+   ============================================ */
+
+/* 1. Ocultar completamente la flecha del submenú cuando está contraído */
+.sidebar.collapsed .submenu-arrow {
+    display: none !important;
+}
+
+/* 2. Forzar centrado perfecto del enlace principal del submenú */
+.sidebar.collapsed .has-submenu > .sidebar-link {
+    justify-content: center !important;
+    padding: 12px 8px !important;
+}
+
+/* 3. Eliminar márgenes residuales del icono principal en estado contraído */
+.sidebar.collapsed .has-submenu > .sidebar-link > i:first-child {
+    margin: 0 !important;
+    width: auto !important;
+}
+
+/* 4. Asegurar que el submenú nunca se muestre visualmente si el sidebar está contraído */
+.sidebar.collapsed .has-submenu .submenu {
+    display: none !important;
+    max-height: 0 !important;
+    opacity: 0 !important;
 }
 
 /* ============================================
