@@ -1415,7 +1415,7 @@ if (isset($_GET['edit_food_id']) && filter_var($_GET['edit_food_id'], FILTER_VAL
 }
 
 $siteConfig = getSiteConfig($pdo);
-$pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
+$pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema');
 
 // ============================================
 // RENDERIZAR HTML
@@ -3031,7 +3031,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
 
                 <div>
 					<label class="block text-sm text-gray-400 mb-1">Nombre del Sitio</label>
-					<input type="text" name="site_name" value="<?= htmlspecialchars($config['site_name'] ?? 'Cinema Pro') ?>"
+					<input type="text" name="site_name" value="<?= htmlspecialchars($config['site_name'] ?? 'Cinema') ?>"
 						   class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500">
 				</div>
 
@@ -3040,7 +3040,7 @@ $pageTitle = "Panel de Control - " . ($siteConfig['site_name'] ?? 'Cinema Pro');
 					<label class="block text-sm text-gray-400 mb-1">Copyright del Footer</label>
 					<textarea name="footer_copyright" rows="2"
 							  class="w-full bg-gray-700 p-2.5 rounded text-white border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-							  placeholder="© {year} Cinema Pro. Todos los derechos reservados."
+							  placeholder="© {year} Cinema. Todos los derechos reservados."
 					><?= htmlspecialchars($config['footer_copyright'] ?? '') ?></textarea>
 					<p class="text-xs text-gray-500 mt-1">Usa <code class="bg-gray-600 px-1 rounded">{year}</code> para el año actual. Se mostrará en el pie de página.</p>
 				</div>
