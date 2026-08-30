@@ -1,6 +1,17 @@
 <?php
 require_once 'config.php';
 
+// ============================================
+// ¿EL HORARIO ESTÁ A ≤15 MINUTOS DE INICIAR?
+// (Si es así, redirigir a index en lugar de seats.php para evitar rebotes)
+// ============================================
+function checkout_showtime_near_start($showtime)
+{
+    $showtimeDateTime = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']);
+    $safetyMargin = 15 * 60;
+    return ($showtimeDateTime + $safetyMargin) < time();
+}
+
 if (!isset($_SESSION['user_id'])) {
     header('Location: login.php');
     exit;
@@ -62,7 +73,11 @@ $totalSeats = $validation['total_seats'];
 $pricesByType = $validation['prices'];
 
 if (count($seatsArray) != $totalSeats) {
-    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=La+cantidad+de+asientos+no+coincide');
+    if (checkout_showtime_near_start($showtime)) {
+        header('Location: index.php?error=La+cantidad+de+asientos+no+coincide+y+el+horario+ya+no+está+disponible');
+    } else {
+        header('Location: seats.php?showtime_id=' . $showtimeId . '&error=La+cantidad+de+asientos+no+coincide');
+    }
     exit;
 }
 
@@ -284,7 +299,11 @@ try {
 } catch (Exception $e) {
     $pdo->rollBack();
     error_log("❌ checkout: " . $e->getMessage());
-    header('Location: seats.php?showtime_id=' . $showtimeId . '&error=' . urlencode($e->getMessage()));
+    if (checkout_showtime_near_start($showtime)) {
+        header('Location: index.php?error=' . urlencode('No se pudo completar la compra y el horario ya no está disponible.'));
+    } else {
+        header('Location: seats.php?showtime_id=' . $showtimeId . '&error=' . urlencode($e->getMessage()));
+    }
     exit;
 }
 

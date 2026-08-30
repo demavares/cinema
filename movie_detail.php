@@ -247,6 +247,7 @@ foreach ($showtimes as $showtime) {
     $showtime['occupied'] = $occupied['occupied'];
     $showtime['available'] = $showtime['capacity'] - $occupied['occupied'];
     $showtime['is_full'] = $showtime['available'] <= 0;
+    $showtime['has_started'] = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']) < time();
     $showtimes_by_date[$date][] = $showtime;
 }
 
@@ -795,6 +796,21 @@ require_once 'header.php';
         background: #b45309;
     }
 
+    .time-block .started-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 12px;
+        border-radius: 12px;
+        font-size: 0.7rem;
+        font-weight: 700;
+        margin-top: 6px;
+        background: #fee2e2;
+        color: #dc2626;
+        border: 1px solid #fecaca;
+        text-transform: uppercase;
+    }
+
     .time-block.sold-out {
         border-color: #fca5a5;
         background: #fef2f2;
@@ -1280,6 +1296,7 @@ require_once 'header.php';
                             $hasMonday = in_array('lunes_mitad', $promotions);
                             $hasPresale = in_array('preventa', $promotions);
                             $isFull = $time['is_full'];
+                            $hasStarted = $time['has_started'] ?? false;
                             $language = $time['language'] ?? 'español';
                             $lang_label = $language == 'español' ? 'Español' : 'Subtítulos en Español';
                             $movieFormat = $time['format'] ?? '2D';
@@ -1298,6 +1315,9 @@ require_once 'header.php';
                                         <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
                                     </div>
                                     <span class="language-text"><?= htmlspecialchars($lang_label) ?></span>
+                                    <?php if ($hasStarted): ?>
+                                        <span class="started-badge"><i class="fas fa-clock"></i> Ya inició Función</span>
+                                    <?php endif; ?>
                                     <?php if ($hasMonday): ?>
                                         <span class="promo-badge lunes">
                                             <span class="dot"></span>
@@ -1320,6 +1340,9 @@ require_once 'header.php';
                                         <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>
                                     </div>
                                     <span class="language-text"><?= htmlspecialchars($lang_label) ?></span>
+                                    <?php if ($hasStarted): ?>
+                                        <span class="started-badge"><i class="fas fa-clock"></i> Ya inició Función</span>
+                                    <?php endif; ?>
                                     <span class="sold-out-label">Agotado</span>
                                 </div>
                             <?php endif; ?>
@@ -1376,6 +1399,7 @@ require_once 'header.php';
                             <span class="format-badge ${formatClass}">${escapeHtml(movieFormat)}</span>
                         </div>
                         <span class="language-text">${escapeHtml(langLabel)}</span>
+                        ${time.has_started ? `<span class="started-badge"><i class="fas fa-clock"></i> Ya inició Función</span>` : ''}
                         ${hasMonday ? `<span class="promo-badge lunes"><span class="dot"></span> Lunes ½ Precio</span>` : ''}
                         ${hasPresale ? `<span class="promo-badge preventa"><span class="dot"></span> Preventa</span>` : ''}
                     </a>
@@ -1390,6 +1414,7 @@ require_once 'header.php';
                             <span class="format-badge ${formatClass}">${escapeHtml(movieFormat)}</span>
                         </div>
                         <span class="language-text">${escapeHtml(langLabel)}</span>
+                        ${time.has_started ? `<span class="started-badge"><i class="fas fa-clock"></i> Ya inició Función</span>` : ''}
                         <span class="sold-out-label">Agotado</span>
                     </div>
                 `;

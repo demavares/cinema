@@ -43,11 +43,8 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $submittedCsrf = $_POST['csrf_token'] ?? '';
 if (!verifyCSRFToken($submittedCsrf)) {
-    if (isset($_SESSION['csrf_token']) && !empty($submittedCsrf)) {
-        error_log("⚠️ CSRF mismatch, re-validando sesión de usuario...");
-    } else {
-        respond(403, ['error' => 'Token CSRF inválido o sesión expirada. Regresa al selector de asientos.'], $isAjax);
-    }
+    error_log("⚠️ CSRF mismatch: token inválido o sesión expirada");
+    respond(403, ['error' => 'Token CSRF inválido o sesión expirada. Regresa al selector de asientos.'], $isAjax);
 }
 
 $showtimeId = isset($_POST['showtime_id']) ? intval($_POST['showtime_id']) : 0;

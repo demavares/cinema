@@ -404,7 +404,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
                 alt="<?= htmlspecialchars($siteName) ?>"
                 title="<?= htmlspecialchars($siteName) ?>"
                 class="auth-logo"
-                onerror="this.style.display='none'"
+                data-error-hide
             >
             <?php endif; ?>
             <h2 class="auth-title">Iniciar Sesión</h2>

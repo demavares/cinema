@@ -667,6 +667,39 @@ $cleanStorage = isset($_GET['session_expired']) || isset($_GET['timeout']) || is
             });
         })();
     </script>
+
+    <!-- ============================================ -->
+    <!-- HANDLERS CSP-SAFE: REEMPLAZAN onclick/onerror INLINE -->
+    <!-- ============================================ -->
+    <script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
+        (function() {
+            // Imprimir comprobante (antes: onclick="window.print()")
+            document.addEventListener('click', function(e) {
+                const btn = e.target.closest('[data-print-btn]');
+                if (btn) {
+                    window.print();
+                }
+            });
+
+            // Errores de imágenes (antes: onerror inline)
+            // data-error-hide     → ocultar la imagen
+            // data-error-fallback → ocultar la imagen y mostrar el siguiente elemento
+            document.addEventListener('error', function(e) {
+                const img = e.target;
+                if (!img || img.tagName !== 'IMG') return;
+
+                if (img.hasAttribute('data-error-hide')) {
+                    img.style.display = 'none';
+                } else if (img.hasAttribute('data-error-fallback')) {
+                    img.style.display = 'none';
+                    const fallback = img.nextElementSibling;
+                    if (fallback) {
+                        fallback.style.display = 'flex';
+                    }
+                }
+            }, true);
+        })();
+    </script>
 </body>
 
 </html>

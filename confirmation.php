@@ -863,7 +863,7 @@ require_once 'header.php';
 
         <h1 class="confirmation-title">¡Compra Confirmada!</h1>
         <p class="confirmation-subtitle">
-            Tu compra se ha realizado con éxito. Revisa los detalles a continuación.
+            Tu compra se ha realizado con éxito, presente este comprobante para su facturación y confirmación. Revisa los detalles a continuación.
         </p>
 
         <div class="text-center mb-4">
@@ -890,8 +890,9 @@ require_once 'header.php';
                 <?php if (!empty($display_poster)): ?>
                     <img src="<?= htmlspecialchars($display_poster) ?>"
                         alt="<?= htmlspecialchars($showtime['title']) ?>"
+                        title="<?= htmlspecialchars($showtime['title']) ?>"
                         class="summary-movie-poster"
-                        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        data-error-fallback>
                     <div class="summary-movie-poster flex items-center justify-center text-4xl bg-gray-100 text-gray-400" style="display:none;">
                         🎬
                     </div>
@@ -1069,7 +1070,7 @@ require_once 'header.php';
         </div>
 
         <div class="btn-actions">
-            <button type="button" class="print-btn" onclick="window.print()">
+            <button type="button" class="print-btn" data-print-btn>
                 <i class="fas fa-print"></i> Imprimir comprobante
             </button>
             <a href="index.php" class="btn-primary">

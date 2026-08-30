@@ -39,8 +39,8 @@ exit;
 $showtimeDateTime = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']);
 $currentDateTime = time();
 $safetyMargin = 15 * 60;
-if (($showtimeDateTime - $safetyMargin) < $currentDateTime) {
-header('Location: seats.php?showtime_id=' . $showtimeId . '&error=Este+horario+está+por+iniciar.+Selecciona+otro');
+if (($showtimeDateTime + $safetyMargin) < $currentDateTime) {
+header('Location: index.php?error=Este+horario+ya+no+está+disponible');
 exit;
 }
 // ============================================
@@ -231,6 +231,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .promo-tag.monday .promo-dot { background: #15803d; }
 .promo-tag.presale { background: #fef3c7; color: #b45309; border-color: #fde68a; }
 .promo-tag.presale .promo-dot { background: #b45309; }
+.started-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 14px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; border: 1px solid #fecaca; background: #fee2e2; color: #dc2626; text-transform: uppercase; }
 .format-badge { display: inline-flex; align-items: center; justify-content: center; padding: 2px 10px; border-radius: 5px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.4; background: transparent !important; border: 1px solid #4f5e71; color: #4f5e71; }
 .btn-continue-food { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff !important; padding: 14px 20px; border-radius: 8px; font-weight: 700; font-size: 1.1rem; border: none; cursor: pointer; transition: all 0.3s ease; width: 100%; text-align: center; display: block; }
 .btn-continue-food:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79,70,229,0.25); }
@@ -318,7 +319,7 @@ elseif ($isAccessible) $seatClass = 'seat-accessible';
 <div class="w-full xl:w-96 card-summary">
 <div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
 <?php if (!empty($showtime['poster_url'])): ?>
-<img src="<?= htmlspecialchars($showtime['poster_url']) ?>" alt="<?= htmlspecialchars($showtime['title']) ?>" class="summary-movie-poster">
+<img src="<?= htmlspecialchars($showtime['poster_url']) ?>" alt="<?= htmlspecialchars($showtime['title']) ?>" title="<?= htmlspecialchars($showtime['title']) ?>" class="summary-movie-poster">
 <?php endif; ?>
 <div class="flex flex-col justify-start text-left text-gray-900 flex-1 min-w-0">
 <div class="summary-movie-title"><?= htmlspecialchars($showtime['title']) ?></div>
@@ -326,6 +327,7 @@ elseif ($isAccessible) $seatClass = 'seat-accessible';
 <div class="text-sm text-gray-700 font-medium mt-1"><?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?></div>
 <div class="mt-1.5"><span class="format-badge"><?= htmlspecialchars($format) ?></span></div>
 <div class="flex flex-col gap-2 mt-3 items-start">
+<?php if (strtotime($showtime['show_date'] . ' ' . $showtime['show_time']) < time()): ?><span class="started-tag"><i class="fas fa-clock"></i> Ya inició Función</span><?php endif; ?>
 <?php if ($hasMondayPromo): ?><span class="promo-tag monday"><span class="promo-dot"></span> Lunes a mitad de precio</span><?php endif; ?>
 <?php if ($hasPresale): ?><span class="promo-tag presale"><span class="promo-dot"></span> Preventa</span><?php endif; ?>
 </div>

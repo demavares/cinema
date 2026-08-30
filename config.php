@@ -200,6 +200,7 @@ define('DB_PASS', env('DB_PASS', ''));
 define('DB_NAME', env('DB_NAME', 'cinema_db'));
 define('TMDB_API_KEY', env('TMDB_API_KEY', ''));
 define('TMDB_API_URL', env('TMDB_API_URL', 'https://api.themoviedb.org/3/'));
+define('TMDB_TIMEOUT', 10);
 
 if (empty(DB_USER) || empty(DB_NAME)) {
     error_log("❌ Error: Faltan credenciales de base de datos en .env");
@@ -305,6 +306,22 @@ function getFaviconHref($siteConfig)
 }
 
 // ============================================
+// IMAGEN PLACEHOLDER (SVG data URI, sin dependencias externas)
+// ============================================
+function getPlaceholderImage(int $width = 300, int $height = 450, string $label = '🎬')
+{
+    $fontSize = max(24, intval($width * 0.2));
+
+    $svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' . $width . '" height="' . $height . '" viewBox="0 0 ' . $width . ' ' . $height . '">'
+        . '<rect width="100%" height="100%" fill="#1f2937"/>'
+        . '<text x="50%" y="50%" font-size="' . $fontSize . '" text-anchor="middle" dominant-baseline="central" fill="#ffffff">'
+        . htmlspecialchars($label, ENT_QUOTES, 'UTF-8')
+        . '</text></svg>';
+
+    return 'data:image/svg+xml;charset=utf-8,' . rawurlencode($svg);
+}
+
+// ============================================
 // FORMATEAR MONEDA
 // ============================================
 function formatCurrency($amount, $config = null)
@@ -349,7 +366,7 @@ function getMovieFromTMDB($title, $year = null)
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, TMDB_TIMEOUT);
 
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -373,7 +390,7 @@ function getMovieFromTMDB($title, $year = null)
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
         curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
-        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_TIMEOUT, TMDB_TIMEOUT);
 
         $detail_response = curl_exec($ch);
         curl_close($ch);

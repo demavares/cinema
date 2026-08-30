@@ -344,6 +344,20 @@ require_once 'header.php';
         background: #b45309;
     }
 
+    .started-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 14px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        border: 1px solid #fecaca;
+        background: #fee2e2;
+        color: #dc2626;
+        text-transform: uppercase;
+    }
+
     .format-badge {
         display: inline-flex;
         align-items: center;
@@ -432,7 +446,7 @@ require_once 'header.php';
         <div class="w-full lg:w-96 card-summary">
             <div class="flex gap-3 mb-5 items-start bg-slate-50 border border-slate-200 rounded-xl p-2.5 px-3">
                 <?php if (!empty($showtime['poster_url'])): ?>
-                    <img src="<?= htmlspecialchars($showtime['poster_url']) ?>" alt="<?= htmlspecialchars($showtime['title']) ?>" class="w-24 h-36 object-cover rounded-lg shadow-sm flex-shrink-0" referrerpolicy="no-referrer">
+                    <img src="<?= htmlspecialchars($showtime['poster_url']) ?>" alt="<?= htmlspecialchars($showtime['title']) ?>" title="<?= htmlspecialchars($showtime['title']) ?>" class="w-24 h-36 object-cover rounded-lg shadow-sm flex-shrink-0" referrerpolicy="no-referrer">
                 <?php endif; ?>
                 <div class="flex flex-col justify-start text-left text-gray-900 flex-1 min-w-0">
                     <div class="font-extrabold text-lg leading-tight text-gray-900"><?= htmlspecialchars($showtime['title']) ?></div>
@@ -440,6 +454,7 @@ require_once 'header.php';
                     <div class="text-sm text-gray-700 font-medium mt-1 whitespace-nowrap"><?= htmlspecialchars($showtime['room_name']) ?> · <?= formatDateShort($showtime['show_date']) ?> · <?= formatTimeVenezuela($showtime['show_time']) ?></div>
                     <div class="mt-1.5"><span class="format-badge"><?= htmlspecialchars($format) ?></span></div>
                     <div class="flex flex-col gap-2 mt-3 items-start">
+                        <?php if (strtotime($showtime['show_date'] . ' ' . $showtime['show_time']) < time()): ?><span class="started-tag"><i class="fas fa-clock"></i> Ya inició Función</span><?php endif; ?>
                         <?php if ($hasMondayPromo): ?><span class="promo-tag monday"><span class="promo-dot"></span> Lunes a mitad de precio</span><?php endif; ?>
                         <?php if ($hasPresale): ?><span class="promo-tag presale"><span class="promo-dot"></span> Preventa</span><?php endif; ?>
                     </div>
