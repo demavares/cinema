@@ -18,7 +18,15 @@ $sidebarCollapsed = isset($_COOKIE['admin_sidebar_collapsed']) && $_COOKIE['admi
 
 // Obtener favicon de la BD
 $favicon_path = $siteConfig['site_favicon'] ?? '';
-$hasFavicon = !empty($favicon_path) && file_exists($favicon_path);
+$favicon_fs = '';
+$favicon_href = $favicon_path;
+if (!empty($favicon_path) && !preg_match('#^(https?:)?//#', $favicon_path) && $favicon_path[0] !== '/') {
+    $favicon_fs = __DIR__ . '/../' . $favicon_path;
+    $favicon_href = '../' . $favicon_path;
+} elseif (!empty($favicon_path)) {
+    $favicon_fs = $favicon_path;
+}
+$hasFavicon = !empty($favicon_path) && is_file($favicon_fs);
 
 // Generar nonce para CSP
 $cspNonce = base64_encode(random_bytes(16));
@@ -37,7 +45,7 @@ if (!headers_sent()) {
 
     <!-- Favicon desde BD -->
     <?php if ($hasFavicon): ?>
-        <link rel="icon" type="<?= mime_content_type($favicon_path) ?>" href="<?= htmlspecialchars($favicon_path) . '?v=' . filemtime($favicon_path) ?>">
+        <link rel="icon" type="<?= mime_content_type($favicon_fs) ?>" href="<?= htmlspecialchars($favicon_href) . '?v=' . filemtime($favicon_fs) ?>">
     <?php else: ?>
         <link rel="icon" type="image/png" href="../favicon.png">
     <?php endif; ?>
@@ -64,8 +72,11 @@ if (!headers_sent()) {
     <aside class="sidebar <?= $sidebarCollapsed ? 'collapsed' : '' ?>" id="adminSidebar">
         <div class="sidebar-header">
             <a href="index.php" class="sidebar-brand">
-                <?php if (!empty($siteConfig['site_logo']) && file_exists($siteConfig['site_logo'])): ?>
-                    <img src="<?= htmlspecialchars($siteConfig['site_logo']) ?>" alt="<?= htmlspecialchars($siteName) ?>" class="sidebar-logo">
+                <?php $site_logo = $siteConfig['site_logo'] ?? ''; ?>
+                <?php $site_logo_fs = (!empty($site_logo) && !preg_match('#^(https?:)?//#', $site_logo) && $site_logo[0] !== '/') ? __DIR__ . '/../' . $site_logo : $site_logo; ?>
+                <?php $site_logo_href = (!empty($site_logo) && !preg_match('#^(https?:)?//#', $site_logo) && $site_logo[0] !== '/') ? '../' . $site_logo : $site_logo; ?>
+                <?php if (!empty($site_logo) && is_file($site_logo_fs)): ?>
+                    <img src="<?= htmlspecialchars($site_logo_href) ?>" alt="<?= htmlspecialchars($siteName) ?>" class="sidebar-logo">
                 <?php else: ?>
                     <span class="sidebar-brand-text"><?= htmlspecialchars($siteName) ?></span>
                 <?php endif; ?>
@@ -83,79 +94,160 @@ if (!headers_sent()) {
         <nav class="sidebar-nav">
             <ul class="sidebar-menu">
                 <li>
-                    <a href="index.php" class="sidebar-link <?= $activeTab === 'dashboard' ? 'active' : '' ?>">
+                    <a href="index.php" class="sidebar-link <?= $activeTab === 'dashboard' ? 'active' : '' ?>" title="Dashboard">
                         <i class="fas fa-chart-pie"></i>
                         <span>Dashboard</span>
                     </a>
                 </li>
                 <li class="has-submenu <?= $activeTab === 'movies' ? 'open' : '' ?>">
-                    <a href="javascript:void(0)" class="sidebar-link submenu-toggle <?= $activeTab === 'movies' ? 'active' : '' ?>">
+                    <a href="javascript:void(0)" class="sidebar-link submenu-toggle <?= $activeTab === 'movies' ? 'active' : '' ?>" title="Películas">
                         <i class="fas fa-film"></i>
                         <span>Películas</span>
                         <i class="fas fa-chevron-down submenu-arrow"></i>
                     </a>
                     <ul class="submenu <?= $activeTab === 'movies' ? 'open' : '' ?>">
                         <li>
-                            <a href="index.php?tab=movies" class="sidebar-link <?= ($activeTab === 'movies' && $subAction !== 'register') ? 'active' : '' ?>">
+                            <a href="index.php?tab=movies" class="sidebar-link <?= ($activeTab === 'movies' && $subAction !== 'register') ? 'active' : '' ?>" title="Lista de Películas">
                                 <i class="fas fa-list"></i>
                                 <span>Lista de Películas</span>
                             </a>
                         </li>
                         <li>
-                            <a href="index.php?tab=movies&action=register" class="sidebar-link <?= ($activeTab === 'movies' && $subAction === 'register') ? 'active' : '' ?>">
+                            <a href="index.php?tab=movies&action=register" class="sidebar-link <?= ($activeTab === 'movies' && $subAction === 'register') ? 'active' : '' ?>" title="Registrar Película">
                                 <i class="fas fa-plus-circle"></i>
                                 <span>Registrar Película</span>
                             </a>
                         </li>
                     </ul>
                 </li>
-                <li>
-                    <a href="index.php?tab=showtimes" class="sidebar-link <?= $activeTab === 'showtimes' ? 'active' : '' ?>">
+                <li class="has-submenu <?= $activeTab === 'showtimes' ? 'open' : '' ?>">
+                    <a href="javascript:void(0)" class="sidebar-link submenu-toggle <?= $activeTab === 'showtimes' ? 'active' : '' ?>" title="Funciones">
                         <i class="fas fa-clock"></i>
-                        <span>Horarios</span>
+                        <span>Funciones</span>
+                        <i class="fas fa-chevron-down submenu-arrow"></i>
                     </a>
+                    <ul class="submenu <?= $activeTab === 'showtimes' ? 'open' : '' ?>">
+                        <li>
+                            <a href="index.php?tab=showtimes" class="sidebar-link <?= ($activeTab === 'showtimes' && $subAction !== 'register') ? 'active' : '' ?>" title="Lista de Funciones">
+                                <i class="fas fa-list"></i>
+                                <span>Lista de Funciones</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="index.php?tab=showtimes&action=register" class="sidebar-link <?= ($activeTab === 'showtimes' && $subAction === 'register') ? 'active' : '' ?>" title="Registrar Función">
+                                <i class="fas fa-plus-circle"></i>
+                                <span>Registrar Función</span>
+                            </a>
+                        </li>
+                    </ul>
                 </li>
-                <li>
-                    <a href="index.php?tab=rooms" class="sidebar-link <?= $activeTab === 'rooms' ? 'active' : '' ?>">
+                <li class="has-submenu <?= $activeTab === 'rooms' ? 'open' : '' ?>">
+                    <a href="javascript:void(0)" class="sidebar-link submenu-toggle <?= $activeTab === 'rooms' ? 'active' : '' ?>" title="Salas">
                         <i class="fas fa-door-open"></i>
                         <span>Salas</span>
+                        <i class="fas fa-chevron-down submenu-arrow"></i>
                     </a>
+                    <ul class="submenu <?= $activeTab === 'rooms' ? 'open' : '' ?>">
+                        <li>
+                            <a href="index.php?tab=rooms" class="sidebar-link <?= $activeTab === 'rooms' ? 'active' : '' ?>" title="Lista de Salas">
+                                <i class="fas fa-list"></i>
+                                <span>Lista de Salas</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="index.php?tab=rooms&action=builder" class="sidebar-link <?= ($subAction === 'builder' && $activeTab === 'rooms') ? 'active' : '' ?>" title="Crear Nueva Sala">
+                                <i class="fas fa-plus-circle"></i>
+                                <span>Crear Sala</span>
+                            </a>
+                        </li>
+                    </ul>
                 </li>
-                <li>
-                    <a href="index.php?tab=users" class="sidebar-link <?= $activeTab === 'users' ? 'active' : '' ?>">
+                <li class="has-submenu <?= $activeTab === 'users' ? 'open' : '' ?>">
+                    <a href="javascript:void(0)" class="sidebar-link submenu-toggle <?= $activeTab === 'users' ? 'active' : '' ?>" title="Usuarios">
                         <i class="fas fa-users"></i>
                         <span>Usuarios</span>
+                        <i class="fas fa-chevron-down submenu-arrow"></i>
                     </a>
+                    <ul class="submenu <?= $activeTab === 'users' ? 'open' : '' ?>">
+                        <li>
+                            <a href="index.php?tab=users" class="sidebar-link <?= ($activeTab === 'users' && $subAction !== 'register') ? 'active' : '' ?>" title="Lista de Usuarios">
+                                <i class="fas fa-list"></i>
+                                <span>Lista de Usuarios</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="index.php?tab=users&action=register" class="sidebar-link <?= ($activeTab === 'users' && $subAction === 'register') ? 'active' : '' ?>" title="Registrar Usuario">
+                                <i class="fas fa-plus-circle"></i>
+                                <span>Registrar Usuario</span>
+                            </a>
+                        </li>
+                    </ul>
                 </li>
-                <li>
-                    <a href="index.php?tab=food" class="sidebar-link <?= $activeTab === 'food' ? 'active' : '' ?>">
+                <li class="has-submenu <?= $activeTab === 'food' ? 'open' : '' ?>">
+                    <a href="javascript:void(0)" class="sidebar-link submenu-toggle <?= $activeTab === 'food' ? 'active' : '' ?>" title="Comida">
                         <i class="fas fa-utensils"></i>
                         <span>Comida</span>
+                        <i class="fas fa-chevron-down submenu-arrow"></i>
                     </a>
+                    <ul class="submenu <?= $activeTab === 'food' ? 'open' : '' ?>">
+                        <li>
+                            <a href="index.php?tab=food" class="sidebar-link <?= ($activeTab === 'food' && $subAction !== 'register') ? 'active' : '' ?>" title="Lista de Productos">
+                                <i class="fas fa-list"></i>
+                                <span>Lista de Productos</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="index.php?tab=food&action=register" class="sidebar-link <?= ($activeTab === 'food' && $subAction === 'register') ? 'active' : '' ?>" title="Registrar Producto">
+                                <i class="fas fa-plus-circle"></i>
+                                <span>Registrar Producto</span>
+                            </a>
+                        </li>
+                    </ul>
                 </li>
                 <li>
-                    <a href="index.php?tab=history" class="sidebar-link <?= $activeTab === 'history' ? 'active' : '' ?>">
+                    <a href="index.php?tab=history" class="sidebar-link <?= $activeTab === 'history' ? 'active' : '' ?>" title="Historial">
                         <i class="fas fa-history"></i>
                         <span>Historial</span>
                     </a>
                 </li>
-                <li>
-                    <a href="index.php?tab=config" class="sidebar-link <?= $activeTab === 'config' ? 'active' : '' ?>">
+                <li class="has-submenu <?= $activeTab === 'config' ? 'open' : '' ?>">
+                    <a href="javascript:void(0)" class="sidebar-link submenu-toggle <?= $activeTab === 'config' ? 'active' : '' ?>" title="Configuración">
                         <i class="fas fa-cog"></i>
                         <span>Configuración</span>
+                        <i class="fas fa-chevron-down submenu-arrow"></i>
                     </a>
+                    <ul class="submenu <?= $activeTab === 'config' ? 'open' : '' ?>">
+                        <li>
+                            <a href="index.php?tab=config&action=general" class="sidebar-link <?= ($activeTab === 'config' && $subAction === 'general') ? 'active' : '' ?>" title="Información General">
+                                <i class="fas fa-building"></i>
+                                <span>Información General</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="index.php?tab=config&action=currency" class="sidebar-link <?= ($activeTab === 'config' && $subAction === 'currency') ? 'active' : '' ?>" title="Moneda y Formato (Moneda y formato e Impuestos)">
+                                <i class="fas fa-coins"></i>
+                                <span>Moneda y Formato</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="index.php?tab=config&action=contact" class="sidebar-link <?= ($activeTab === 'config' && $subAction === 'contact') ? 'active' : '' ?>" title="Contacto (Información de Contacto y Redes Sociales)">
+                                <i class="fas fa-address-book"></i>
+                                <span>Contacto</span>
+                            </a>
+                        </li>
+                    </ul>
                 </li>
             </ul>
         </nav>
 
         <div class="sidebar-footer">
-            <a href="../index.php" class="sidebar-link" target="_blank">
+            <a href="../index.php" class="sidebar-link" target="_blank" title="Ver Cartelera">
                 <i class="fas fa-external-link-alt"></i>
                 <span>Ver Cartelera</span>
             </a>
             <form action="../logout.php" method="POST" class="sidebar-logout-form">
                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($header_csrf_token) ?>">
-                <button type="submit" class="sidebar-link">
+                <button type="submit" class="sidebar-link" title="Cerrar Sesión">
                     <i class="fas fa-sign-out-alt"></i>
                     <span>Cerrar Sesión</span>
                 </button>
@@ -177,8 +269,20 @@ if (!headers_sent()) {
                 <h2 class="topbar-title">
                     <?php if ($activeTab === 'movies'): ?>
                         <?= $subAction === 'register' ? 'Registrar Película' : 'Películas' ?>
+                    <?php elseif ($activeTab === 'showtimes'): ?>
+                        <?= $subAction === 'register' ? 'Registrar Función' : 'Funciones' ?>
+                    <?php elseif ($activeTab === 'users'): ?>
+                        <?= $subAction === 'register' ? 'Registrar Usuario' : 'Usuarios' ?>
+                    <?php elseif ($activeTab === 'food'): ?>
+                        <?= $subAction === 'register' ? 'Registrar Producto' : 'Comida' ?>
+                    <?php elseif ($activeTab === 'config'): ?>
+                        <?= $subAction === 'currency' ? 'Moneda y Formato' : ($subAction === 'contact' ? 'Contacto' : 'Información General') ?>
+                    <?php elseif ($activeTab === 'rooms'): ?>
+                        Salas
+                    <?php elseif ($activeTab === 'history'): ?>
+                        Historial
                     <?php else: ?>
-                        <?= $activeTab === 'dashboard' ? 'Dashboard' : ucfirst($activeTab) ?>
+                        <?= ucfirst($activeTab) ?>
                     <?php endif; ?>
                 </h2>
             </div>

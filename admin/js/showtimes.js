@@ -1,8 +1,47 @@
 // ============================================
-// SHOWTIMES.JS - Funcionalidad específica para horarios
+// SHOWTIMES.JS - Funcionalidad específica para funciones
 // ============================================
 
 document.addEventListener('DOMContentLoaded', function() {
+    // ============================================
+    // BUSCADOR - EVENT LISTENERS (CSP-safe)
+    // Solo existe en la página de listado
+    // ============================================
+    const searchBtn = document.getElementById('searchBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const searchInput = document.getElementById('searchShowtime');
+
+    function doSearch() {
+        const csrf = document.querySelector('input[name="csrf_token"]')?.value || '';
+        let url = 'index.php?tab=showtimes&csrf_token=' + encodeURIComponent(csrf);
+        if (searchInput && searchInput.value.trim()) {
+            url += '&search_showtime=' + encodeURIComponent(searchInput.value.trim());
+        }
+        window.location.href = url;
+    }
+
+    function clearSearch() {
+        const csrf = document.querySelector('input[name="csrf_token"]')?.value || '';
+        window.location.href = 'index.php?tab=showtimes&csrf_token=' + encodeURIComponent(csrf);
+    }
+
+    if (searchBtn) {
+        searchBtn.addEventListener('click', doSearch);
+    }
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', clearSearch);
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                doSearch();
+            }
+        });
+    }
+
     const movieSelect = document.getElementById('movieSelect');
     const roomSelect = document.getElementById('roomSelect');
     const dateInput = document.getElementById('dateInput');
@@ -45,6 +84,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ============================================
     // VERIFICACIÓN DE CONFLICTOS
+    // El botón de guardar SOLO se habilita cuando
+    // se confirma que no hay conflicto.
     // ============================================
     function checkConflicts() {
         const movieId = movieSelect.value;
@@ -60,7 +101,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-checking';
                 conflictChecker.style.display = 'block';
             }
-            enableSubmit(true);
+            enableSubmit(false);
             return;
         }
 
@@ -74,7 +115,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (conflictChecker) {
                 conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
             }
-            enableSubmit(true);
+            enableSubmit(false);
             return;
         }
 
@@ -98,7 +139,7 @@ document.addEventListener('DOMContentLoaded', function() {
             formData.append('exclude_id', excludeId);
         }
 
-        fetch('../ajax/check_conflict.php', {
+        fetch('ajax/check_conflict.php', {
             method: 'POST',
             body: formData
         })
@@ -111,7 +152,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 if (conflictChecker) {
                     conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
                 }
-                enableSubmit(true);
+                enableSubmit(false);
                 return;
             }
 
@@ -128,7 +169,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
                 enableSubmit(false);
             } else {
-                let message = data.message || '✅ No hay conflictos. La sala está disponible en el horario seleccionado.';
+                let message = data.message || '✅ No hay conflictos. La sala está disponible en la función seleccionada.';
                 if (conflictStatus) {
                     conflictStatus.textContent = message;
                 }
@@ -146,7 +187,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (conflictChecker) {
                 conflictChecker.className = 'mb-4 p-3 rounded-lg border text-sm conflict-warning';
             }
-            enableSubmit(true);
+            enableSubmit(false);
         });
     }
 
@@ -165,14 +206,32 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // ============================================
-    // EVENT LISTENERS
+    // EVENT LISTENERS (verificación en tiempo real)
     // ============================================
-    movieSelect.addEventListener('change', checkConflicts);
-    roomSelect.addEventListener('change', checkConflicts);
-    dateInput.addEventListener('change', checkConflicts);
-    timeInput.addEventListener('change', checkConflicts);
+    let conflictTimeout;
 
-    // Validación inicial
+    function checkConflictsImmediate() {
+        clearTimeout(conflictTimeout);
+        checkConflicts();
+    }
+
+    function checkConflictsDebounced() {
+        clearTimeout(conflictTimeout);
+        conflictTimeout = setTimeout(checkConflicts, 300);
+    }
+
+    movieSelect.addEventListener('change', checkConflictsImmediate);
+    movieSelect.addEventListener('input', checkConflictsDebounced);
+    roomSelect.addEventListener('change', checkConflictsImmediate);
+    roomSelect.addEventListener('input', checkConflictsDebounced);
+    dateInput.addEventListener('change', checkConflictsImmediate);
+    dateInput.addEventListener('input', checkConflictsDebounced);
+    timeInput.addEventListener('change', checkConflictsImmediate);
+    timeInput.addEventListener('input', checkConflictsDebounced);
+
+    // Validación inicial: el botón queda deshabilitado
+    // hasta confirmar que no hay conflicto
+    enableSubmit(false);
     if (movieSelect.value && roomSelect.value && dateInput.value && timeInput.value) {
         setTimeout(checkConflicts, 300);
     }
@@ -183,7 +242,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('showtimeForm')?.addEventListener('submit', function(e) {
         if (submitBtn && submitBtn.disabled) {
             e.preventDefault();
-            alert('❌ No puedes guardar el horario mientras haya un conflicto. Resuelve el conflicto primero.');
+            alert('❌ No puedes guardar la función mientras haya un conflicto. Resuelve el conflicto primero.');
             return false;
         }
     });

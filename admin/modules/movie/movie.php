@@ -21,11 +21,6 @@ $msg = $_GET['msg'] ?? '';
 $error = $_GET['error'] ?? '';
 ?>
 
-<div class="admin-content-header">
-    <h1 class="admin-content-title">🎬 Películas</h1>
-    <p class="admin-content-subtitle">Administra el catálogo de películas de tu cine</p>
-</div>
-
 <!-- Lista de Películas con buscador -->
 <div class="admin-card">
 <div class="admin-card-header">
@@ -100,16 +95,16 @@ $error = $_GET['error'] ?? '';
                             </td>
                             <td class="text-center">
                                 <div class="table-actions">
-                                    <a href="index.php?tab=movies&action=register&edit_movie_id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
-                                       class="action-btn action-edit">Editar</a>
+<a href="index.php?tab=movies&action=register&edit_movie_id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>"
+                                        class="action-btn action-edit" title="Editar película"><i class="fas fa-pen"></i></a>
                                    <a href="modules/movie/movie_actions.php?action=update_movie&id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>&return=../../index.php?tab=movies" class="action-btn action-update" onclick="return confirm('¿Actualizar los datos de la película desde TMDb?')">
-    <i class="fas fa-sync-alt"></i> Actualizar
+    <i class="fas fa-sync-alt" title="Actualizar datos desde TMDb"></i>
 </a>
 <a href="modules/movie/movie_actions.php?action=toggle_movie&id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>&return=../../index.php?tab=movies" class="action-btn action-toggle" onclick="return confirm('¿Cambiar estado de esta película?')">
-    <?= $m['is_active'] ? 'Ocultar' : 'Mostrar' ?>
+    <i class="fas <?= $m['is_active'] ? 'fa-eye-slash' : 'fa-eye' ?>" title="<?= $m['is_active'] ? 'Ocultar película' : 'Mostrar película' ?>"></i>
 </a>
 <a href="modules/movie/movie_actions.php?action=delete_movie&id=<?= htmlspecialchars($m['id']) ?>&csrf_token=<?= htmlspecialchars($csrf_token) ?>&return=../../index.php?tab=movies" class="action-btn action-delete" onclick="return confirm('¿Eliminar esta película permanentemente? Se eliminarán también todos los horarios y boletos asociados.')">
-    Eliminar
+<i class="fas fa-trash" title="Eliminar película"></i>
 </a>
                                 </div>
                             </td>

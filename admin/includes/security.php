@@ -62,4 +62,47 @@ function validateReturnUrl($url) {
     
     return $url;
 }
+
+// ============================================
+// SUBIDA SEGURA DE ARCHIVOS (imágenes)
+// ============================================
+function secureFileUpload($file, $allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'], $max_size = 2097152) {
+    if ($file['error'] !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'error' => 'Error al subir el archivo.'];
+    }
+    if ($file['size'] > $max_size) {
+        return ['success' => false, 'error' => 'El archivo excede el tamaño máximo permitido (2MB).'];
+    }
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime_type = finfo_file($finfo, $file['tmp_name']);
+    finfo_close($finfo);
+    if (!in_array($mime_type, $allowed_types)) {
+        return ['success' => false, 'error' => 'Tipo de archivo no permitido.'];
+    }
+    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    $allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    if (!in_array($extension, $allowed_extensions)) {
+        return ['success' => false, 'error' => 'Extensión de archivo no permitida.'];
+    }
+    return ['success' => true, 'extension' => $extension, 'mime_type' => $mime_type];
+}
+
+// ============================================
+// VALIDAR FORTALEZA DE CONTRASEÑA
+// ============================================
+function validatePasswordStrength($password) {
+    if (strlen($password) < 8) {
+        return "La contraseña debe tener al menos 8 caracteres.";
+    }
+    if (!preg_match('/[A-Z]/', $password)) {
+        return "La contraseña debe contener al menos una letra mayúscula.";
+    }
+    if (!preg_match('/[a-z]/', $password)) {
+        return "La contraseña debe contener al menos una letra minúscula.";
+    }
+    if (!preg_match('/[0-9]/', $password)) {
+        return "La contraseña debe contener al menos un número.";
+    }
+    return null;
+}
 ?>

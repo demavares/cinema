@@ -18,11 +18,6 @@ $msg = $_GET['msg'] ?? '';
 $error = $_GET['error'] ?? '';
 ?>
 
-<div class="admin-content-header">
-    <h1 class="admin-content-title"><?= $edit_movie ? '✏️ Editar Película' : '➕ Registrar Película' ?></h1>
-    <p class="admin-content-subtitle"><?= $edit_movie ? 'Modifica los datos de la película existente' : 'Agrega una nueva película al catálogo' ?></p>
-</div>
-
 <!-- Formulario Agregar/Editar Película -->
 <div class="admin-card">
     <div class="admin-card-header">

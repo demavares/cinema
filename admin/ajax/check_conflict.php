@@ -73,7 +73,7 @@ try {
 
     if (!$result['conflict']) {
         if (empty($result['message'])) {
-            $result['message'] = '✅ No hay conflictos. La ' . $room_name . ' está disponible en el horario seleccionado.';
+            $result['message'] = '✅ No hay conflictos. La ' . $room_name . ' está disponible en la función seleccionada.';
         }
     } else {
         if (!empty($result['message'])) {

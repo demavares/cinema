@@ -13,7 +13,7 @@ if ($is_edit) {
     $stmt->execute([$room_id]);
     $room = $stmt->fetch();
     if (!$room) {
-        header('Location: admin.php?tab=rooms');
+        header('Location: admin/index.php?tab=rooms');
         exit;
     }
 }
@@ -504,7 +504,7 @@ $availableSeats = $totalSeats - count($blockedSeats);
                 <p class="text-xs sm:text-sm text-gray-400 mt-1">Diseña la distribución de asientos, bloquea filas o asigna accesibilidad de forma sencilla.</p>
             </div>
             <div class="flex gap-2 w-full sm:w-auto">
-                <a href="admin.php?tab=rooms" class="flex-1 sm:flex-none text-center bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors border border-gray-600">← Volver</a>
+                <a href="admin/index.php?tab=rooms" class="flex-1 sm:flex-none text-center bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors border border-gray-600">← Volver</a>
                 <a href="logout.php" class="flex-1 sm:flex-none text-center bg-red-600/20 hover:bg-red-600/40 text-red-400 px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-colors border border-red-500/30">Cerrar</a>
             </div>
         </div>
@@ -634,10 +634,10 @@ $availableSeats = $totalSeats - count($blockedSeats);
                         💾 <?= $is_edit ? 'Actualizar Sala' : 'Guardar y Crear Sala' ?>
                     </button>
                     <div class="grid grid-cols-2 gap-2 mt-2">
-                        <a href="admin.php?tab=rooms" class="w-full bg-red-600/20 hover:bg-red-600/40 text-red-400 font-semibold py-2.5 rounded-lg transition-all text-sm flex items-center justify-center gap-1 border border-red-500/30">
+                        <a href="admin/index.php?tab=rooms" class="w-full bg-red-600/20 hover:bg-red-600/40 text-red-400 font-semibold py-2.5 rounded-lg transition-all text-sm flex items-center justify-center gap-1 border border-red-500/30">
                             ❌ Cancelar
                         </a>
-                        <a href="admin.php?tab=rooms" class="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 font-semibold py-2.5 rounded-lg transition-all text-sm flex items-center justify-center gap-1 border border-gray-600">
+                        <a href="admin/index.php?tab=rooms" class="w-full bg-gray-700 hover:bg-gray-600 text-gray-300 font-semibold py-2.5 rounded-lg transition-all text-sm flex items-center justify-center gap-1 border border-gray-600">
                             ⬅️ Volver
                         </a>
                     </div>

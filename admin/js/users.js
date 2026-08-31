@@ -4,30 +4,42 @@
 
 document.addEventListener('DOMContentLoaded', function() {
     // ============================================
-    // TOGGLE DE VISIBILIDAD DE CONTRASEÑA
+    // BUSCADOR - CÉDULA (solo existe en la lista)
     // ============================================
-    document.querySelectorAll('[data-password-toggle]').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            const inputId = this.getAttribute('data-password-toggle');
-            const input = document.getElementById(inputId);
-            if (!input) return;
+    const searchBtn = document.getElementById('searchBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const searchInput = document.getElementById('searchCedula');
 
-            const icon = this.querySelector('i');
-            if (input.type === 'password') {
-                input.type = 'text';
-                if (icon) {
-                    icon.classList.remove('fa-eye');
-                    icon.classList.add('fa-eye-slash');
-                }
-            } else {
-                input.type = 'password';
-                if (icon) {
-                    icon.classList.remove('fa-eye-slash');
-                    icon.classList.add('fa-eye');
-                }
+    function doSearch() {
+        const csrf = document.querySelector('input[name="csrf_token"]')?.value || '';
+        let url = 'index.php?tab=users&csrf_token=' + encodeURIComponent(csrf);
+        if (searchInput && searchInput.value.trim()) {
+            url += '&search_cedula=' + encodeURIComponent(searchInput.value.trim());
+        }
+        window.location.href = url;
+    }
+
+    function clearSearch() {
+        const csrf = document.querySelector('input[name="csrf_token"]')?.value || '';
+        window.location.href = 'index.php?tab=users&csrf_token=' + encodeURIComponent(csrf);
+    }
+
+    if (searchBtn) {
+        searchBtn.addEventListener('click', doSearch);
+    }
+
+    if (clearBtn) {
+        clearBtn.addEventListener('click', clearSearch);
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                doSearch();
             }
         });
-    });
+    }
 
     // ============================================
     // SOLO NÚMEROS EN CÉDULA Y TELÉFONO

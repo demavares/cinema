@@ -329,7 +329,7 @@ body {
 }
 
 .sidebar-menu .has-submenu.open .submenu {
-    max-height: 200px;
+    max-height: 400px;
     opacity: 1;
 }
 
@@ -1494,4 +1494,225 @@ body {
     .admin-card-body {
         padding: 12px 14px;
     }
+}
+
+/* ============================================
+   HORARIOS (SHOWTIMES)
+   ============================================ */
+
+/* Tiempo de función */
+.time-display {
+    white-space: nowrap;
+}
+
+/* Formato de proyección */
+.format-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.format-2d {
+    background: #e0e7ff;
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+}
+
+.format-3d {
+    background: #fce7f3;
+    color: #9d174d;
+    border: 1px solid #f9a8d4;
+}
+
+.format-imax,
+.format-imax-3d {
+    background: #c7d2fe;
+    color: #1e1b4b;
+    border: 1px solid #a5b4fc;
+}
+
+.format-4dx {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.format-screenx {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fcd34d;
+}
+
+.format-d-box {
+    background: #ede9fe;
+    color: #5b21b6;
+    border: 1px solid #ddd6fe;
+}
+
+/* Idioma */
+.language-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.language-badge.espanol {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+
+.language-badge.subtitulos {
+    background: #e0e7ff;
+    color: #3730a3;
+    border: 1px solid #c7d2fe;
+}
+
+/* Promociones */
+.promotion-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    white-space: nowrap;
+    margin: 2px 2px 2px 0;
+}
+
+.promotion-tag.lunes {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+
+.promotion-tag.preventa {
+    background: #fdf2f8;
+    color: #be185d;
+    border: 1px solid #fbcfe8;
+}
+
+.promotion-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #f8fafc;
+    cursor: pointer;
+}
+
+.promotion-checkbox input {
+    width: 16px;
+    height: 16px;
+    accent-color: #4f46e5;
+}
+
+.promotion-checkbox label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+}
+
+/* Estado en lista */
+.movie-deleted {
+    text-decoration: line-through;
+    color: #9ca3af;
+}
+
+.showtime-inactive {
+    opacity: 0.6;
+}
+
+.showtime-inactive td {
+    text-decoration: line-through;
+    text-decoration-color: #6b7280;
+}
+
+.showtime-past td {
+    text-decoration: line-through;
+    text-decoration-color: #9ca3af;
+}
+
+/* Toggle switches de precios */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 22px;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: #cbd5e1;
+    transition: 0.3s;
+    border-radius: 34px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: #ffffff;
+    transition: 0.3s;
+    border-radius: 50%;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: #4f46e5;
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(18px);
+}
+
+.price-input-disabled {
+    background-color: #f3f4f6 !important;
+    color: #9ca3af !important;
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* Verificación de conflictos (legible sobre fondo claro) */
+.conflict-warning { background-color: #fef2f2; border-color: #dc2626; color: #991b1b; }
+.conflict-checking { background-color: #eff6ff; border-color: #3b82f6; color: #1d4ed8; }
+.conflict-safe { background-color: #f0fdf4; border-color: #22c55e; color: #15803d; }
+
+.btn-disabled { opacity: 0.5 !important; cursor: not-allowed !important; pointer-events: none; }
+
+/* Botón para mostrar/ocultar contraseña */
+.password-toggle-btn {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #6b7280;
+    font-size: 0.9rem;
+    padding: 6px 8px;
+    z-index: 2;
+}
+.password-toggle-btn:hover {
+    color: #4f46e5;
 }

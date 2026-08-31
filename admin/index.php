@@ -118,16 +118,16 @@ require_once 'includes/header.php';
                     <a href="index.php?tab=movies&action=register" class="quick-action-btn">
                         <i class="fas fa-plus-circle"></i> Registrar Película
                     </a>
-                    <a href="index.php?tab=showtimes" class="quick-action-btn">
-                        <i class="fas fa-plus-circle"></i> Agregar Horario
+                    <a href="index.php?tab=showtimes&action=register" class="quick-action-btn">
+                        <i class="fas fa-plus-circle"></i> Agregar Función
                     </a>
-                    <a href="index.php?tab=rooms" class="quick-action-btn">
+                    <a href="index.php?tab=rooms&action=builder" class="quick-action-btn">
                         <i class="fas fa-plus-circle"></i> Crear Sala
                     </a>
-                    <a href="index.php?tab=food" class="quick-action-btn">
+                    <a href="index.php?tab=food&action=register" class="quick-action-btn">
                         <i class="fas fa-plus-circle"></i> Agregar Producto
                     </a>
-                    <a href="index.php?tab=users" class="quick-action-btn">
+                    <a href="index.php?tab=users&action=register" class="quick-action-btn">
                         <i class="fas fa-user-plus"></i> Registrar Usuario
                     </a>
                 </div>
@@ -204,39 +204,43 @@ require_once 'includes/header.php';
 
     <?php elseif ($activeTab === 'showtimes'): ?>
         <!-- ============================================ -->
-        <!-- TAB: HORARIOS (Pendiente de implementar)     -->
+        <!-- TAB: HORARIOS                               -->
         <!-- ============================================ -->
-        <div class="admin-content-header">
-            <h1 class="admin-content-title">🕐 Gestión de Horarios</h1>
-            <p class="admin-content-subtitle">Módulo en construcción</p>
-        </div>
+        <?php if ($subAction === 'register'): ?>
+            <?php require_once 'modules/showtime/showtime_register.php'; ?>
+        <?php else: ?>
+            <?php require_once 'modules/showtime/showtime.php'; ?>
+        <?php endif; ?>
 
     <?php elseif ($activeTab === 'rooms'): ?>
         <!-- ============================================ -->
-        <!-- TAB: SALAS (Pendiente de implementar)        -->
+        <!-- TAB: SALAS                                   -->
         <!-- ============================================ -->
-        <div class="admin-content-header">
-            <h1 class="admin-content-title">🏠 Gestión de Salas</h1>
-            <p class="admin-content-subtitle">Módulo en construcción</p>
-        </div>
+        <?php if ($subAction === 'builder'): ?>
+            <?php require_once 'modules/room/room_builder.php'; ?>
+        <?php else: ?>
+            <?php require_once 'modules/room/room.php'; ?>
+        <?php endif; ?>
 
     <?php elseif ($activeTab === 'users'): ?>
         <!-- ============================================ -->
-        <!-- TAB: USUARIOS (Pendiente de implementar)     -->
+        <!-- TAB: USUARIOS                                -->
         <!-- ============================================ -->
-        <div class="admin-content-header">
-            <h1 class="admin-content-title">👥 Gestión de Usuarios</h1>
-            <p class="admin-content-subtitle">Módulo en construcción</p>
-        </div>
+        <?php if ($subAction === 'register'): ?>
+            <?php require_once 'modules/user/user_register.php'; ?>
+        <?php else: ?>
+            <?php require_once 'modules/user/user.php'; ?>
+        <?php endif; ?>
 
     <?php elseif ($activeTab === 'food'): ?>
         <!-- ============================================ -->
-        <!-- TAB: COMIDA (Pendiente de implementar)       -->
+        <!-- TAB: COMIDA                                 -->
         <!-- ============================================ -->
-        <div class="admin-content-header">
-            <h1 class="admin-content-title">🍿 Gestión de Comida</h1>
-            <p class="admin-content-subtitle">Módulo en construcción</p>
-        </div>
+        <?php if ($subAction === 'register'): ?>
+            <?php require_once 'modules/food/food_register.php'; ?>
+        <?php else: ?>
+            <?php require_once 'modules/food/food.php'; ?>
+        <?php endif; ?>
 
     <?php elseif ($activeTab === 'history'): ?>
         <!-- ============================================ -->
@@ -249,12 +253,9 @@ require_once 'includes/header.php';
 
     <?php elseif ($activeTab === 'config'): ?>
         <!-- ============================================ -->
-        <!-- TAB: CONFIGURACIÓN (Pendiente de implementar)-->
+        <!-- TAB: CONFIGURACIÓN                           -->
         <!-- ============================================ -->
-        <div class="admin-content-header">
-            <h1 class="admin-content-title">⚙️ Configuración del Sitio</h1>
-            <p class="admin-content-subtitle">Módulo en construcción</p>
-        </div>
+        <?php require_once 'modules/config/config.php'; ?>
 
     <?php endif; ?>
 </div>

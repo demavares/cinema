@@ -858,7 +858,7 @@ require_once 'header.php';
         <div class="bg-white border border-gray-300 rounded-2xl p-12 text-center shadow-sm">
             <div class="text-6xl mb-4">🎬</div>
             <h3 class="text-xl font-bold text-gray-700 mb-2">No hay películas programadas</h3>
-            <p class="text-gray-500 text-sm">El administrador debe agregar películas y horarios desde el <a href="admin.php" class="text-indigo-600 hover:underline">panel de configuración</a>.</p>
+            <p class="text-gray-500 text-sm">El administrador debe agregar películas y horarios desde el <a href="admin/index.php" class="text-indigo-600 hover:underline">panel de configuración</a>.</p>
         </div>
     <?php else: ?>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-8">

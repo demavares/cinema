@@ -63,7 +63,7 @@ if (isset($_SESSION['user_id'])) {
     } catch (PDOException $e) {
         error_log("Error actualizando last_login: " . $e->getMessage());
     }
-    header('Location: ' . ($_SESSION['user_role'] === 'admin' ? 'admin.php' : 'index.php'));
+    header('Location: ' . ($_SESSION['user_role'] === 'admin' ? 'admin/index.php' : 'index.php'));
     exit;
 }
 $error = '';
@@ -225,7 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     $user['role'],
                                     $ip
                                 ));
-                                $redirectUrl = ($user['role'] === 'admin') ? 'admin.php' : 'index.php';
+                                $redirectUrl = ($user['role'] === 'admin') ? 'admin/index.php' : 'index.php';
                                 if (isset($_POST['redirect_to']) && !empty($_POST['redirect_to'])) {
                                     $redirectTo = $_POST['redirect_to'];
                                     if (

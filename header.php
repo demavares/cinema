@@ -424,7 +424,7 @@ $cleanStorage = isset($_GET['session_expired']) || isset($_GET['timeout']) || is
                 </li>
                 <?php if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin'): ?>
                     <li>
-                        <a href="admin.php" class="<?= $currentPage === 'admin.php' ? 'active' : '' ?>">
+                        <a href="admin/index.php">
                             <i class="fas fa-cog"></i> Panel Admin
                         </a>
                     </li>
@@ -512,7 +512,7 @@ $cleanStorage = isset($_GET['session_expired']) || isset($_GET['timeout']) || is
                                 <?= htmlspecialchars($_SESSION['user_name']) ?>
                             </span>
                             <?php if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin'): ?>
-                                <a href="admin.php" class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1">
+                                <a href="admin/index.php" class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1">
                                     <i class="fas fa-cog"></i>
                                     <span class="hidden sm:inline">Configurar</span>
                                 </a>
