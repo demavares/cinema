@@ -19,12 +19,13 @@ $movies = $stmt->fetchAll();
 // Verificar si hay mensaje de error o éxito
 $msg = $_GET['msg'] ?? '';
 $error = $_GET['error'] ?? '';
+$total_movies = count($movies);
 ?>
 
 <!-- Lista de Películas con buscador -->
 <div class="admin-card">
 <div class="admin-card-header">
-    <h3 class="admin-card-title">📋 Todas las Películas</h3>
+    <h3 class="admin-card-title">📋 Películas (<?= $total_movies ?> registrados)</h3>
     <a href="index.php?tab=movies&action=register" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md text-sm no-underline">
         <i class="fas fa-plus-circle"></i> Registrar Película
     </a>

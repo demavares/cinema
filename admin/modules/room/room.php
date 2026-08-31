@@ -13,15 +13,10 @@ try {
 $total_rooms = count($rooms);
 ?>
 
-<div class="admin-content-header">
-    <h1 class="admin-content-title">Salas</h1>
-    <p class="admin-content-subtitle">Gestiona las salas del cine (<strong><?= $total_rooms ?></strong> salas)</p>
-</div>
-
 <!-- Lista de Salas -->
 <div class="admin-card">
     <div class="admin-card-header">
-        <h3 class="admin-card-title">Todas las Salas</h3>
+        <h3 class="admin-card-title">Salas (<?= $total_rooms ?> registrados)</h3>
         <a href="index.php?tab=rooms&action=builder" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md text-sm no-underline">
             <i class="fas fa-plus-circle"></i> Crear Nueva Sala
         </a>

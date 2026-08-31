@@ -205,9 +205,9 @@ if (!headers_sent()) {
                     </ul>
                 </li>
                 <li>
-                    <a href="index.php?tab=history" class="sidebar-link <?= $activeTab === 'history' ? 'active' : '' ?>" title="Historial">
-                        <i class="fas fa-history"></i>
-                        <span>Historial</span>
+                    <a href="index.php?tab=report" class="sidebar-link <?= $activeTab === 'report' || $activeTab === 'history' ? 'active' : '' ?>" title="Informe">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>Informe</span>
                     </a>
                 </li>
                 <li class="has-submenu <?= $activeTab === 'config' ? 'open' : '' ?>">
@@ -279,8 +279,8 @@ if (!headers_sent()) {
                         <?= $subAction === 'currency' ? 'Moneda y Formato' : ($subAction === 'contact' ? 'Contacto' : 'Información General') ?>
                     <?php elseif ($activeTab === 'rooms'): ?>
                         Salas
-                    <?php elseif ($activeTab === 'history'): ?>
-                        Historial
+                    <?php elseif ($activeTab === 'history' || $activeTab === 'report'): ?>
+                        Informe
                     <?php else: ?>
                         <?= ucfirst($activeTab) ?>
                     <?php endif; ?>

@@ -14,15 +14,10 @@ $siteRoot = dirname(__DIR__, 3);
 $total_products = count($food_items);
 ?>
 
-<div class="admin-content-header">
-    <h1 class="admin-content-title">Comida</h1>
-    <p class="admin-content-subtitle">Gestiona el catálogo de comida del cine (<strong><?= $total_products ?></strong> productos)</p>
-</div>
-
 <!-- Lista de Productos -->
 <div class="admin-card">
     <div class="admin-card-header">
-        <h3 class="admin-card-title">Todos los Productos</h3>
+        <h3 class="admin-card-title">Productos (<?= $total_products ?> registrados)</h3>
         <a href="index.php?tab=food&action=register" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md text-sm no-underline">
             <i class="fas fa-plus-circle"></i> Registrar Producto
         </a>

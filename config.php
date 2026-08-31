@@ -18,7 +18,7 @@ $cspNonce = getCSPNonce();
 
 if (!headers_sent()) {
     $currentScript = basename($_SERVER['SCRIPT_NAME'] ?? '');
-    $adminScripts = ['room_builder.php'];
+    $adminScripts = [];
 
     if (in_array($currentScript, $adminScripts, true)) {
         // ✅ PANEL ADMIN: compatibilidad con scripts/handlers inline legacy

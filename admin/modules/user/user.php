@@ -30,7 +30,7 @@ $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
 <!-- Lista de Usuarios con buscador por cédula -->
 <div class="admin-card">
     <div class="admin-card-header">
-        <h3 class="admin-card-title">Usuarios Registrados</h3>
+        <h3 class="admin-card-title">Usuarios (<?= $user_count ?> registrados)</h3>
         <a href="index.php?tab=users&action=register" class="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md text-sm no-underline">
             <i class="fas fa-plus-circle"></i> Registrar Usuario
         </a>
@@ -82,7 +82,8 @@ $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
                             $is_self = $u['id'] == $_SESSION['user_id'];
                             $is_blocked = $u['is_blocked'] == 1;
                             $initial = strtoupper(substr($u['name'] ?? 'U', 0, 1));
-                            $birth_date = $u['birth_date'] ? formatDateVenezuela($u['birth_date']) : '—';
+                            $birth_date = $u['birth_date'] ? formatDateShort($u['birth_date']) : '—';
+                            $is_birthday = !empty($u['birth_date']) && date('m-d', strtotime($u['birth_date'])) === date('m-d');
                             ?>
                             <tr>
                                 <td>
@@ -102,7 +103,12 @@ $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
                                 <td class="text-gray-700"><?= htmlspecialchars($u['email']) ?></td>
                                 <td class="text-gray-700"><?= $u['cedula_type'] ? htmlspecialchars($u['cedula_type'] . '-' . $u['cedula_number']) : '<span class="text-gray-400">—</span>' ?></td>
                                 <td class="text-gray-700"><?= $u['phone_number'] ? htmlspecialchars((substr($u['phone_prefix'], 0, 1) === '+' ? $u['phone_prefix'] : '0' . $u['phone_prefix']) . '-' . $u['phone_number']) : '<span class="text-gray-400">—</span>' ?></td>
-                                <td class="text-gray-700"><?= $birth_date ?></td>
+                                <td class="text-gray-700">
+                                    <span><?= $birth_date ?></span>
+                                    <?php if ($is_birthday): ?>
+                                        <span class="birthday-badge"><i class="fas fa-cake-candles"></i> Cumpleaños</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?= $u['role'] === 'admin' ? '<span class="badge badge-a"><i class="fas fa-shield-halved"></i> Admin</span>' : '<span class="badge badge-c"><i class="fas fa-user"></i> Usuario</span>' ?></td>
                                 <td class="text-center">
                                     <span class="status-badge <?= $is_blocked ? 'status-inactive' : 'status-active' ?>">

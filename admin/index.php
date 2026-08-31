@@ -140,7 +140,7 @@ require_once 'includes/header.php';
             <div class="admin-card">
                 <div class="admin-card-header">
                     <h3 class="admin-card-title">🕐 Actividad Reciente</h3>
-                    <a href="index.php?tab=history" class="admin-card-link">Ver todo</a>
+                    <a href="index.php?tab=report" class="admin-card-link">Ver todo</a>
                 </div>
                 <div class="admin-card-body">
                     <?php $recentActivity = getRecentActivity($pdo); ?>
@@ -242,14 +242,11 @@ require_once 'includes/header.php';
             <?php require_once 'modules/food/food.php'; ?>
         <?php endif; ?>
 
-    <?php elseif ($activeTab === 'history'): ?>
+    <?php elseif ($activeTab === 'report' || $activeTab === 'history'): ?>
         <!-- ============================================ -->
-        <!-- TAB: HISTORIAL (Pendiente de implementar)    -->
+        <!-- TAB: INFORME (antes Historial)               -->
         <!-- ============================================ -->
-        <div class="admin-content-header">
-            <h1 class="admin-content-title">📊 Historial de Funciones</h1>
-            <p class="admin-content-subtitle">Módulo en construcción</p>
-        </div>
+        <?php require_once 'modules/report/report.php'; ?>
 
     <?php elseif ($activeTab === 'config'): ?>
         <!-- ============================================ -->
