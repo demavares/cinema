@@ -1140,8 +1140,7 @@ require_once 'header.php';
                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowfullscreen
                     loading="lazy"
-                    referrerpolicy="strict-origin-when-cross-origin"
-                    sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"></iframe>
+                    referrerpolicy="strict-origin-when-cross-origin"></iframe>
             </div>
         </div>
     </div>

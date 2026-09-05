@@ -207,7 +207,7 @@ body { background-color: #ffffff !important; color: #1f2937 !important; }
 .seat-occupied .seat-label { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
 .seat-accessible.seat-occupied { background-color: #ef4444 !important; opacity: 0.9; }
 .seat-accessible.seat-occupied .seat-label { font-size: calc(var(--seat-size) * 0.6) !important; }
-.cinema-screen { background: #1a1a1a !important; color: #6b7280; text-align: center; padding: 3px; border-radius: 8px; margin-top: 28px; font-weight: bold; letter-spacing: 4px; font-size: clamp(0.7rem, 2vw, 1rem); width: 100%; cursor: default; }
+.cinema-screen { background: #1a1a1a !important; color: #ffffff; text-align: center; padding: 3px; border-radius: 8px; margin-top: 28px; font-weight: bold; letter-spacing: 4px; font-size: clamp(0.7rem, 2vw, 1rem); width: 100%; cursor: default; }
 .legend { display: flex; gap: clamp(8px, 2vw, 20px); justify-content: center; flex-wrap: wrap; margin-top: 20px; }
 .legend-item { display: flex; align-items: center; gap: 6px; font-size: clamp(0.65rem, 1.2vw, 0.8rem); color: #475569; font-weight: 500; }
 .legend-item .color-box { width: clamp(14px, 2vw, 20px); height: clamp(14px, 2vw, 20px); border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; }
@@ -438,6 +438,12 @@ let unloadReleaseSent = false;
 function releaseSeatsOnUnload() {
 if (skipUnloadRelease || unloadReleaseSent) return;
 unloadReleaseSent = true;
+// Limpiar solo la selección de ESTA función para que no se restaure al volver
+try {
+sessionStorage.removeItem('selected_seats_' + showtimeId);
+sessionStorage.removeItem('selected_seats_count_' + showtimeId);
+sessionStorage.removeItem('purchase_token_' + showtimeId);
+} catch (e) {}
 const formData = new FormData();
 formData.append('showtime_id', showtimeId);
 if (navigator.sendBeacon) {
@@ -453,9 +459,28 @@ window.addEventListener('beforeunload', releaseSeatsOnUnload);
 // ============================================
 window.addEventListener('pageshow', function(event) {
 const navEntry = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || null;
-const isReload = event.persisted ||
-(navEntry && navEntry.type === 'reload') ||
+const isReload = (navEntry && navEntry.type === 'reload') ||
+(window.performance && window.performance.navigation && window.performance.navigation.type === 1);
+const isBackForward = event.persisted ||
+(navEntry && navEntry.type === 'back_forward') ||
 (window.performance && window.performance.navigation && window.performance.navigation.type === 2);
+if (isBackForward) {
+// ✅ Regreso por bfcache / botón atrás: liberar y mostrar los asientos libres en el acto
+liberarAsientos(function() {});
+selectedSeats = [];
+try {
+sessionStorage.removeItem('selected_seats_' + showtimeId);
+sessionStorage.removeItem('selected_seats_count_' + showtimeId);
+sessionStorage.removeItem('purchase_token_' + showtimeId);
+} catch (e) {}
+document.querySelectorAll('.seat-selected').forEach(function(seat) {
+const seatId = seat.getAttribute('data-seat');
+seat.classList.remove('seat-selected');
+seat.classList.add(accessibleSeats.includes(seatId) ? 'seat-accessible' : 'seat-available');
+});
+updateSummary();
+return;
+}
 if (isReload) {
 skipUnloadRelease = true;
 liberarAsientos(function() {
