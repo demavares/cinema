@@ -311,7 +311,7 @@ elseif ($isAccessible) $seatClass = 'seat-accessible';
 </div>
 <div class="legend">
 <div class="legend-item"><div class="color-box" style="background-color: #cbd5e1;"></div> Disponible</div>
-<div class="legend-item"><div class="color-box bg-sky-600">♿</div> Discapacidad</div>
+<?php if (!empty($accessibleSeats)): ?><div class="legend-item"><div class="color-box bg-sky-600">♿</div> Discapacitado</div><?php endif; ?>
 <div class="legend-item"><div class="color-box bg-indigo-500"></div> Seleccionado</div>
 <div class="legend-item"><div class="color-box bg-red-600"></div> Ocupado</div>
 </div>

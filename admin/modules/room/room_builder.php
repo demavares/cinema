@@ -465,7 +465,7 @@ $save_url = 'index.php?tab=rooms&action=builder' . ($room_id > 0 ? '&room_id=' .
                 <div class="mode-toggle">
                     <button type="button" class="mode-btn active" id="modeSelect">Seleccionar</button>
                     <button type="button" class="mode-btn" id="modeBlock">🚫 Bloquear (Pasillo)</button>
-                    <button type="button" class="mode-btn" id="modeWheelchair">♿ Discapacidad</button>
+                    <button type="button" class="mode-btn" id="modeWheelchair">♿ Discapacitado</button>
                 </div>
                 <span id="modeHelp" class="text-xs text-gray-500">Clic en un asiento para seleccionarlo</span>
             </div>
@@ -497,7 +497,7 @@ $save_url = 'index.php?tab=rooms&action=builder' . ($room_id > 0 ? '&room_id=' .
                 </div>
                 <div class="stat-item">
                     <div class="stat-value text-sky-500" id="statWheelchair">0</div>
-                    <div class="stat-label">Discapacidad</div>
+                    <div class="stat-label">Discapacitado</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-value text-green-600" id="statAvailable">0</div>
@@ -554,7 +554,7 @@ $save_url = 'index.php?tab=rooms&action=builder' . ($room_id > 0 ? '&room_id=' .
                     <div class="grid grid-cols-2 gap-2 text-[11px]">
                         <div class="flex items-center gap-2"><span class="inline-block w-3.5 h-3.5 bg-gray-500 rounded"></span> Disponible</div>
                         <div class="flex items-center gap-2"><span class="inline-block w-3.5 h-3.5 bg-indigo-600 rounded"></span> Seleccionado</div>
-                        <div class="flex items-center gap-2"><span class="inline-block w-3.5 h-3.5 bg-sky-600 rounded"></span> Discapacidad ♿</div>
+                        <div class="flex items-center gap-2"><span class="inline-block w-3.5 h-3.5 bg-sky-600 rounded"></span> Discapacitado ♿</div>
                         <div class="flex items-center gap-2"><span class="inline-block w-3.5 h-3.5 bg-gray-800 border border-gray-500 rounded"></span> Bloqueado</div>
                     </div>
                 </div>
@@ -649,7 +649,7 @@ function setMode(mode) {
         help.textContent = 'Clic en un asiento para bloquearlo o convertirlo en pasillo';
         help.className = 'text-xs text-indigo-600 font-medium';
     } else if (mode === 'wheelchair') {
-        help.textContent = 'Clic en un asiento para definirlo como accesible (Discapacidad)';
+        help.textContent = 'Clic en un asiento para definirlo como accesible (Discapacitado)';
         help.className = 'text-xs text-sky-600 font-medium';
     }
 }
