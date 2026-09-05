@@ -319,6 +319,14 @@ if (!empty($movieFormat)) {
     $formatClass = 'format-' . str_replace(' ', '-', $formatLower);
 }
 
+// La función se considera realizada solo cuando ya terminó la película (hora + duración)
+$functionDone = false;
+$durationMin = intval($showtime['duration'] ?? 0);
+if ($durationMin > 0 && !empty($showtime['show_date']) && !empty($showtime['show_time'])) {
+    $functionEndTs = strtotime($showtime['show_date'] . ' ' . $showtime['show_time']) + ($durationMin * 60);
+    $functionDone = $functionEndTs < time();
+}
+
 $totalTickets = intval($purchase['total_tickets'] ?? 0);
 $showIntegrityWarning = !$dataIntegrity;
 $integrityMessage = $showIntegrityWarning ? implode(', ', $integrityIssues) : '';
@@ -750,6 +758,24 @@ require_once 'header.php';
         color: #78350f;
     }
 
+    .function-done-note {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 10px;
+        background: #f1f5f9;
+        border: 1px dashed #94a3b8;
+        color: #475569;
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 4px 12px;
+        border-radius: 8px;
+    }
+
+    .function-done-note i {
+        color: #6366f1;
+    }
+
     @media (max-width: 640px) {
         .confirmation-card {
             padding: 20px;
@@ -916,6 +942,12 @@ require_once 'header.php';
                         <?= formatDateShort($showtime['show_date']) ?> ·
                         <?= formatTimeVenezuela($showtime['show_time']) ?>
                     </div>
+
+                    <?php if ($functionDone): ?>
+                        <div class="function-done-note">
+                            <i class="fas fa-flag-checkered"></i>Función ya realizada
+                        </div>
+                    <?php endif; ?>
 
                     <div class="mt-1.5">
                         <span class="format-badge <?= $formatClass ?>"><?= htmlspecialchars($movieFormat) ?></span>

@@ -349,9 +349,26 @@ if ($action === 'toggle_movie') {
     }
 
     try {
+        $stmt = $pdo->prepare("SELECT title, is_active FROM movies WHERE id = ?");
+        $stmt->execute([$id]);
+        $movie = $stmt->fetch();
+
+        // 🎬 Regla de visibilidad: al MOSTRAR una película debe tener al menos una función vigente.
+        if ($movie && (int)$movie['is_active'] === 0) {
+            $stmtFuncs = $pdo->prepare("SELECT COUNT(*) FROM showtimes WHERE movie_id = ? AND CONCAT(show_date, ' ', show_time) >= NOW()");
+            $stmtFuncs->execute([$id]);
+            $funcCount = (int)$stmtFuncs->fetchColumn();
+
+            if ($funcCount <= 0) {
+                $message = 'La película "' . $movie['title'] . '" no tiene funciones asignadas. Para poder mostrarla debe tener al menos una función asignada.';
+                header('Location: ../../index.php?tab=showtimes&action=register&movie_id=' . $id . '&error=' . urlencode($message));
+                exit;
+            }
+        }
+
         $stmt = $pdo->prepare("UPDATE movies SET is_active = NOT is_active WHERE id = ?");
         $stmt->execute([$id]);
-        header('Location: ' . $return_url . '&msg=' . urlencode("Estado de película actualizado."));
+        header('Location: ' . $return_url . '&msg=' . urlencode('Estado de película actualizado.'));
         exit;
     } catch (PDOException $e) {
         error_log("Error al cambiar estado de película: " . $e->getMessage());

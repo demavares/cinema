@@ -16,6 +16,21 @@ $header_csrf_token = generateCSRFToken();
 
 // LIMPIAR SESSIONSTORAGE SI LA SESIÓN EXPIRÓ (Script de limpieza automática)
 $cleanStorage = isset($_GET['session_expired']) || isset($_GET['timeout']) || isset($_GET['logout']);
+
+// RUTA DEL AVATAR DEL USUARIO LOGUEADO (si existe)
+$menuAvatar = '';
+if (isset($_SESSION['user_id'])) {
+    try {
+        $stmtAv = $pdo->prepare("SELECT avatar FROM users WHERE id = ?");
+        $stmtAv->execute([$_SESSION['user_id']]);
+        $avatarVal = $stmtAv->fetchColumn();
+        if (!empty($avatarVal) && is_file($avatarVal)) {
+            $menuAvatar = $avatarVal . '?v=' . filemtime($avatarVal);
+        }
+    } catch (Throwable $e) {
+        error_log("Error obteniendo avatar en header: " . $e->getMessage());
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -28,7 +43,7 @@ $cleanStorage = isset($_GET['session_expired']) || isset($_GET['timeout']) || is
     <?php if ($hasFavicon): ?>
         <link rel="icon" type="<?= mime_content_type($siteFavicon) ?>" href="<?= htmlspecialchars($siteFavicon) . '?v=' . filemtime($siteFavicon) ?>">
     <?php else: ?>
-        <link rel="icon" type="image/png" href="favicon.png">
+        <link rel="icon" type="image/png" href="admin/img/favicon.png">
     <?php endif; ?>
 
      <!-- ✅ GOOGLE FONTS (Correcto y optimizado con Preconnect) -->
@@ -400,9 +415,13 @@ $cleanStorage = isset($_GET['session_expired']) || isset($_GET['timeout']) || is
 
         <?php if (isset($_SESSION['user_id'])): ?>
             <div class="menu-header">
-                <div class="user-avatar">
-                    <?= strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)) ?>
-                </div>
+                <?php if ($menuAvatar): ?>
+                    <img src="<?= htmlspecialchars($menuAvatar) ?>" alt="Foto de perfil" class="user-avatar" style="object-fit: cover;">
+                <?php else: ?>
+                    <div class="user-avatar">
+                        <?= strtoupper(substr($_SESSION['user_name'] ?? 'U', 0, 1)) ?>
+                    </div>
+                <?php endif; ?>
                 <div class="user-info">
                     <span class="user-name"><?= htmlspecialchars($_SESSION['user_name'] ?? 'Usuario') ?></span>
                     <span class="user-email"><?= htmlspecialchars($_SESSION['user_email'] ?? '') ?></span>
@@ -418,7 +437,12 @@ $cleanStorage = isset($_GET['session_expired']) || isset($_GET['timeout']) || is
             </li>
             <?php if (isset($_SESSION['user_id'])): ?>
                 <li>
-                    <a href="mis_compras.php" class="<?= $currentPage === 'mis_compras.php' ? 'active' : '' ?>">
+                    <a href="user/account.php" class="<?= $currentPage === 'account.php' ? 'active' : '' ?>">
+                        <i class="fas fa-user-cog"></i> Mi Cuenta
+                    </a>
+                </li>
+                <li>
+                    <a href="user/tickets.php" class="<?= $currentPage === 'tickets.php' ? 'active' : '' ?>">
                         <i class="fas fa-ticket-alt"></i> Mis Boletos
                     </a>
                 </li>
@@ -441,7 +465,7 @@ $cleanStorage = isset($_GET['session_expired']) || isset($_GET['timeout']) || is
                 </a>
             </li>
             <li>
-                <a href="promociones.php">
+                <a href="user/promotions.php" class="<?= $currentPage === 'promotions.php' ? 'active' : '' ?>">
                     <i class="fas fa-tags"></i> Promociones
                 </a>
             </li>
@@ -507,10 +531,16 @@ $cleanStorage = isset($_GET['session_expired']) || isset($_GET['timeout']) || is
 
                     <?php if (isset($_SESSION['user_id'])): ?>
                         <div class="flex items-center gap-3">
-                            <span class="text-sm text-gray-300 hidden sm:inline">
-                                <i class="fas fa-user-circle text-indigo-400 mr-1"></i>
-                                <?= htmlspecialchars($_SESSION['user_name']) ?>
-                            </span>
+                            <a href="user/account.php" class="flex items-center gap-2 group" title="Mi Cuenta">
+                                <?php if ($menuAvatar): ?>
+                                    <img src="<?= htmlspecialchars($menuAvatar) ?>" alt="Foto de perfil" class="w-7 h-7 rounded-full object-cover inline-block group-hover:ring-2 group-hover:ring-indigo-400 transition-all">
+                                <?php else: ?>
+                                    <i class="fas fa-user-circle text-indigo-400 text-lg group-hover:text-indigo-300 transition-colors"></i>
+                                <?php endif; ?>
+                                <span class="text-sm text-gray-300 hidden sm:inline group-hover:text-white transition-colors">
+                                    <?= htmlspecialchars($_SESSION['user_name']) ?>
+                                </span>
+                            </a>
                             <?php if (isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin'): ?>
                                 <a href="admin/index.php" class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors flex items-center gap-1">
                                     <i class="fas fa-cog"></i>

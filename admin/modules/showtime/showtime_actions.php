@@ -77,7 +77,7 @@ if ($action === 'add_showtime') {
         header('Location: ' . $return_url . '&error=Formato+de+proyecci%C3%B3n+no+v%C3%A1lido.');
         exit;
     } else {
-        $stmt = $pdo->prepare("SELECT duration FROM movies WHERE id = ? AND is_active = 1");
+        $stmt = $pdo->prepare("SELECT duration FROM movies WHERE id = ?");
         $stmt->execute([$movie_id]);
         $movie = $stmt->fetch();
 
@@ -240,7 +240,7 @@ if ($action === 'edit_showtime') {
                 exit;
             }
         } else {
-            $stmt = $pdo->prepare("SELECT duration FROM movies WHERE id = ? AND is_active = 1");
+            $stmt = $pdo->prepare("SELECT duration FROM movies WHERE id = ?");
             $stmt->execute([$movie_id]);
             $movie_duration = $stmt->fetch();
 

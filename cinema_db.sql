@@ -464,6 +464,8 @@ CREATE TABLE `users` (
   `phone_prefix` varchar(10) DEFAULT NULL,
   `phone_number` varchar(20) DEFAULT NULL,
   `birth_date` date DEFAULT NULL,
+  `avatar` varchar(255) DEFAULT NULL,
+  `delete_requested_at` datetime DEFAULT NULL,
   `password` varchar(255) NOT NULL,
   `role` enum('user','admin') DEFAULT 'user',
   `is_blocked` tinyint(1) DEFAULT 0,
@@ -475,9 +477,9 @@ CREATE TABLE `users` (
 -- Volcado de datos para la tabla `users`
 --
 
-INSERT INTO `users` (`id`, `name`, `email`, `cedula_type`, `cedula_number`, `phone_prefix`, `phone_number`, `birth_date`, `password`, `role`, `is_blocked`, `created_at`, `last_login`) VALUES
-(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-09-05 04:32:54'),
-(8, 'Darwin Mavares', 'darwinmavares@gmail.com', 'V', '14511134', '412', '3601706', '1979-03-31', '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-22 01:41:34');
+INSERT INTO `users` (`id`, `name`, `email`, `cedula_type`, `cedula_number`, `phone_prefix`, `phone_number`, `birth_date`, `avatar`, `delete_requested_at`, `password`, `role`, `is_blocked`, `created_at`, `last_login`) VALUES
+(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-09-05 04:32:54'),
+(8, 'Darwin Mavares', 'darwinmavares@gmail.com', 'V', '14511134', '412', '3601706', '1979-03-31', NULL, NULL, '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-22 01:41:34');
 
 --
 -- Índices para tablas volcadas

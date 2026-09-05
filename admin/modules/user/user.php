@@ -84,6 +84,7 @@ $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
                             $initial = strtoupper(substr($u['name'] ?? 'U', 0, 1));
                             $birth_date = $u['birth_date'] ? formatDateShort($u['birth_date']) : '—';
                             $is_birthday = !empty($u['birth_date']) && date('m-d', strtotime($u['birth_date'])) === date('m-d');
+                            $delete_requested = !empty($u['delete_requested_at']);
                             ?>
                             <tr>
                                 <td>
@@ -95,6 +96,7 @@ $total_users = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
                                             <span class="font-medium text-gray-900">
                                                 <?= htmlspecialchars($u['name']) ?>
                                                 <?php if ($is_self): ?><span class="badge badge-b ml-1">Tú</span><?php endif; ?>
+                                                <?php if ($delete_requested): ?><span class="badge badge-c ml-1"><i class="fas fa-user-minus"></i> Solicitó eliminar</span><?php endif; ?>
                                             </span>
                                             <small class="text-gray-400">#<?= $u['id'] ?></small>
                                         </div>

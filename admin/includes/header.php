@@ -47,7 +47,7 @@ if (!headers_sent()) {
     <?php if ($hasFavicon): ?>
         <link rel="icon" type="<?= mime_content_type($favicon_fs) ?>" href="<?= htmlspecialchars($favicon_href) . '?v=' . filemtime($favicon_fs) ?>">
     <?php else: ?>
-        <link rel="icon" type="image/png" href="../favicon.png">
+        <link rel="icon" type="image/png" href="img/favicon.png">
     <?php endif; ?>
 
     <!-- Google Fonts -->

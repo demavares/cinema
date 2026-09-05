@@ -4,7 +4,9 @@
 // ============================================
 
 $rooms = $pdo->query("SELECT * FROM rooms ORDER BY name ASC")->fetchAll();
-$movies_ordered = $pdo->query("SELECT * FROM movies WHERE is_active = 1 ORDER BY title ASC")->fetchAll();
+// Incluye también películas inactivas: permite asignar funciones antes de mostrarlas
+$movies_ordered = $pdo->query("SELECT * FROM movies ORDER BY title ASC")->fetchAll();
+$preselectedMovieId = isset($_GET['movie_id']) ? intval($_GET['movie_id']) : 0;
 
 $formats_stmt = $pdo->query("SELECT DISTINCT format FROM showtimes WHERE format IS NOT NULL AND format != '' ORDER BY format ASC");
 $formatos_bd = $formats_stmt->fetchAll(PDO::FETCH_COLUMN);
@@ -76,8 +78,8 @@ $senior_checked = $edit_showtime && !empty($edit_showtime['enable_senior_price']
                     <?php foreach ($movies_ordered as $m): ?>
                         <option value="<?= htmlspecialchars($m['id']) ?>"
                                 data-duration="<?= htmlspecialchars($m['duration']) ?>"
-                                <?= ($edit_showtime && $edit_showtime['movie_id'] == $m['id']) ? 'selected' : '' ?>>
-                            <?= htmlspecialchars($m['title']) ?> (<?= htmlspecialchars($m['duration']) ?> min)
+                                <?= (($edit_showtime && $edit_showtime['movie_id'] == $m['id']) || (!$edit_showtime && $preselectedMovieId == $m['id'])) ? 'selected' : '' ?>>
+                            <?= htmlspecialchars($m['title']) ?> (<?= htmlspecialchars($m['duration']) ?> min)<?= $m['is_active'] ? '' : ' — Inactiva' ?>
                         </option>
                     <?php endforeach; ?>
                 </select>

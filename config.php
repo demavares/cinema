@@ -409,7 +409,7 @@ function getFaviconHref($siteConfig)
     $favicon = trim($siteConfig['site_favicon'] ?? ($siteConfig['favicon'] ?? ''));
 
     if ($favicon === '') {
-        return 'favicon.png';
+        return 'admin/img/favicon.png';
     }
 
     $urlPath = parse_url($favicon, PHP_URL_PATH);
@@ -423,7 +423,7 @@ function getFaviconHref($siteConfig)
         return $favicon;
     }
 
-    return is_file('favicon.png') ? 'favicon.png' : $favicon;
+    return is_file('admin/img/favicon.png') ? 'admin/img/favicon.png' : $favicon;
 }
 
 // ============================================
@@ -774,6 +774,34 @@ function cleanupExpiredPurchasesPeriodic($pdo)
 }
 
 cleanupExpiredPurchasesPeriodic($pdo);
+
+// ============================================
+// 🎬 OCULTADO AUTOMÁTICO DE PELÍCULAS SIN FUNCIONES VIGENTES
+// ============================================
+// Una película se oculta automáticamente si no tiene funciones
+// disponibles (fecha+hora >= ahora). Se ejecuta en cada petición.
+function autoHideMoviesWithoutActiveShows($pdo)
+{
+    try {
+        $stmt = $pdo->query("
+            UPDATE movies m
+            LEFT JOIN showtimes s
+                ON s.movie_id = m.id
+               AND CONCAT(s.show_date, ' ', s.show_time) >= NOW()
+            SET m.is_active = 0
+            WHERE m.is_active = 1
+              AND s.id IS NULL
+        ");
+        $hidden = $stmt->rowCount();
+        if ($hidden > 0) {
+            error_log("🎬 Ocultadas automáticamente $hidden película(s) sin funciones vigentes");
+        }
+    } catch (Exception $e) {
+        // No bloquear el sitio (instalación nueva, tabla ausente, etc.)
+    }
+}
+
+autoHideMoviesWithoutActiveShows($pdo);
 
 // ============================================
 // CSRF

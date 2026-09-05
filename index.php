@@ -903,7 +903,7 @@ require_once 'header.php';
                     <a href="movie_detail.php?id=<?= intval($movie['id']) ?>" class="poster">
                         <img src="<?= htmlspecialchars($poster_url) ?>" alt="<?= htmlspecialchars($movie['title']) ?>" title="<?= htmlspecialchars($movie['title']) ?>" loading="lazy">
                         <?php if ($hasPresale): ?>
-                            <img src="preventa.png" alt="PREVENTA" class="presale-ribbon-img">
+                            <img src="admin/img/preventa.png" alt="PREVENTA" class="presale-ribbon-img">
                         <?php endif; ?>
                     </a>
                     <div class="p-4">
