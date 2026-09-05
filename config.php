@@ -229,6 +229,35 @@ try {
 }
 
 // ============================================
+// 🕐 ZONA HORARIA DEL SITIO (configurable desde el panel)
+// ============================================
+// Se lee de site_config ('timezone'). Si no existe o es inválida,
+// se usa 'America/Caracas' como valor por defecto.
+$siteTimezone = 'America/Caracas';
+try {
+    $stmtTz = $pdo->query("SELECT value FROM site_config WHERE key_name = 'timezone' LIMIT 1");
+    $configuredTz = $stmtTz ? $stmtTz->fetchColumn() : '';
+    if ($configuredTz && in_array($configuredTz, DateTimeZone::listIdentifiers(), true)) {
+        $siteTimezone = $configuredTz;
+    }
+} catch (Exception $e) {
+    // Tabla aún no disponible (instalación nueva): se mantiene el valor por defecto.
+}
+date_default_timezone_set($siteTimezone);
+// Sincronizar también la sesión de MySQL para que NOW()/DATE_ADD() usen la misma zona
+try {
+    $tzOffset = (new DateTimeZone($siteTimezone))->getOffset(new DateTime('now', new DateTimeZone('UTC')));
+    $tzSign = $tzOffset < 0 ? '-' : '+';
+    $tzAbs = abs($tzOffset);
+    $tzOffsetStr = $tzSign
+        . str_pad((string)intdiv($tzAbs, 3600), 2, '0', STR_PAD_LEFT)
+        . ':' . str_pad((string)intdiv($tzAbs % 3600, 60), 2, '0', STR_PAD_LEFT);
+    $pdo->exec("SET time_zone = '" . $tzOffsetStr . "'");
+} catch (Exception $e) {
+    error_log("⚠️ No se pudo sincronizar time_zone de MySQL: " . $e->getMessage());
+}
+
+// ============================================
 // CONFIGURACIÓN DEL SITIO
 // ============================================
 function getSiteConfig($pdo)
@@ -244,6 +273,7 @@ function getSiteConfig($pdo)
         'site_logo' => '',
         'footer_logo' => '',
         'site_favicon' => '',
+        'timezone' => 'America/Caracas',
         'footer_copyright' => '© ' . date('Y') . ' Cinema. Todos los derechos reservados.',
         'currency_symbol' => '$',
         'currency_position' => 'left',
@@ -281,6 +311,96 @@ function getSiteConfig($pdo)
         error_log("Error cargando configuración del sitio: " . $e->getMessage());
         return $defaults;
     }
+}
+
+// ============================================
+// 🕐 ZONAS HORARIAS SOPORTADAS (LATAM, Canadá y EEUU)
+// ============================================
+function getSupportedTimezones(): array
+{
+    return [
+        'Latinoamérica' => [
+            'America/Caracas' => 'Venezuela (UTC-4:00)',
+            'America/Bogota' => 'Colombia (UTC-5:00)',
+            'America/Lima' => 'Perú (UTC-5:00)',
+            'America/Guayaquil' => 'Ecuador (UTC-5:00)',
+            'America/Panama' => 'Panamá (UTC-5:00)',
+            'America/Costa_Rica' => 'Costa Rica (UTC-6:00)',
+            'America/Guatemala' => 'Guatemala (UTC-6:00)',
+            'America/San_Salvador' => 'El Salvador (UTC-6:00)',
+            'America/Managua' => 'Nicaragua (UTC-6:00)',
+            'America/Tegucigalpa' => 'Honduras (UTC-6:00)',
+            'America/Mexico_City' => 'México – Ciudad de México (UTC-6:00)',
+            'America/Monterrey' => 'México – Monterrey (UTC-6:00)',
+            'America/Havana' => 'Cuba (UTC-5:00)',
+            'America/Santo_Domingo' => 'República Dominicana (UTC-4:00)',
+            'America/Puerto_Rico' => 'Puerto Rico (UTC-4:00)',
+            'America/Port-au-Prince' => 'Haití (UTC-5:00)',
+            'America/La_Paz' => 'Bolivia (UTC-4:00)',
+            'America/Asuncion' => 'Paraguay (UTC-4:00)',
+            'America/Montevideo' => 'Uruguay (UTC-3:00)',
+            'America/Santiago' => 'Chile (UTC-4:00)',
+            'America/Argentina/Buenos_Aires' => 'Argentina (UTC-3:00)',
+            'America/Sao_Paulo' => 'Brasil – São Paulo (UTC-3:00)',
+            'America/Manaus' => 'Brasil – Manaos (UTC-4:00)',
+            'America/Cuiaba' => 'Brasil – Cuiabá (UTC-4:00)',
+        ],
+        'Canadá' => [
+            'America/Toronto' => 'Este – Toronto / Ottawa (UTC-5:00)',
+            'America/Montreal' => 'Este – Montreal (UTC-5:00)',
+            'America/Halifax' => 'Atlántico – Halifax (UTC-4:00)',
+            "America/St_Johns" => "Terranova – St. John's (UTC-3:30)",
+            'America/Winnipeg' => 'Central – Winnipeg (UTC-6:00)',
+            'America/Regina' => 'Central – Regina (UTC-6:00)',
+            'America/Edmonton' => 'Montaña – Edmonton (UTC-7:00)',
+            'America/Vancouver' => 'Pacífico – Vancouver (UTC-8:00)',
+            'America/Whitehorse' => 'Yukón – Whitehorse (UTC-7:00)',
+            'America/Iqaluit' => 'Nunavut – Iqaluit (UTC-5:00)',
+        ],
+        'Estados Unidos' => [
+            'America/New_York' => 'Este – New York (UTC-5:00)',
+            'America/Detroit' => 'Este – Detroit (UTC-5:00)',
+            'America/Indianapolis' => 'Este – Indianapolis (UTC-5:00)',
+            'America/Chicago' => 'Central – Chicago (UTC-6:00)',
+            'America/Denver' => 'Montaña – Denver (UTC-7:00)',
+            'America/Phoenix' => 'Montaña – Phoenix (UTC-7:00, sin DST)',
+            'America/Los_Angeles' => 'Pacífico – Los Ángeles (UTC-8:00)',
+            'America/Anchorage' => 'Alaska – Anchorage (UTC-9:00)',
+            'America/Juneau' => 'Alaska – Juneau (UTC-9:00)',
+            'Pacific/Honolulu' => 'Hawái – Honolulu (UTC-10:00)',
+        ],
+        'España' => [
+            'Atlantic/Canary' => 'Canarias – Las Palmas (UTC±0:00)',
+            'Africa/Ceuta' => 'Ceuta y Melilla (UTC+1:00)',
+            'Europe/Madrid' => 'Península – Madrid (UTC+1:00)',
+        ],
+    ];
+
+    // Orden ascendente (alfabético) de las opciones dentro de cada región
+    foreach ($zones as $groupKey => $groupZones) {
+        asort($groupZones, SORT_STRING | SORT_FLAG_CASE);
+        $zones[$groupKey] = $groupZones;
+    }
+
+    return $zones;
+}
+
+function getTimezoneIdentifiers(): array
+{
+    $ids = [];
+    foreach (getSupportedTimezones() as $group) {
+        $ids = array_merge($ids, array_keys($group));
+    }
+    return $ids;
+}
+
+function getSiteTimezone(array $siteConfig): string
+{
+    $tz = $siteConfig['timezone'] ?? 'America/Caracas';
+    if (!in_array($tz, DateTimeZone::listIdentifiers(), true)) {
+        $tz = 'America/Caracas';
+    }
+    return $tz;
 }
 
 function getFaviconHref($siteConfig)

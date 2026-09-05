@@ -27,6 +27,29 @@ $has_favicon = adminAssetExists($favicon);
             <input type="hidden" name="action" value="save_config">
             <input type="hidden" name="section" value="general">
 
+            <!-- Zona Horaria -->
+            <div class="md:col-span-2">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Zona Horaria <span class="field-required">*</span></label>
+                <select name="timezone" id="siteTimezoneSelect" required
+                        class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    <?php foreach (getSupportedTimezones() as $groupLabel => $groupZones): ?>
+                        <optgroup label="<?= htmlspecialchars($groupLabel) ?>">
+                            <?php foreach ($groupZones as $tzId => $tzLabel): ?>
+                                <option value="<?= htmlspecialchars($tzId) ?>" <?= getSiteTimezone($siteConfig) === $tzId ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars($tzLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </optgroup>
+                    <?php endforeach; ?>
+                </select>
+                <p class="text-xs text-gray-500 mt-1">
+                    <i class="fas fa-clock mr-1"></i> Ámbito: <span id="tzPreview">—</span>
+                </p>
+                <p class="text-xs text-gray-500 mt-1">
+                    Esta zona horaria se aplica a todo el sitio (horarios de funciones, informe, expiración de reservas). Si operas en otro país, cámbiala al iniciar la configuración.
+                </p>
+            </div>
+
             <!-- Nombre del Sitio -->
             <div class="md:col-span-2">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Nombre del Sitio <span class="field-required">*</span></label>
@@ -108,3 +131,23 @@ $has_favicon = adminAssetExists($favicon);
         </form>
     </div>
 </div>
+
+<script nonce="<?= htmlspecialchars($cspNonce) ?>">
+(function() {
+    const sel = document.getElementById('siteTimezoneSelect');
+    const preview = document.getElementById('tzPreview');
+    if (!sel || !preview) return;
+    function update() {
+        try {
+            const now = new Date();
+            const time = now.toLocaleTimeString('es-VE', { timeZone: sel.value, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const fecha = now.toLocaleDateString('es-VE', { timeZone: sel.value, day: '2-digit', month: '2-digit', year: 'numeric' });
+            preview.textContent = fecha + ' ' + time + ' (' + sel.value + ')';
+        } catch (e) {
+            preview.textContent = '';
+        }
+    }
+    sel.addEventListener('change', update);
+    update();
+})();
+</script>

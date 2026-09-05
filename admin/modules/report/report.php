@@ -97,7 +97,7 @@ $report_average = count($report_rows) > 0 ? $report_total_revenue / count($repor
 </div>
 
 <!-- Resumen -->
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 my-6">
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 my-6">
     <div class="stat-card">
         <div class="stat-card-icon bg-indigo-100 text-indigo-600">
             <i class="fas fa-film"></i>

@@ -62,6 +62,27 @@ if ($action === 'save_config') {
             $stmt->execute([$value, $key]);
         }
 
+        // ============================================
+        // ZONA HORARIA (validación + upsert)
+        // ============================================
+        if (empty($error) && isset($_POST['timezone'])) {
+            $timezone = trim($_POST['timezone']);
+            if (in_array($timezone, getTimezoneIdentifiers(), true)) {
+                $stmt = $pdo->prepare("SELECT COUNT(*) FROM site_config WHERE key_name = 'timezone'");
+                $stmt->execute();
+                $tzExists = (int)$stmt->fetchColumn() > 0;
+                if ($tzExists) {
+                    $stmt = $pdo->prepare("UPDATE site_config SET value = ?, updated_at = NOW() WHERE key_name = 'timezone'");
+                    $stmt->execute([$timezone]);
+                } else {
+                    $stmt = $pdo->prepare("INSERT INTO site_config (key_name, value) VALUES ('timezone', ?)");
+                    $stmt->execute([$timezone]);
+                }
+            } else {
+                $error = "Zona horaria no válida.";
+            }
+        }
+
         if (empty($error) && isset($_POST['tax_rate'])) {
             $tax_rate = filter_var($_POST['tax_rate'], FILTER_VALIDATE_FLOAT);
             if ($tax_rate !== false && $tax_rate >= 0 && $tax_rate <= 100) {
