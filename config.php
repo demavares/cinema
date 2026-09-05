@@ -376,7 +376,8 @@ function getSupportedTimezones(): array
         ],
     ];
 
-    // Orden ascendente (alfabético) de las opciones dentro de cada región
+    // Grupos (regiones) en orden alfabético A→Z y opciones ascendentes dentro de cada uno
+    ksort($zones, SORT_STRING | SORT_FLAG_CASE);
     foreach ($zones as $groupKey => $groupZones) {
         asort($groupZones, SORT_STRING | SORT_FLAG_CASE);
         $zones[$groupKey] = $groupZones;
