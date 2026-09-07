@@ -415,6 +415,12 @@ require_once 'header.php';
             </button>
         </form>
 
+        <p class="text-sm text-right mt-3">
+            <a href="user/forgot_password.php" class="text-indigo-600 hover:text-indigo-700 hover:underline font-semibold">
+                ¿Olvidaste tu contraseña?
+            </a>
+        </p>
+
         <?php if ($showCaptcha && !$isLockedOut): ?>
         <div class="attempts-warning">
             <i class="fas fa-exclamation-triangle mr-1"></i>

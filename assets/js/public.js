@@ -89,6 +89,21 @@
         const btn = e.target.closest('[data-print-btn]');
         if (btn) window.print();
     });
+    document.addEventListener('click', function(e) {
+        const toggleBtn = e.target.closest('[data-password-toggle]');
+        if (!toggleBtn) return;
+        const inputId = toggleBtn.getAttribute('data-password-toggle');
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        const icon = toggleBtn.querySelector('i');
+        if (input.type === 'password') {
+            input.type = 'text';
+            if (icon) icon.classList.replace('fa-eye', 'fa-eye-slash');
+        } else {
+            input.type = 'password';
+            if (icon) icon.classList.replace('fa-eye-slash', 'fa-eye');
+        }
+    });
     document.addEventListener('error', function(e) {
         const img = e.target;
         if (!img || img.tagName !== 'IMG') return;
