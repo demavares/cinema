@@ -1,0 +1,80 @@
+/* CSS compartido Login/Register (extraido 4B) */
+
+/* ============================================
+✅ TEMA CLARO (igual que index.php)
+============================================ */
+body { background-color: #ffffff !important; color: #1f2937 !important; }
+
+.auth-wrapper {
+    min-height: calc(100vh - 320px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 16px;
+}
+
+.auth-title { font-size: 1.5rem; font-weight: 800; color: #4f46e5; text-align: center; }
+
+.auth-subtitle { color: #6b7280; font-size: 0.9rem; text-align: center; }
+
+.auth-label { display: block; font-size: 0.85rem; color: #475569; margin-bottom: 4px; font-weight: 600; }
+
+.auth-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    color: #0f172a;
+    font-size: 0.95rem;
+    transition: border-color 0.3s ease;
+}
+
+.auth-input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
+
+.auth-btn {
+    width: 100%;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    color: #ffffff;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.auth-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25); }
+
+.auth-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+.password-wrapper { position: relative; }
+
+.password-wrapper input { padding-right: 40px; }
+
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #6b7280;
+    cursor: pointer;
+    background: none;
+    border: none;
+    font-size: 1rem;
+    padding: 4px;
+}
+
+.password-toggle:hover { color: #1f2937; }
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+.error-shake { animation: shake 0.5s ease-in-out; }

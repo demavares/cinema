@@ -1,6 +1,15 @@
 <?php
 global $pdo;
 $config = getSiteConfig($pdo);
+// PREFIJO DE RUTA RELATIVA (footer usado desde la raíz o desde user/)
+$publicPathPrefix = '';
+$publicCssDir = str_replace('\\', '/', dirname(__FILE__));
+$publicScriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_FILENAME'] ?? __FILE__));
+if ($publicScriptDir !== $publicCssDir && strpos($publicScriptDir, $publicCssDir . '/') === 0) {
+    $publicPathPrefix = str_repeat('../', substr_count(substr($publicScriptDir, strlen($publicCssDir) + 1), '/') + 1);
+}
+// Enlace de WhatsApp: el número se guarda solo (sin https://wa.me/)
+$whatsappHref = !empty($config['whatsapp']) ? 'https://wa.me/' . preg_replace('/[^0-9]/', '', $config['whatsapp']) : '';
 ?>
 <footer class="site-footer">
 <!-- Sección de Estudios de Cine / Aliados - MARQUESINA INFINITA -->
@@ -97,10 +106,10 @@ title="Clic para calcular la ruta desde tu ubicación actual">
 <a href="mailto:<?= htmlspecialchars($config['email']) ?>"><?= htmlspecialchars($config['email']) ?></a>
 </li>
 <?php endif; ?>
-<?php if (!empty($config['phone']) && !empty($config['whatsapp'])): ?>
+<?php if (!empty($config['phone']) && !empty($whatsappHref)): ?>
 <li>
 <i class="fab fa-whatsapp"></i>
-<a href="<?= htmlspecialchars($config['whatsapp']) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($config['phone']) ?></a>
+<a href="<?= htmlspecialchars($whatsappHref) ?>" target="_blank" rel="noopener"><?= htmlspecialchars($config['phone']) ?></a>
 </li>
 <?php elseif (!empty($config['phone'])): ?>
 <li>
@@ -140,8 +149,8 @@ if ($has_social):
 <i class="fab fa-telegram-plane"></i>
 </a>
 <?php endif; ?>
-<?php if (!empty($config['whatsapp'])): ?>
-<a href="<?= htmlspecialchars($config['whatsapp']) ?>" target="_blank" rel="noopener" aria-label="WhatsApp" class="social-btn whatsapp">
+<?php if (!empty($whatsappHref)): ?>
+<a href="<?= htmlspecialchars($whatsappHref) ?>" target="_blank" rel="noopener" aria-label="WhatsApp" class="social-btn whatsapp">
 <i class="fab fa-whatsapp"></i>
 </a>
 <?php endif; ?>
@@ -158,8 +167,14 @@ if ($has_social):
 $footerCopyright = $config['footer_copyright'] ?? '© {year} Cinema. Todos los derechos reservados.';
 // Reemplazar placeholder {year} con el año actual
 $footerCopyright = str_replace('{year}', date('Y'), $footerCopyright);
+// RIF de la empresa (configuración separada)
+$companyRif = trim($config['company_rif'] ?? '');
+$footerLine = $footerCopyright;
+if ($companyRif !== '') {
+    $footerLine .= ' RIF: ' . $companyRif;
+}
 ?>
-<p><?= $footerCopyright ?></p>
+<p><?= htmlspecialchars($footerLine) ?></p>
 <div class="legal-links">
 <a href="#">Términos y Condiciones</a>
 <span class="dot">•</span>
@@ -173,372 +188,4 @@ $footerCopyright = str_replace('{year}', date('Y'), $footerCopyright);
 </div>
 </footer>
 <!-- Estilos CSS del Footer (Tema Oscuro) -->
-<style>
-.site-footer {
-background-color: #0a0a0f;
-color: #9ca3af;
-font-family: inherit;
-border-top: 1px solid #1e1e2e;
-margin-top: auto;
-}
-.footer-container {
-max-width: 1200px;
-margin: 0 auto;
-padding: 0 20px;
-}
-/* ============================================
-MARQUESINA INFINITA
-============================================ */
-.footer-studios {
-background-color: #07070a;
-padding: 24px 0;
-border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-overflow: hidden;
-}
-.studios-title {
-text-align: center;
-font-size: 0.75rem;
-text-transform: uppercase;
-letter-spacing: 0.1em;
-color: #6b7280;
-margin-bottom: 16px;
-font-weight: 600;
-}
-.marquee-wrapper {
-width: 100%;
-overflow: hidden;
-position: relative;
-}
-.marquee-track {
-display: flex;
-gap: 0;
-animation: marquee-scroll 30s linear infinite;
-width: max-content;
-}
-.marquee-content {
-display: flex;
-align-items: center;
-gap: 50px;
-padding: 0 25px;
-flex-shrink: 0;
-}
-@keyframes marquee-scroll {
-0% {
-transform: translateX(0);
-}
-100% {
-transform: translateX(-50%);
-}
-}
-.marquee-track:hover {
-animation-play-state: paused;
-}
-.studio-logo {
-height: 32px;
-width: auto;
-max-width: 120px;
-object-fit: contain;
-opacity: 0.5;
-filter: brightness(0) invert(0.7);
-transition: all 0.4s ease;
-flex-shrink: 0;
-}
-.studio-logo:hover {
-opacity: 1;
-filter: brightness(0) invert(1);
-transform: scale(1.1);
-}
-/* Fallback para logos que no cargan - texto alternativo */
-.studio-logo::before {
-content: "🎬";
-display: none;
-}
-/* ============================================
-FIN MARQUESINA
-============================================ */
-.footer-main {
-padding: 50px 0 40px 0;
-}
-.footer-grid {
-display: grid;
-grid-template-columns: 1.5fr 1.2fr 1fr;
-gap: 40px;
-}
-.footer-brand {
-display: inline-flex;
-align-items: center;
-gap: 10px;
-color: #ffffff;
-font-size: 1.4rem;
-font-weight: 800;
-text-decoration: none;
-margin-bottom: 14px;
-}
-.footer-brand i {
-color: #6366f1;
-}
-.footer-brand img {
-max-height: 81px;
-max-width: 277px;
-width: auto;
-height: auto;
-object-fit: contain;
-}
-/* Estilo específico para el logo del footer con tamaño 277px x 81px */
-.footer-logo-img {
-height: 81px;
-width: 277px;
-max-width: 100%;
-object-fit: contain;
-}
-.brand-desc {
-font-size: 0.9rem;
-line-height: 1.6;
-color: #9ca3af;
-}
-.footer-heading {
-color: #ffffff;
-font-size: 1.05rem;
-font-weight: 700;
-margin-bottom: 18px;
-letter-spacing: 0.02em;
-}
-.contact-list {
-list-style: none;
-padding: 0;
-margin: 0;
-display: flex;
-flex-direction: column;
-gap: 12px;
-}
-.contact-list li {
-display: flex;
-align-items: flex-start;
-gap: 12px;
-font-size: 0.9rem;
-line-height: 1.4;
-}
-.contact-list i {
-color: #6366f1;
-font-size: 1rem;
-margin-top: 3px;
-flex-shrink: 0;
-}
-.contact-list a {
-color: #d1d5db;
-text-decoration: none;
-transition: color 0.2s ease;
-}
-.contact-list a:hover {
-color: #818cf8;
-}
-.social-intro {
-font-size: 0.85rem;
-margin-bottom: 16px;
-color: #9ca3af;
-}
-.social-links {
-display: flex;
-gap: 10px;
-flex-wrap: wrap;
-}
-.social-btn {
-width: 38px;
-height: 38px;
-border-radius: 50%;
-background: #14141e;
-border: 1px solid #2a2a3e;
-color: #d1d5db;
-display: flex;
-align-items: center;
-justify-content: center;
-text-decoration: none;
-font-size: 1rem;
-transition: all 0.3s ease;
-}
-.social-btn:hover {
-transform: translateY(-3px);
-color: #ffffff;
-}
-.social-btn.instagram:hover {
-background: #e1306c;
-border-color: #e1306c;
-}
-.social-btn.facebook:hover {
-background: #1877f2;
-border-color: #1877f2;
-}
-.social-btn.x-twitter:hover {
-background: #000000;
-border-color: #333333;
-}
-.social-btn.telegram:hover {
-background: #0088cc;
-border-color: #0088cc;
-}
-.social-btn.whatsapp:hover {
-background: #25d366;
-border-color: #25d366;
-}
-.footer-bottom {
-background-color: #07070a;
-padding: 18px 0;
-border-top: 1px solid #1e1e2e;
-font-size: 0.8rem;
-}
-.footer-bottom-content {
-display: flex;
-justify-content: space-between;
-align-items: center;
-flex-wrap: wrap;
-gap: 12px;
-}
-.legal-links {
-display: flex;
-align-items: center;
-gap: 8px;
-}
-.legal-links a {
-color: #6b7280;
-text-decoration: none;
-transition: color 0.2s ease;
-}
-.legal-links a:hover {
-color: #9ca3af;
-}
-.legal-links .dot {
-color: #374151;
-}
-/* ============================================
-CRÉDITO DEL DESARROLLADOR
-============================================ */
-.footer-dev {
-text-align: center;
-padding-top: 10px;
-font-size: 0.8rem;
-color: #6b7280;
-}
-.footer-dev a {
-color: #6b7280;
-text-decoration: none;
-transition: color 0.2s ease;
-}
-.footer-dev a:hover {
-color: #818cf8;
-}
-/* ============================================
-RESPONSIVE
-============================================ */
-@media (max-width: 900px) {
-.footer-grid {
-grid-template-columns: 1fr 1fr;
-gap: 30px;
-}
-.brand-col {
-grid-column: span 2;
-}
-}
-@media (max-width: 768px) {
-.marquee-content {
-gap: 30px;
-padding: 0 15px;
-}
-.studio-logo {
-height: 28px;
-max-width: 90px;
-}
-.marquee-track {
-animation-duration: 25s;
-}
-}
-@media (max-width: 600px) {
-.footer-grid {
-grid-template-columns: 1fr;
-gap: 28px;
-}
-.brand-col {
-grid-column: span 1;
-}
-.footer-bottom-content {
-flex-direction: column;
-text-align: center;
-}
-.contact-list {
-gap: 18px;
-}
-.contact-list li {
-line-height: 1.6;
-padding-bottom: 2px;
-}
-.footer-logo-img {
-height: 60px;
-width: 200px;
-}
-.footer-brand img {
-max-height: 60px;
-max-width: 200px;
-}
-.marquee-content {
-gap: 20px;
-padding: 0 10px;
-}
-.studio-logo {
-height: 24px;
-max-width: 75px;
-}
-.marquee-track {
-animation-duration: 20s;
-}
-}
-@media (max-width: 480px) {
-.marquee-content {
-gap: 15px;
-padding: 0 8px;
-}
-.studio-logo {
-height: 20px;
-max-width: 60px;
-}
-.marquee-track {
-animation-duration: 16s;
-}
-}
-</style>
-<script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
-// ============================================
-// ✅ RUTA A GOOGLE MAPS (CSP-safe: sin onclick inline)
-// ============================================
-function openDirections(destinationAddress) {
-const encodedDestination = encodeURIComponent(destinationAddress);
-const fallbackUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + encodedDestination;
-// Solo usar geolocalización en contexto seguro (HTTPS) y si existe
-if (navigator.geolocation && window.isSecureContext) {
-navigator.geolocation.getCurrentPosition(
-function(position) {
-const lat = position.coords.latitude;
-const lng = position.coords.longitude;
-const mapsUrl = 'https://www.google.com/maps/dir/?api=1&origin=' + lat + ',' + lng +
-'&destination=' + encodedDestination + '&travelmode=driving';
-window.open(mapsUrl, '_blank', 'noopener');
-},
-function(error) {
-window.open(fallbackUrl, '_blank', 'noopener');
-}, {
-enableHighAccuracy: true,
-timeout: 5000
-}
-);
-} else {
-window.open(fallbackUrl, '_blank', 'noopener');
-}
-}
-// ✅ Event listener en lugar de onclick inline (compatible con CSP estricta)
-document.addEventListener('DOMContentLoaded', function() {
-document.querySelectorAll('a.address-link').forEach(function(link) {
-link.addEventListener('click', function(e) {
-e.preventDefault();
-openDirections(this.getAttribute('data-address'));
-});
-});
-});
-</script>
+<link rel="stylesheet" href="<?= $publicPathPrefix ?>assets/css/footer.css">

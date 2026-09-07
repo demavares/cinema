@@ -3,8 +3,8 @@
 -- https://www.phpmyadmin.net/
 --
 -- Servidor: datame
--- Tiempo de generación: 05-09-2026 a las 10:29:08
--- Versión del servidor: 10.11.18-MariaDB-ubu2204
+-- Tiempo de generación: 06-09-2026 a las 07:06:27
+-- Versión del servidor: 10.11.19-MariaDB-ubu2204
 -- Versión de PHP: 8.3.26
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
@@ -143,7 +143,10 @@ CREATE TABLE `food_orders` (
 --
 
 INSERT INTO `food_orders` (`id`, `user_id`, `ticket_id`, `showtime_id`, `purchase_id`, `food_item_id`, `quantity`, `unit_price`, `total_price`, `order_date`, `status`) VALUES
-(21, 1, NULL, 72, 586, 1, 1, 1200.00, 1200.00, '2026-08-30 07:18:36', 'completed');
+(21, 1, NULL, 72, 586, 1, 1, 1200.00, 1200.00, '2026-08-30 07:18:36', 'completed'),
+(22, 8, NULL, 80, 603, 3, 1, 15.00, 15.00, '2026-09-05 14:06:35', 'completed'),
+(23, 8, NULL, 80, 603, 4, 1, 1500.00, 1500.00, '2026-09-05 14:06:35', 'completed'),
+(24, 8, NULL, 82, 605, 1, 1, 1200.00, 1200.00, '2026-09-05 16:49:03', 'completed');
 
 -- --------------------------------------------------------
 
@@ -167,8 +170,7 @@ CREATE TABLE `login_rate_limits` (
 
 INSERT INTO `login_rate_limits` (`rate_limit_key`, `attempts`, `first_attempt_at`, `last_attempt_at`, `blocked_until`, `created_at`, `updated_at`) VALUES
 ('account:68051dd5cc3e50d1badd08c415c1ad694f326923082a0824be28e7c59ce23da7', 1, 1787558243, 1787558243, NULL, '2026-08-24 07:57:23', '2026-08-24 07:57:23'),
-('account:c0030ece54609ec378730c2f994df76edeb4d57fec0464332126338ec133c443', 1, 1788597163, 1788597163, NULL, '2026-08-22 06:38:01', '2026-09-05 08:32:43'),
-('action:movie_detail_view:ip:172.22.0.1', 1, 1788603774, 1788603774, NULL, '2026-08-23 15:55:30', '2026-09-05 10:22:54'),
+('action:movie_detail_view:ip:172.22.0.1', 1, 1788673912, 1788673912, NULL, '2026-08-23 15:55:30', '2026-09-06 05:51:52'),
 ('ip:172.22.0.1', 1, 1788597163, 1788597163, NULL, '2026-08-22 06:38:01', '2026-09-05 08:32:43');
 
 -- --------------------------------------------------------
@@ -200,10 +202,10 @@ CREATE TABLE `movies` (
 --
 
 INSERT INTO `movies` (`id`, `title`, `description`, `poster_url`, `banner_url`, `cast_members`, `country_id`, `duration`, `genre`, `year`, `director`, `classification`, `trailer_url`, `is_active`, `created_at`) VALUES
-(35, 'Babymetal', 'Babymetal es un grupo idol japonés de kawaii metal formada en Tokio en 2010.', 'https://cdn.shopify.com/s/files/1/0689/6061/6685/files/20251120_imp_fest_2026_vo4_referral_social_babymetal_4x5_c853eafa-872e-4d0c-9d1c-ea063dc17bad.jpg', 'https://gritaradio.com/wp-content/uploads/2026/04/BM26-Anuncio_General_16x9-scaled.jpg', 'Suzuka Nakamoto (Su-metal), Moa Kikuchi (Moametal) y Momoko Okazaki (Momometal).', 27, 120, 'Música, Concierto', '2026', 'No disponible', 'A (Todo público)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-07-27 03:25:09'),
-(55, 'La casa del fin de los tiempos', 'La casa del fin de los tiempos es el primer thriller de suspenso y terror venezolano. Narra la historia de Dulce, Ruddy Rodríguez, una madre de familia que tiene encuentros con Apariciones dentro de su vieja casa, lugar donde debe descifrar un misterio que podría desencadenar una profecía: la muerte de su familia.', 'https://image.tmdb.org/t/p/w500/weNI3TFmC2JGYwEX4YKvYIKbGme.jpg', 'https://image.tmdb.org/t/p/original/ZIwr7usYLrVodguqdosMiXzJc5.jpg', 'Ruddy Rodriguez, Gonzalo Cubero, Guillermo García, Adriana Calzadilla, Rosmel Bustamante, Hector Mercado', 20, 100, 'Terror, Drama, Fantasía', '2013', 'Alejandro Hidalgo', 'C (Mayores de 18)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-08-11 13:53:18'),
-(70, 'Alien', 'De regreso a la Tierra, la nave de carga Nostromo interrumpe su viaje y despierta a sus siete tripulantes. El ordenador central, MADRE, ha detectado la misteriosa transmisión de una forma de vida desconocida, procedente de un planeta cercano aparentemente deshabitado. La nave se dirige entonces al extraño planeta para investigar el origen de la comunicación.', 'https://image.tmdb.org/t/p/w500/pZ9cAe5FxexJjpCaeiETbXzz3Fs.jpg', 'https://image.tmdb.org/t/p/original/AmR3JG1VQVxU8TfAvljUhfSFUOx.jpg', 'Tom Skerritt, Sigourney Weaver, Veronica Cartwright, Harry Dean Stanton, John Hurt, Ian Holm', 21, 117, 'Terror, Ciencia ficción', '1979', 'Ridley Scott', 'C (Mayores de 18)', 'https://www.youtube.com/watch?v=oSeQQlaCZgU', 1, '2026-08-26 17:04:25'),
-(72, 'Star Wars: Episode IV - A New Hope', 'La princesa Leia, líder del movimiento rebelde que desea reinstaurar la República en la galaxia en los tiempos ominosos del Imperio, es capturada por las malévolas Fuerzas Imperiales, capitaneadas por el implacable Darth Vader, el sirviente más fiel del emperador. El intrépido Luke Skywalker, ayudado por Han Solo, capitán de la nave espacial \"El Halcón Milenario\", y los androides, R2D2 y C3PO, serán los encargados de luchar contra el enemigo y rescatar a la princesa para volver a instaurar la justicia en el seno de la Galaxia.', 'https://image.tmdb.org/t/p/original/wmIVGytmj4TmSQ45YvQaHi95Xv9.jpg', 'https://image.tmdb.org/t/p/original/yUiXA68FfQeA8cRBhd0Ao0jIRZt.jpg', 'Mark Hamill, Harrison Ford, Carrie Fisher, Peter Cushing, Alec Guinness, Anthony Daniels', 21, 121, 'Aventura, Acción, Ciencia ficción', '1977', 'George Lucas', 'A (Todo público)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-08-30 08:56:43');
+(35, 'Babymetal', 'Babymetal es un grupo idol japonés de kawaii metal formada en Tokio en 2010.', 'https://cdn.shopify.com/s/files/1/0689/6061/6685/files/20251120_imp_fest_2026_vo4_referral_social_babymetal_4x5_c853eafa-872e-4d0c-9d1c-ea063dc17bad.jpg', 'https://gritaradio.com/wp-content/uploads/2026/04/BM26-Anuncio_General_16x9-scaled.jpg', 'Suzuka Nakamoto (Su-metal), Moa Kikuchi (Moametal) y Momoko Okazaki (Momometal).', 27, 120, 'Música, Concierto', '2026', 'No disponible', 'A (Todo público)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 0, '2026-07-27 03:25:09'),
+(70, 'Alien', 'De regreso a la Tierra, la nave de carga Nostromo interrumpe su viaje y despierta a sus siete tripulantes. El ordenador central, MADRE, ha detectado la misteriosa transmisión de una forma de vida desconocida, procedente de un planeta cercano aparentemente deshabitado. La nave se dirige entonces al extraño planeta para investigar el origen de la comunicación.', 'https://image.tmdb.org/t/p/w500/pZ9cAe5FxexJjpCaeiETbXzz3Fs.jpg', 'https://image.tmdb.org/t/p/original/AmR3JG1VQVxU8TfAvljUhfSFUOx.jpg', 'Tom Skerritt, Sigourney Weaver, Veronica Cartwright, Harry Dean Stanton, John Hurt, Ian Holm', 21, 117, 'Terror, Ciencia ficción', '1979', 'Ridley Scott', 'C (Mayores de 18)', 'https://www.youtube.com/watch?v=oSeQQlaCZgU', 0, '2026-08-26 17:04:25'),
+(72, 'Star Wars: Episode IV - A New Hope', 'La princesa Leia, líder del movimiento rebelde que desea reinstaurar la República en la galaxia en los tiempos ominosos del Imperio, es capturada por las malévolas Fuerzas Imperiales, capitaneadas por el implacable Darth Vader, el sirviente más fiel del emperador. El intrépido Luke Skywalker, ayudado por Han Solo, capitán de la nave espacial \"El Halcón Milenario\", y los androides, R2D2 y C3PO, serán los encargados de luchar contra el enemigo y rescatar a la princesa para volver a instaurar la justicia en el seno de la Galaxia.', 'https://image.tmdb.org/t/p/original/wmIVGytmj4TmSQ45YvQaHi95Xv9.jpg', 'https://image.tmdb.org/t/p/original/yUiXA68FfQeA8cRBhd0Ao0jIRZt.jpg', 'Mark Hamill, Harrison Ford, Carrie Fisher, Peter Cushing, Alec Guinness, Anthony Daniels', 21, 121, 'Aventura, Acción, Ciencia ficción', '1977', 'George Lucas', 'A (Todo público)', 'https://youtu.be/EDnIEWyVIlE?si=Omr8eTQJu9wPUfe3', 1, '2026-08-30 08:56:43'),
+(73, 'Dulce sabor a Muerte', 'Lo que comienza siendo un verano idílico, en un pequeño y tranquilo pueblo vacacional, se convierte en una auténtica pesadilla cuando los más pequeños comienzan a mostrar instintos asesinos y deseos insaciables por acabar con todos los adultos. Son víctimas de una curiosa maldición provocada por los helados que comen que afecta a todos, menos a tres niños que tendrán que intentar escapar y salvar a todo el pueblo.', 'https://image.tmdb.org/t/p/w500/uVuP2ZTYLn5hdL1aUOe4BiFD6d3.jpg', 'https://image.tmdb.org/t/p/original/75pK9Dj1CheZFItgld9TVvb2P4x.jpg', 'Ari Millen, Charlie Zeltzer, Kole Parks, Shiloh O’Reilly, Kiori Mirza Waldman, Sarah Abbott', 21, 86, 'Terror, Comedia', '2026', 'Eli Roth', 'A (Todo público)', 'https://www.youtube.com/watch?v=oSeQQlaCZgU', 1, '2026-09-05 12:02:29');
 
 -- --------------------------------------------------------
 
@@ -213,6 +215,7 @@ INSERT INTO `movies` (`id`, `title`, `description`, `poster_url`, `banner_url`, 
 
 CREATE TABLE `purchases` (
   `id` int(11) NOT NULL,
+  `sale_number` int(10) unsigned DEFAULT NULL COMMENT 'Secuencia de venta consecutiva (solo compras completadas)',
   `user_id` int(11) NOT NULL,
   `showtime_id` int(11) NOT NULL,
   `seats` text NOT NULL,
@@ -234,11 +237,33 @@ CREATE TABLE `purchases` (
 -- Volcado de datos para la tabla `purchases`
 --
 
-INSERT INTO `purchases` (`id`, `user_id`, `showtime_id`, `seats`, `total_tickets`, `total_food`, `total_amount`, `subtotal`, `tax_amount`, `tax_rate`, `purchase_date`, `status`, `payment_method`, `payment_data`, `session_token`, `expires_at`) VALUES
-(586, 1, 72, 'G7', 1, 1200.00, 4872.00, 4200.00, 672.00, 16.00, '2026-08-30 07:18:36', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260830-94C26BB2\",\"method\":\"movil\",\"reference\":\"CMP-20260830-C26BD9\",\"date\":\"2026-08-30 03:18:36\",\"ip\":\"172.22.0.1\"}', '942bf47fd7cc80725331b20dac5ed6a450234d2a16731574c168618ead9c2e5f', '2026-08-30 03:18:36'),
-(597, 1, 77, 'F12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-31 03:14:21', 'expired', NULL, NULL, '61c35da5a13c4861acdc3b6d7afdfb59b9a566ddd91f855004aaaaf49f020026', '2026-08-30 23:24:21'),
-(599, 1, 77, 'B14', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-09-05 08:33:37', 'expired', NULL, NULL, '538fa017bcf040bd1158191edea932e91dd05ad0e55bf9f3076a8ed2f5f71b9d', '2026-09-05 04:39:02'),
-(600, 1, 77, 'E19', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-09-05 09:01:52', 'expired', NULL, NULL, 'b6dd29e6b5f86360775265cec535bcea06c7ac87bc290305129a41d81641e3ac', '2026-09-05 05:02:20');
+INSERT INTO `purchases` (`id`, `sale_number`, `user_id`, `showtime_id`, `seats`, `total_tickets`, `total_food`, `total_amount`, `subtotal`, `tax_amount`, `tax_rate`, `purchase_date`, `status`, `payment_method`, `payment_data`, `session_token`, `expires_at`) VALUES
+(586, 1, 1, 72, 'G7', 1, 1200.00, 4872.00, 4200.00, 672.00, 16.00, '2026-08-30 07:18:36', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260830-94C26BB2\",\"method\":\"movil\",\"reference\":\"CMP-20260830-C26BD9\",\"date\":\"2026-08-30 03:18:36\",\"ip\":\"172.22.0.1\"}', '942bf47fd7cc80725331b20dac5ed6a450234d2a16731574c168618ead9c2e5f', '2026-08-30 03:18:36'),
+(597, NULL, 1, 77, 'F12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-08-31 03:14:21', 'expired', NULL, NULL, '61c35da5a13c4861acdc3b6d7afdfb59b9a566ddd91f855004aaaaf49f020026', '2026-08-30 23:24:21'),
+(599, NULL, 1, 77, 'B14', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-09-05 08:33:37', 'expired', NULL, NULL, '538fa017bcf040bd1158191edea932e91dd05ad0e55bf9f3076a8ed2f5f71b9d', '2026-09-05 04:39:02'),
+(600, NULL, 1, 77, 'E19', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-09-05 09:01:52', 'expired', NULL, NULL, 'b6dd29e6b5f86360775265cec535bcea06c7ac87bc290305129a41d81641e3ac', '2026-09-05 05:02:20'),
+(601, NULL, 1, 81, 'A11', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-09-05 13:29:43', 'expired', NULL, NULL, 'bc5e5f880cf4f417ea311a46c558f389b1e9930a90ba7432a506d8dd4c0bda4e', '2026-09-05 09:29:48'),
+(602, NULL, 8, 80, 'A10', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-09-05 14:06:10', 'expired', NULL, NULL, '3f4037ceece5d081bec60801236f217e404a326de258c99f78338d157b6e3679', '2026-09-05 10:06:35'),
+(603, 2, 8, 80, 'A10', 1, 1515.00, 5237.40, 4515.00, 722.40, 16.00, '2026-09-05 14:06:35', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260905-1EB15B4E\",\"method\":\"movil\",\"reference\":\"CMP-20260905-B15B70\",\"date\":\"2026-09-05 10:06:35\",\"ip\":\"172.22.0.1\"}', 'd1d01e9d574a701315ae02e3d1d823dd0c3c5d27c8deb23a33b3319124cf2a3f', '2026-09-05 10:06:35'),
+(604, NULL, 8, 82, 'A11', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-09-05 16:48:54', 'expired', NULL, NULL, 'bb3fc0ffb8fb8cc4220ea0f12d920bd186cb48ce4e04b2e956448d6a2ad16f93', '2026-09-05 12:49:03'),
+(605, 3, 8, 82, 'A11', 1, 1200.00, 4872.00, 4200.00, 672.00, 16.00, '2026-09-05 16:49:03', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260905-7FF3432D\",\"method\":\"movil\",\"reference\":\"CMP-20260905-F34349\",\"date\":\"2026-09-05 12:49:03\",\"ip\":\"172.22.0.1\"}', '0655c6a75907330fa0de628f597ccb056defe7ab32ee5211155c44e1716f6628', '2026-09-05 12:49:03'),
+(606, NULL, 8, 79, 'A11', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-09-05 18:07:13', 'expired', NULL, NULL, '567596dd1a9eaa286e8294ed92568476ded35e2808c8a63f0c0552702eb9a803', '2026-09-05 14:07:39'),
+(607, NULL, 8, 82, 'A12', 1, 0.00, 0.00, 0.00, 0.00, 0.00, '2026-09-06 22:45:33', 'expired', NULL, NULL, 'SES-20260906-607', '2026-09-06 22:45:33'),
+(608, 4, 8, 82, 'A12', 1, 0.00, 5237.40, 4515.00, 722.40, 16.00, '2026-09-06 22:45:52', 'completed', 'movil', '{\"transaction_id\":\"TXN-20260906-608\",\"method\":\"movil\",\"reference\":\"CMP-20260906-608\",\"date\":\"2026-09-06 22:45:52\",\"ip\":\"172.22.0.1\"}', 'SES-20260906-608', '2026-09-06 22:45:52');
+
+-- --------------------------------------------------------
+
+--
+-- Estructura de tabla para la tabla `sale_sequence`
+-- (Secuencia atómica para numerar ventas: solo compras completadas)
+--
+
+CREATE TABLE `sale_sequence` (
+  `id` tinyint(3) unsigned NOT NULL,
+  `last_value` int(10) unsigned NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO `sale_sequence` (`id`, `last_value`) VALUES (1, 4);
 
 -- --------------------------------------------------------
 
@@ -315,7 +340,10 @@ CREATE TABLE `showtimes` (
 INSERT INTO `showtimes` (`id`, `movie_id`, `room_id`, `show_date`, `show_time`, `price`, `price_adult`, `price_child`, `price_senior`, `enable_child_price`, `enable_senior_price`, `half_price_monday`, `promotions`, `language`, `format`, `is_active`, `created_at`) VALUES
 (72, 70, 12, '2026-08-30', '03:30:00', 3000.00, 3000.00, 0.00, 1500.00, 0, 1, 0, '', 'español', '2D', 0, '2026-08-30 07:24:46'),
 (77, 72, 12, '2026-09-08', '14:35:00', 3000.00, 3000.00, 0.00, 0.00, 0, 0, 0, '', 'subtitulos', '4DX', 1, '2026-08-31 03:13:06'),
-(79, 72, 14, '2026-09-28', '14:30:00', 3000.00, 3000.00, 500.00, 1500.00, 1, 1, 0, '', 'español', '2D', 1, '2026-09-05 09:51:15');
+(79, 72, 14, '2026-09-28', '14:30:00', 3000.00, 3000.00, 500.00, 1500.00, 1, 1, 0, '', 'español', '2D', 1, '2026-09-05 09:51:15'),
+(80, 73, 14, '2026-09-14', '17:00:00', 3000.00, 3000.00, 0.00, 0.00, 0, 0, 0, '', 'español', '2D', 1, '2026-09-05 12:16:28'),
+(81, 70, 16, '2026-09-05', '09:40:00', 3000.00, 3000.00, 0.00, 0.00, 0, 0, 0, 'preventa', 'español', 'IMAX 3D', 0, '2026-09-05 13:28:59'),
+(82, 73, 16, '2026-09-05', '13:00:00', 3000.00, 3000.00, 0.00, 0.00, 0, 0, 0, 'preventa', 'español', '2D', 0, '2026-09-05 16:48:11');
 
 -- --------------------------------------------------------
 
@@ -352,9 +380,9 @@ INSERT INTO `site_config` (`id`, `key_name`, `value`, `updated_at`) VALUES
 (15, 'whatsapp', 'https://wa.me/584143601706', '2026-07-24 21:25:57'),
 (16, 'footer_copyright', '© {year} Cinema. Todos los derechos reservados. RIF: J-00123456-7', '2026-08-21 16:50:00'),
 (17, 'footer_logo', 'uploads/footer_logo.png', '2026-07-27 01:53:32'),
-(18, 'site_favicon', 'uploads/favicon.png', '2026-08-11 05:39:24'),
-(19, 'timezone', 'America/Caracas', '2026-09-05 08:32:26'),
-(20, 'last_cleanup_expired_purchases', '2026-09-05 04:32:26', '2026-09-05 08:32:26');
+(18, 'site_favicon', 'admin/img/favicon.png', '2026-09-05 16:36:30'),
+(20, 'last_cleanup_expired_purchases', '2026-09-05 04:32:26', '2026-09-05 08:32:26'),
+(23, 'timezone', 'America/Caracas', '2026-09-05 11:04:25');
 
 -- --------------------------------------------------------
 
@@ -401,7 +429,9 @@ CREATE TABLE `tickets` (
 --
 
 INSERT INTO `tickets` (`id`, `user_id`, `showtime_id`, `purchase_id`, `ticket_type_id`, `seat_code`, `price_paid`, `status`, `created_at`, `confirmed_at`) VALUES
-(67, 1, 72, 586, 1, 'G7', 3000.00, 'confirmed', '2026-08-30 07:18:22', '2026-08-30 07:18:36');
+(67, 1, 72, 586, 1, 'G7', 3000.00, 'confirmed', '2026-08-30 07:18:22', '2026-08-30 07:18:36'),
+(87, 8, 80, 603, 1, 'A10', 3000.00, 'confirmed', '2026-09-05 14:06:10', '2026-09-05 14:06:35'),
+(88, 8, 82, 605, 1, 'A11', 3000.00, 'confirmed', '2026-09-05 16:48:54', '2026-09-05 16:49:03');
 
 -- --------------------------------------------------------
 
@@ -422,7 +452,9 @@ CREATE TABLE `ticket_logs` (
 
 INSERT INTO `ticket_logs` (`id`, `showtime_id`, `ticket_count`, `released_at`) VALUES
 (4, 72, 1, '2026-08-30 09:38:26'),
-(6, 72, 1, '2026-08-30 14:28:58');
+(6, 72, 1, '2026-08-30 14:28:58'),
+(9, 81, 0, '2026-09-05 16:21:08'),
+(10, 82, 1, '2026-09-05 18:28:06');
 
 -- --------------------------------------------------------
 
@@ -478,8 +510,8 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `name`, `email`, `cedula_type`, `cedula_number`, `phone_prefix`, `phone_number`, `birth_date`, `avatar`, `delete_requested_at`, `password`, `role`, `is_blocked`, `created_at`, `last_login`) VALUES
-(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-09-05 04:32:54'),
-(8, 'Darwin Mavares', 'darwinmavares@gmail.com', 'V', '14511134', '412', '3601706', '1979-03-31', NULL, NULL, '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-08-22 01:41:34');
+(1, 'Administrador', 'admin@cinema.com', NULL, NULL, NULL, NULL, NULL, NULL, NULL, '$2y$10$NOMst0oD6bh5Lrm8op6h8O5VIEaqXj70FjgMF7IeU9lAL0b4dwNPq', 'admin', 0, '2026-07-12 21:36:26', '2026-09-05 12:47:35'),
+(8, 'Darwin Mavares', 'darwinmavares@gmail.com', 'V', '14511134', '412', '3601706', '1979-03-31', 'uploads/avatars/avatar_8.jpg', NULL, '$2y$10$OBPu7dEtLSDfXPtMLYx6c.p8u6kI2QWnM9tPW9F9no4Yr7KS.dM2C', 'user', 0, '2026-08-09 00:24:33', '2026-09-06 01:55:05');
 
 --
 -- Índices para tablas volcadas
@@ -540,6 +572,12 @@ ALTER TABLE `purchases`
   ADD KEY `idx_status_fecha` (`status`,`purchase_date`),
   ADD KEY `idx_user_showtime` (`user_id`,`showtime_id`),
   ADD KEY `idx_status_expires` (`status`,`expires_at`);
+
+--
+-- Indices de la tabla `sale_sequence`
+--
+ALTER TABLE `sale_sequence`
+  ADD PRIMARY KEY (`id`);
 
 --
 -- Indices de la tabla `rate_limits`
@@ -634,19 +672,19 @@ ALTER TABLE `food_items`
 -- AUTO_INCREMENT de la tabla `food_orders`
 --
 ALTER TABLE `food_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=22;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
 
 --
 -- AUTO_INCREMENT de la tabla `movies`
 --
 ALTER TABLE `movies`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=73;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=74;
 
 --
 -- AUTO_INCREMENT de la tabla `purchases`
 --
 ALTER TABLE `purchases`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=601;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=609;
 
 --
 -- AUTO_INCREMENT de la tabla `rate_limits`
@@ -664,13 +702,13 @@ ALTER TABLE `rooms`
 -- AUTO_INCREMENT de la tabla `showtimes`
 --
 ALTER TABLE `showtimes`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=80;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=83;
 
 --
 -- AUTO_INCREMENT de la tabla `site_config`
 --
 ALTER TABLE `site_config`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=24;
 
 --
 -- AUTO_INCREMENT de la tabla `tax_config`
@@ -682,13 +720,13 @@ ALTER TABLE `tax_config`
 -- AUTO_INCREMENT de la tabla `tickets`
 --
 ALTER TABLE `tickets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=86;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=90;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_logs`
 --
 ALTER TABLE `ticket_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
 -- AUTO_INCREMENT de la tabla `ticket_types`

@@ -37,7 +37,7 @@ if ($action === 'save_config') {
     $upload_dir = $siteRoot . '/uploads/';
 
     $config_keys = [
-        'site_name', 'footer_copyright', 'currency_symbol', 'currency_position',
+        'site_name', 'footer_copyright', 'company_rif', 'currency_symbol', 'currency_position',
         'thousands_separator', 'decimal_separator', 'decimal_places',
         'address', 'phone', 'email',
         'instagram', 'facebook', 'twitter', 'telegram', 'whatsapp'
@@ -50,16 +50,37 @@ if ($action === 'save_config') {
                 continue;
             }
             $value = sanitizeInput($_POST[$key]);
+            if ($key === 'whatsapp') {
+                // Guardar solo el número (quitar +, espacios, guiones); wa.me se integra en el footer
+                $value = preg_replace('/[^0-9]/', '', $value);
+            }
             if ($key === 'email' && !empty($value) && !filter_var($value, FILTER_VALIDATE_EMAIL)) {
                 $error = "Email de contacto no válido.";
                 break;
             }
-            if (in_array($key, ['instagram', 'facebook', 'twitter', 'telegram', 'whatsapp']) && !empty($value) && !filter_var($value, FILTER_VALIDATE_URL)) {
+            if (in_array($key, ['instagram', 'facebook', 'twitter', 'telegram']) && !empty($value) && !filter_var($value, FILTER_VALIDATE_URL)) {
                 $error = "URL de " . $key . " no válida.";
                 break;
             }
             $stmt = $pdo->prepare("UPDATE site_config SET value = ? WHERE key_name = ?");
             $stmt->execute([$value, $key]);
+        }
+
+        // ============================================
+        // RIF DE LA EMPRESA (upsert)
+        // ============================================
+        if (empty($error) && isset($_POST['company_rif'])) {
+            $rif = trim($_POST['company_rif']);
+            $stmt = $pdo->prepare("SELECT COUNT(*) FROM site_config WHERE key_name = 'company_rif'");
+            $stmt->execute();
+            $rifExists = (int)$stmt->fetchColumn() > 0;
+            if ($rifExists) {
+                $stmt = $pdo->prepare("UPDATE site_config SET value = ?, updated_at = NOW() WHERE key_name = 'company_rif'");
+                $stmt->execute([$rif]);
+            } else {
+                $stmt = $pdo->prepare("INSERT INTO site_config (key_name, value) VALUES ('company_rif', ?)");
+                $stmt->execute([$rif]);
+            }
         }
 
         // ============================================

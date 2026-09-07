@@ -1,0 +1,137 @@
+/* ============================================
+   MÓDULO DE USUARIO — MIS BOLETOS (tickets.php)
+   ============================================ */
+
+.account-wrapper { max-width: 820px; }
+.ticket-row {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    padding: 18px;
+    margin-bottom: 16px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    transition: box-shadow 0.2s ease;
+}
+.ticket-row:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12); }
+.ticket-poster {
+    width: 64px;
+    height: 96px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6rem;
+    color: #94a3b8;
+}
+.ticket-title { font-weight: 800; color: #0f172a; font-size: 1.05rem; line-height: 1.3; }
+.ticket-meta { font-size: 0.85rem; color: #475569; margin-top: 4px; }
+.ticket-meta i { color: #6366f1; width: 16px; margin-right: 4px; }
+.seat-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.seat-item {
+    display: inline-flex;
+    align-items: center;
+    font-weight: 600;
+    color: #0f172a;
+    background: #f1f5f9;
+    padding: 2px 10px 2px 8px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+    font-size: 0.8rem;
+}
+.ticket-total { font-weight: 800; color: #16a34a; font-size: 1.05rem; }
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 12px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border: 1px solid;
+}
+.btn-print {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    color: #334155;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+.btn-print:hover { border-color: #6366f1; color: #4f46e5; background: #eef2ff; }
+.btn-print:disabled { opacity: 0.4; cursor: not-allowed; }
+.empty-state { text-align: center; padding: 60px 20px; color: #6b7280; }
+.empty-state i { font-size: 3rem; color: #cbd5e1; margin-bottom: 16px; }
+.purchase-id {
+    font-family: 'Courier New', monospace;
+    background: #f1f5f9;
+    padding: 2px 10px;
+    border-radius: 6px;
+    color: #4f46e5;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+.format-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 5px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border: 1px solid #94a3b8;
+    color: #475569;
+    margin-left: 8px;
+}
+.function-done-note {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    background: #fef2f2;
+    border: 1px dashed #ef4444;
+    color: #dc2626;
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 8px;
+}
+.function-done-note i { color: #dc2626; }
+.promo-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.promo-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 20px;
+    border: 1px solid;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.promo-tag .promo-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.promo-tag.monday { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+.promo-tag.monday .promo-dot { background: #15803d; }
+.promo-tag.presale { background: #fef3c7; color: #b45309; border-color: #fde68a; }
+.promo-tag.presale .promo-dot { background: #b45309; }

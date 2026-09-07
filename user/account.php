@@ -21,152 +21,6 @@ $deleteRequested = !empty($userAuth['delete_requested_at']);
 
 require_once 'includes/header.php';
 ?>
-<style>
-    body { background-color: #ffffff !important; color: #1f2937 !important; }
-    .account-wrapper { max-width: 760px; margin: 0 auto; padding: 32px 16px; }
-    .account-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-        padding: 24px;
-        margin-bottom: 20px;
-    }
-    .account-heading { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
-    .avatar-circle {
-        width: 84px;
-        height: 84px;
-        border-radius: 50%;
-        object-fit: cover;
-        flex-shrink: 0;
-        border: 3px solid #eef2ff;
-        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
-        background: #4f46e5;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #ffffff;
-        font-weight: 800;
-        font-size: 2rem;
-    }
-    .avatar-circle.preview { border: 3px solid #c7d2fe; }
-    .account-title { font-size: 1.5rem; font-weight: 800; color: #0f172a; margin: 0; }
-    .account-subtitle { color: #6b7280; font-size: 0.9rem; }
-    .auth-label { display: block; font-size: 0.85rem; color: #475569; margin-bottom: 4px; font-weight: 600; }
-    .auth-input {
-        width: 100%;
-        padding: 10px 12px;
-        background: #ffffff;
-        border: 1px solid #cbd5e1;
-        border-radius: 8px;
-        color: #0f172a;
-        font-size: 0.95rem;
-        transition: border-color 0.3s ease;
-    }
-    .auth-input:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1); }
-    .auth-input:disabled { background: #f8fafc; color: #94a3b8; }
-    .auth-btn {
-        background: linear-gradient(135deg, #4f46e5, #7c3aed);
-        color: #ffffff;
-        padding: 12px;
-        border-radius: 8px;
-        font-weight: 700;
-        border: none;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 8px;
-    }
-    .auth-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79, 70, 229, 0.25); }
-    .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-    .btn-danger {
-        background: #ffffff;
-        border: 1px solid #fca5a5;
-        color: #dc2626;
-        padding: 11px 16px;
-        border-radius: 8px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
-    .btn-danger:hover { background: #fef2f2; border-color: #ef4444; }
-    .btn-secondary {
-        background: #ffffff;
-        border: 1px solid #cbd5e1;
-        color: #334155;
-        padding: 11px 16px;
-        border-radius: 8px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
-    .btn-secondary:hover { border-color: #6366f1; color: #4f46e5; background: #eef2ff; }
-    .msg { padding: 12px 16px; border-radius: 8px; font-size: 0.875rem; text-align: center; font-weight: 600; margin-bottom: 16px; }
-    .msg-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
-    .msg-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-    .form-group-inline { display: flex; gap: 8px; align-items: center; }
-    .form-group-inline select { flex: 0 0 80px; }
-    .form-group-inline input { flex: 1; }
-    .phone-group-inline { display: flex; gap: 8px; align-items: center; }
-    .phone-group-inline select { flex: 0 0 90px; }
-    .phone-group-inline input { flex: 1; }
-    .password-wrapper { position: relative; }
-    .password-wrapper input { padding-right: 40px; }
-    .password-toggle {
-        position: absolute;
-        right: 12px;
-        top: 50%;
-        transform: translateY(-50%);
-        color: #6b7280;
-        cursor: pointer;
-        background: none;
-        border: none;
-        font-size: 1rem;
-        padding: 4px;
-    }
-    .password-toggle:hover { color: #1f2937; }
-    .input-error { border-color: #ef4444 !important; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important; }
-    .input-success { border-color: #22c55e !important; box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2) !important; }
-    .password-hint { font-size: 0.75rem; color: #6b7280; margin-top: 4px; }
-    .delete-request-banner {
-        background: #fef3c7;
-        border: 1px solid #f59e0b;
-        color: #92400e;
-        padding: 14px 16px;
-        border-radius: 10px;
-        font-size: 0.875rem;
-        display: flex;
-        align-items: flex-start;
-        gap: 10px;
-    }
-    .danger-box { border-color: #fecaca; }
-    .section-title { font-size: 1rem; font-weight: 800; color: #0f172a; margin-bottom: 4px; }
-    .file-label {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        border: 1px dashed #cbd5e1;
-        color: #4f46e5;
-        font-weight: 600;
-        font-size: 0.85rem;
-        padding: 10px 14px;
-        border-radius: 10px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        background: #ffffff;
-    }
-    .file-label:hover { border-color: #6366f1; background: #eef2ff; }
-    .avatar-small {
-        width: 32px;
-        height: 32px;
-        border-radius: 50%;
-        object-fit: cover;
-        flex-shrink: 0;
-    }
-</style>
-
 <div class="account-wrapper">
     <?php if ($msg): ?>
         <div class="msg msg-success"><i class="fas fa-check-circle mr-1"></i><?= htmlspecialchars($msg) ?></div>
@@ -353,8 +207,6 @@ require_once 'includes/header.php';
     </p>
 </div>
 
-<?php require_once 'includes/footer.php'; ?>
-
 <script nonce="<?= htmlspecialchars($cspNonce ?? '') ?>">
 document.addEventListener('DOMContentLoaded', function() {
     // Nota: el toggle de visibilidad de contraseñas lo maneja admin.js ([data-password-toggle])
@@ -481,5 +333,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-</body>
-</html>
+
+<?php require_once 'includes/footer.php'; ?>

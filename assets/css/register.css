@@ -1,0 +1,47 @@
+/* CSS especifico de register.php (4B) */
+
+.auth-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 480px;
+}
+
+.auth-logo {
+    max-height: 70px;
+    max-width: 100%;
+    object-fit: contain;
+    margin: 0 auto 8px auto;
+    display: block;
+}
+
+.msg-error {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fca5a5;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    text-align: center;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+.form-group-inline { display: flex; gap: 8px; align-items: center; }
+
+.form-group-inline select { flex: 0 0 80px; }
+
+.form-group-inline input { flex: 1; }
+
+.phone-group-inline { display: flex; gap: 8px; align-items: center; }
+
+.phone-group-inline select { flex: 0 0 90px; }
+
+.phone-group-inline input { flex: 1; }
+
+.input-error { border-color: #ef4444 !important; box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important; }
+
+.input-success { border-color: #22c55e !important; box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2) !important; }

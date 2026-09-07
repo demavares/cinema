@@ -1,0 +1,92 @@
+/* CSS especifico de seats.php (4B) */
+
+:root { --seat-size: clamp(1.2rem, 2.2vw, 1.8rem); }
+
+.seat { width: var(--seat-size); height: var(--seat-size); border-radius: 0.3rem 0.3rem 0.2rem 0.2rem; transition: all 0.2s ease; cursor: pointer; border: none !important; position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; padding: 0 !important; overflow: hidden; }
+
+.seat:disabled { cursor: not-allowed; }
+
+.seat-available { background-color: #cbd5e1 !important; }
+
+.seat-available:hover:not(.seat-occupied):not(.seat-blocked):not(.seat-accessible):not(.seat-selected) { background-color: #6366f1 !important; transform: scale(1.1); box-shadow: 0 0 12px rgba(99,102,241,0.4); }
+
+.seat-selected { background-color: #4f46e5 !important; box-shadow: 0 0 10px rgba(79,70,229,0.5); transform: scale(1.05); }
+
+.seat-occupied { background-color: #ef4444 !important; cursor: not-allowed !important; opacity: 0.85; }
+
+.seat-accessible { background-color: #0284c7 !important; }
+
+.seat-accessible .seat-label { position: static !important; transform: none !important; width: 100% !important; height: 100% !important; display: flex !important; align-items: center !important; justify-content: center !important; font-size: calc(var(--seat-size) * 0.6) !important; line-height: 1 !important; color: #ffffff !important; }
+
+.seat-blocked { background-color: #f1f5f9 !important; cursor: not-allowed !important; opacity: 0.2; box-shadow: none !important; transform: none !important; }
+
+.seat-blocked .seat-label { display: none !important; }
+
+.seat-label { font-size: calc(var(--seat-size) * 0.35); color: #0f172a; text-align: center; position: absolute; bottom: 1px; left: 50%; transform: translateX(-50%); font-weight: bold; white-space: nowrap; }
+
+.seat-selected .seat-label, .seat-occupied .seat-label { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
+
+.seat-occupied .seat-label { color: #ffffff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.6); }
+
+.seat-accessible.seat-occupied { background-color: #ef4444 !important; opacity: 0.9; }
+
+.seat-accessible.seat-occupied .seat-label { font-size: calc(var(--seat-size) * 0.6) !important; }
+
+.cinema-screen { background: #1a1a1a !important; color: #ffffff; text-align: center; padding: 3px; border-radius: 8px; margin-top: 28px; font-weight: bold; letter-spacing: 4px; font-size: clamp(0.7rem, 2vw, 1rem); width: 100%; cursor: default; }
+
+.legend { display: flex; gap: clamp(8px, 2vw, 20px); justify-content: center; flex-wrap: wrap; margin-top: 20px; }
+
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: clamp(0.65rem, 1.2vw, 0.8rem); color: #475569; font-weight: 500; }
+
+.legend-item .color-box { width: clamp(14px, 2vw, 20px); height: clamp(14px, 2vw, 20px); border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #fff; }
+
+.seat-row { display: flex; gap: clamp(2px, 0.4vw, 4px); align-items: center; justify-content: center; flex-wrap: nowrap; }
+
+.row-label { width: clamp(20px, 2.5vw, 28px); font-size: clamp(0.6rem, 1vw, 0.75rem); color: #475569; font-weight: bold; text-align: right; padding-right: clamp(4px, 0.6vw, 8px); flex-shrink: 0; position: sticky; left: 0; background: #ffffff; z-index: 5; }
+
+.seat-grid-scroll-wrapper { width: 100%; overflow: auto; padding: 8px; border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; }
+
+.seat-grid-container { display: grid; gap: clamp(2px, 0.4vw, 4px); padding: clamp(4px, 0.8vw, 10px); width: max-content; margin: 0 auto; }
+
+/* ✅ NUEVO: Ilustración personalizada de asientos */
+.custom-seat-map { text-align: center; margin-bottom: 16px; }
+
+.custom-seat-map-img { max-width: 100%; max-height: 280px; object-fit: contain; border-radius: 12px; border: 1px solid #1e1e2e; background: #0f172a; padding: 8px; }
+
+.btn-continue-food { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff !important; padding: 14px 20px; border-radius: 8px; font-weight: 700; font-size: 1.1rem; border: none; cursor: pointer; transition: all 0.3s ease; width: 100%; text-align: center; display: block; }
+
+.btn-continue-food:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(79,70,229,0.25); }
+
+.btn-continue-food:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+.selected-info { background: #f1f5f9 !important; border: 1px solid #e2e8f0 !important; border-radius: 8px !important; padding: 14px !important; margin-top: 12px; margin-bottom: 16px; }
+
+.selected-info .text-sm { font-size: 0.9rem !important; }
+
+.selected-info .font-bold { font-weight: 700 !important; }
+
+.notification-container { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 9999; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; max-width: 500px; padding: 0 20px; }
+
+.notification-container .notification { pointer-events: auto; padding: 10px 22px; border-radius: 16px; font-size: 1.2rem; font-weight: 700; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,0.25); animation: notifFadeIn 0.4s ease, notifPulse 1.5s ease-in-out 0.4s 2; width: 100%; display: flex; align-items: center; justify-content: center; gap: 14px; }
+
+.notification-container .notification .notif-icon { font-size: 1.8rem; flex-shrink: 0; }
+
+.notification-container .notification.info { background: #4f46e5; color: #ffffff; border: 2px solid #818cf8; }
+
+.notification-container .notification.success { background: #16a34a; color: #ffffff; border: 2px solid #4ade80; }
+
+.notification-container .notification.warning { background: #d97706; color: #ffffff; }
+
+.notification-container .notification.error { background: #dc2626; color: #ffffff; border: 2px solid #f87171; }
+
+@keyframes notifFadeIn { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: scale(1); } }
+
+@keyframes notifPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.03); } }
+
+.notification-container .notification.fade-out { animation: notifFadeOut 0.3s ease forwards; }
+
+@keyframes notifFadeOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.9); } }
+
+@media (min-width: 1024px) { .card-summary { position: sticky; top: 100px; } }
+
+@media (max-width: 768px) { .card-summary { padding: 16px; position: relative; top: auto; } .summary-movie-poster { width: 60px; height: 90px; } .seat-grid-scroll-wrapper { max-height: 50vh; } }

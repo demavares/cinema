@@ -103,10 +103,11 @@
                 <!-- WhatsApp -->
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-1"><i class="fab fa-whatsapp text-green-500 mr-1"></i>WhatsApp</label>
-                    <input type="url" name="whatsapp"
+                    <input type="text" name="whatsapp" maxlength="15" inputmode="tel"
                            value="<?= htmlspecialchars($siteConfig['whatsapp'] ?? '') ?>"
-                           placeholder="https://wa.me/1234567890"
+                           placeholder="+58123456789"
                            class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="text-xs text-gray-500 mt-1">WhatsApp (solo número de teléfono. Ej: +58123456789).</p>
                 </div>
 
                 <button type="submit" class="md:col-span-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md">

@@ -1,0 +1,57 @@
+/* ============================================
+   MÓDULO DE USUARIO — ESTILOS COMPARTIDOS
+   Reutiliza admin/css/admin.css para el layout.
+   ============================================ */
+
+/* --- Avatar del usuario en topbar --- */
+.topbar-user .topbar-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-right: 8px;
+    border: 2px solid #e2e8f0;
+}
+
+/* --- Bloque del usuario en el sidebar --- */
+.sidebar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 16px;
+    border-bottom: 1px solid #1e293b;
+}
+.sidebar-user .sidebar-user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: #4f46e5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 1rem;
+}
+.sidebar-user .sidebar-user-info { min-width: 0; }
+.sidebar-user .sidebar-user-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: #e5e7eb;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.sidebar-user .sidebar-user-role { font-size: 0.75rem; color: #94a3b8; }
+.sidebar.collapsed .sidebar-user { justify-content: center; padding: 12px 8px; }
+.sidebar.collapsed .sidebar-user-info { display: none; }
+
+/* --- Base de las páginas del usuario --- */
+body { background-color: #ffffff !important; color: #1f2937 !important; }
+
+/* --- Estructura y encabezados comunes --- */
+.account-wrapper { margin: 0 auto; padding: 32px 16px; }
+.account-title { font-size: 1.5rem; font-weight: 800; color: #0f172a; }
+.account-subtitle { color: #6b7280; font-size: 0.9rem; }

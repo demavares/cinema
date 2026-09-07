@@ -268,12 +268,17 @@ try {
     }
 
     // ✅ CORREGIDO: AHORA marcar la compra como 'completed'
+    // Asigna el número de venta consecutivo (ignora compras canceladas/expired)
+    $stmtNextSale = $pdo->prepare("UPDATE sale_sequence SET last_value = LAST_INSERT_ID(last_value + 1) WHERE id = 1");
+    $stmtNextSale->execute();
+    $saleNumber = (int)$pdo->lastInsertId();
+
     $stmtUpdatePurchase = $pdo->prepare("
         UPDATE purchases 
-        SET status = 'completed', expires_at = NOW()
+        SET status = 'completed', expires_at = NOW(), sale_number = ?
         WHERE id = ?
     ");
-    $stmtUpdatePurchase->execute([$purchaseId]);
+    $stmtUpdatePurchase->execute([$saleNumber, $purchaseId]);
 
     $_SESSION['last_order_id'] = $purchaseId;
 

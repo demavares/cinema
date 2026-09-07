@@ -1,0 +1,51 @@
+/* CSS especifico de login.php (4B) */
+
+.auth-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 430px;
+}
+
+.auth-logo {
+    max-height: 80px;
+    max-width: 100%;
+    object-fit: contain;
+    margin: 0 auto 8px auto;
+    display: block;
+}
+
+.msg { padding: 12px; border-radius: 8px; font-size: 0.875rem; text-align: center; font-weight: 600; margin-bottom: 16px; }
+
+.msg-success { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+
+.msg-info { background: #dbeafe; color: #1d4ed8; border: 1px solid #bfdbfe; }
+
+.msg-warning { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+
+.msg-error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+.lockout-box {
+    background: #fee2e2;
+    border: 1px solid #fca5a5;
+    color: #991b1b;
+    padding: 16px;
+    border-radius: 8px;
+    font-size: 0.875rem;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.attempts-warning {
+    background: #fef3c7;
+    border: 1px solid #fde68a;
+    color: #92400e;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    margin-top: 8px;
+    text-align: center;
+}

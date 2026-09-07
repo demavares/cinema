@@ -53,95 +53,12 @@ if ($promoLoggedIn) {
 } else {
     require_once '../header.php';
 }
+if (!$promoLoggedIn) {
+    // Cargar los estilos compartidos del módulo de usuario (la vista pública usa el header del sitio)
+    echo '<link rel="stylesheet" href="assets/css/user.css">'
+        . '<link rel="stylesheet" href="assets/css/promotions.css">';
+}
 ?>
-<style>
-    body { background-color: #ffffff !important; color: #1f2937 !important; }
-    .account-wrapper { max-width: 860px; margin: 0 auto; padding: 32px 16px; }
-    .account-title { font-size: 1.5rem; font-weight: 800; color: #0f172a; }
-    .account-subtitle { color: #6b7280; font-size: 0.9rem; }
-    .promo-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-        padding: 20px;
-    }
-    .promo-hero {
-        border-radius: 16px;
-        padding: 28px 24px;
-        margin-bottom: 24px;
-        border: 1px solid;
-    }
-    .promo-hero.monday { background: #f0fdf4; border-color: #bbf7d0; }
-    .promo-hero.presale { background: #fffbeb; border-color: #fde68a; }
-    .promo-hero h2 { font-size: 1.3rem; font-weight: 800; }
-    .promo-hero.monday h2 { color: #15803d; }
-    .promo-hero.presale h2 { color: #b45309; }
-    .promo-hero p { color: #475569; font-size: 0.9rem; margin-top: 6px; }
-    .promo-tag {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 3px 14px;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        border: 1px solid;
-    }
-    .promo-tag .promo-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
-    .promo-tag.monday { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
-    .promo-tag.monday .promo-dot { background: #15803d; }
-    .promo-tag.presale { background: #fef3c7; color: #b45309; border-color: #fde68a; }
-    .promo-tag.presale .promo-dot { background: #b45309; }
-    .promo-tag.generic { background: #eef2ff; color: #4338ca; border-color: #c7d2fe; }
-    .promo-tag.generic .promo-dot { background: #4338ca; }
-    .showtime-row {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-        padding: 16px 18px;
-        margin-bottom: 14px;
-        display: flex;
-        gap: 14px;
-        align-items: center;
-        text-decoration: none;
-        transition: box-shadow 0.2s ease;
-    }
-    .showtime-row:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12); }
-    .showtime-poster {
-        width: 56px;
-        height: 84px;
-        border-radius: 8px;
-        object-fit: cover;
-        flex-shrink: 0;
-        background: #f1f5f9;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1.4rem;
-        color: #94a3b8;
-    }
-    .showtime-title { font-weight: 800; color: #0f172a; font-size: 1rem; line-height: 1.3; }
-    .showtime-meta { font-size: 0.83rem; color: #475569; margin-top: 3px; }
-    .showtime-meta i { color: #6366f1; width: 14px; margin-right: 3px; }
-    .format-badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 1px 8px;
-        border-radius: 5px;
-        font-size: 0.68rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        border: 1px solid #94a3b8;
-        color: #475569;
-        margin-left: 6px;
-    }
-    .empty-state { text-align: center; padding: 48px 20px; color: #6b7280; }
-    .empty-state i { font-size: 3rem; color: #cbd5e1; margin-bottom: 14px; }
-</style>
-
 <div class="account-wrapper">
     <h1 class="account-title"><i class="fas fa-tags text-indigo-600 mr-2"></i>Promociones</h1>
     <p class="account-subtitle mb-6">Aprovecha nuestras ofertas especiales en funciones seleccionadas.</p>
@@ -219,5 +136,3 @@ if ($promoLoggedIn) {
 </div>
 
 <?php if ($promoLoggedIn) { require_once 'includes/footer.php'; } else { require_once '../footer.php'; } ?>
-</body>
-</html>

@@ -59,13 +59,23 @@ $has_favicon = adminAssetExists($favicon);
                        class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
             </div>
 
-            <!-- Copyright del Footer -->
-            <div class="md:col-span-2">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Copyright del Footer</label>
-                <textarea name="footer_copyright" rows="2"
-                          class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                          placeholder="© {year} Cinema. Todos los derechos reservados."><?= htmlspecialchars($siteConfig['footer_copyright'] ?? '') ?></textarea>
-                <p class="text-xs text-gray-500 mt-1">Usa <code class="bg-gray-100 px-1 rounded">{year}</code> para que se coloque automáticamente el año actual.</p>
+            <!-- Copyright del Footer + RIF -->
+            <div class="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Copyright del Footer</label>
+                    <textarea name="footer_copyright" rows="2"
+                              class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                              placeholder="© {year} Cinema. Todos los derechos reservados."><?= htmlspecialchars($siteConfig['footer_copyright'] ?? '') ?></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Usa <code class="bg-gray-100 px-1 rounded">{year}</code> para que se coloque automáticamente el año actual.</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">RIF de la Empresa</label>
+                    <input type="text" name="company_rif" maxlength="20"
+                           value="<?= htmlspecialchars($siteConfig['company_rif'] ?? '') ?>"
+                           placeholder="J-00123456-7"
+                           class="w-full bg-gray-50 border border-gray-300 rounded-lg px-4 py-2.5 text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
+                    <p class="text-xs text-gray-500 mt-1">RIF identificador de la empresa. Aparece en el footer y en el comprobante.</p>
+                </div>
             </div>
 
             <!-- Logo del Header -->

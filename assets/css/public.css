@@ -1,0 +1,342 @@
+/* ============================================
+   PUBLIC.CSS - Estilos globales del header publico
+   Menu hamburguesa, overlay, menu mobil.
+   Extraido de header.php (Paso 4A).
+   ============================================ */
+
+* {
+    font-family: 'Inter', sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #0a0a0f;
+    color: #e5e7eb;
+}
+
+.header-gradient {
+    background: #0f0f1a;
+    background: linear-gradient(180deg, #0f0f1a 0%, #0a0a0f 100%);
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1a1a2e;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4f46e5;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #6366f1;
+}
+
+/* ============================================
+MENÚ HAMBURGUESA - ESTILOS
+============================================ */
+.hamburger-btn {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    cursor: pointer;
+    padding: 8px;
+    background: transparent;
+    border: none;
+    z-index: 60;
+    position: relative;
+}
+
+.hamburger-btn span {
+    display: block;
+    width: 28px;
+    height: 3px;
+    background: #e5e7eb;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+    transform-origin: center;
+}
+
+.hamburger-btn.active span:nth-child(1) {
+    transform: rotate(45deg) translate(5px, 6px);
+}
+
+.hamburger-btn.active span:nth-child(2) {
+    opacity: 0;
+    transform: scaleX(0);
+}
+
+.hamburger-btn.active span:nth-child(3) {
+    transform: rotate(-45deg) translate(5px, -6px);
+}
+
+.menu-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: 110;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.menu-overlay.active {
+    display: block;
+    opacity: 1;
+}
+
+/* Menú desplegable - FONDO BLANCO */
+.mobile-menu {
+    display: none;
+    position: fixed;
+    top: 0;
+    right: -100%;
+    width: 85%;
+    max-width: 340px;
+    height: 100vh;
+    background: #ffffff;
+    z-index: 120;
+    padding: 80px 24px 30px 24px;
+    transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.3);
+    overflow-y: auto;
+}
+
+.mobile-menu.active {
+    right: 0;
+    display: block;
+}
+
+/* Estilos del contenido del menú - FONDO BLANCO */
+.mobile-menu .menu-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e5e7eb;
+    margin-bottom: 20px;
+}
+
+.mobile-menu .menu-header .user-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #4f46e5;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.mobile-menu .menu-header .user-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.mobile-menu .menu-header .user-info .user-name {
+    font-weight: 700;
+    color: #111827;
+    font-size: 1rem;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mobile-menu .menu-header .user-info .user-email {
+    font-size: 0.8rem;
+    color: #6b7280;
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mobile-menu .menu-items {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.mobile-menu .menu-items li {
+    margin-bottom: 4px;
+}
+
+.mobile-menu .menu-items li a {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    color: #1f2937;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+}
+
+.mobile-menu .menu-items li a i {
+    width: 22px;
+    text-align: center;
+    color: #4f46e5;
+    font-size: 1.1rem;
+}
+
+.mobile-menu .menu-items li a:hover {
+    background: #f3f4f6;
+}
+
+.mobile-menu .menu-items li a.active {
+    background: #eef2ff;
+    color: #4f46e5;
+}
+
+.mobile-menu .menu-items li a.active i {
+    color: #4f46e5;
+}
+
+.mobile-menu .menu-divider {
+    height: 1px;
+    background: #e5e7eb;
+    margin: 12px 0;
+}
+
+.mobile-menu .menu-footer {
+    margin-top: 20px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.mobile-menu .menu-footer .logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    color: #dc2626;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: all 0.2s ease;
+    width: 100%;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+.mobile-menu .menu-footer .logout-btn:hover {
+    background: #fef2f2;
+}
+
+.mobile-menu .menu-footer .logout-btn i {
+    width: 22px;
+    text-align: center;
+    font-size: 1.1rem;
+}
+
+.mobile-menu .close-menu-btn {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: none;
+    border: none;
+    font-size: 1.8rem;
+    color: #1f2937;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 8px;
+    transition: background 0.2s ease;
+}
+
+.mobile-menu .close-menu-btn:hover {
+    background: #f3f4f6;
+}
+
+/* ✅ Estilos para el formulario de logout desktop */
+.logout-form-inline {
+    display: inline-flex;
+    margin: 0;
+    padding: 0;
+}
+
+.logout-form-inline .logout-link-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #9ca3af;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: color 0.2s ease;
+    padding: 0;
+    font-family: inherit;
+}
+
+.logout-form-inline .logout-link-btn:hover {
+    color: #ffffff;
+}
+
+@media (max-width: 768px) {
+    .hamburger-btn {
+        display: flex;
+    }
+
+    .desktop-menu {
+        display: none !important;
+    }
+
+    .mobile-menu {
+        display: block;
+        right: -100%;
+    }
+
+    .mobile-menu.active {
+        right: 0;
+    }
+
+    .menu-overlay.active {
+        display: block;
+    }
+
+    .header-content .right-section {
+        gap: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .mobile-menu {
+        width: 90%;
+        max-width: 300px;
+        padding: 70px 16px 20px 16px;
+    }
+
+    .mobile-menu .menu-items li a {
+        padding: 10px 14px;
+        font-size: 0.9rem;
+    }
+
+    .mobile-menu .menu-header .user-avatar {
+        width: 40px;
+        height: 40px;
+        font-size: 1rem;
+    }
+
+    .mobile-menu .menu-header .user-info .user-name {
+        font-size: 0.9rem;
+    }
+}

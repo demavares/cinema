@@ -19,6 +19,13 @@ $userPageTitles = [
 $userPageTitle = $userPageTitles[$activePage] ?? ucfirst($activePage);
 $pageTitle = $pageTitle ?? ($userPageTitle . ' - ' . $siteName);
 
+// CSS específico de cada página del módulo de usuario
+$userPageStylesheets = [
+    'account' => 'assets/css/account.css',
+    'tickets' => 'assets/css/tickets.css',
+    'promotions' => 'assets/css/promotions.css',
+];
+
 // CSRF para logout
 $user_header_csrf_token = generateCSRFToken();
 
@@ -90,50 +97,11 @@ $hasFavicon = !empty($favicon_path) && is_file($favicon_fs);
     <!-- Estilos del panel (reutiliza el CSS del admin) -->
     <link rel="stylesheet" href="../admin/css/admin.css">
 
-    <style>
-        /* Avatar del usuario en topbar y sidebar */
-        .topbar-user .topbar-avatar {
-            width: 30px;
-            height: 30px;
-            border-radius: 50%;
-            object-fit: cover;
-            margin-right: 8px;
-            border: 2px solid #e2e8f0;
-        }
-        .sidebar-user {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 14px 16px;
-            border-bottom: 1px solid #1e293b;
-        }
-        .sidebar-user .sidebar-user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            object-fit: cover;
-            flex-shrink: 0;
-            background: #4f46e5;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #ffffff;
-            font-weight: 700;
-            font-size: 1rem;
-        }
-        .sidebar-user .sidebar-user-info { min-width: 0; }
-        .sidebar-user .sidebar-user-name {
-            font-weight: 600;
-            font-size: 0.9rem;
-            color: #e5e7eb;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .sidebar-user .sidebar-user-role { font-size: 0.75rem; color: #94a3b8; }
-        .sidebar.collapsed .sidebar-user { justify-content: center; padding: 12px 8px; }
-        .sidebar.collapsed .sidebar-user-info { display: none; }
-    </style>
+    <!-- Estilos propios del módulo de usuario -->
+    <link rel="stylesheet" href="assets/css/user.css">
+    <?php if (isset($userPageStylesheets[$activePage])): ?>
+        <link rel="stylesheet" href="<?= $userPageStylesheets[$activePage] ?>">
+    <?php endif; ?>
 </head>
 <body>
     <!-- Overlay para móvil -->

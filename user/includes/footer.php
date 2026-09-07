@@ -8,3 +8,5 @@
 
     <!-- JavaScript del panel (reutiliza admin.js: sidebar, colapso, submenús) -->
     <script src="../admin/js/admin.js"></script>
+</body>
+</html>
