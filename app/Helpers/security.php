@@ -145,6 +145,11 @@ function checkSessionExpired($showtimeId = null)
 {
     $limite_inactividad = 1800;
 
+    // Ruta raíz relativa: si el script vive en una subcarpeta (user/, admin/), se antepone ../ 
+    // para que login.php/index.php queden siempre en la raíz del sitio.
+    $scriptDir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/'));
+    $rootPrefix = ($scriptDir !== '/' && $scriptDir !== '.' && $scriptDir !== '') ? '../' : '';
+
     if (isset($_SESSION['last_activity']) && (time() - $_SESSION['last_activity'] > $limite_inactividad)) {
         $_SESSION = array();
 
@@ -155,12 +160,12 @@ function checkSessionExpired($showtimeId = null)
 
         session_destroy();
 
-        header("Location: index.php?expired=1");
+        header("Location: " . $rootPrefix . "index.php?expired=1");
         exit();
     }
 
     if (!isset($_SESSION['user_id'])) {
-        header('Location: login.php');
+        header('Location: ' . $rootPrefix . 'login.php');
         exit;
     }
 
@@ -170,7 +175,7 @@ function checkSessionExpired($showtimeId = null)
 
         if (empty($sessionToken) || time() > $expiresAt) {
             clearPurchaseSession($showtimeId);
-            header('Location: index.php?expired=1');
+            header('Location: ' . $rootPrefix . 'index.php?expired=1');
             exit;
         }
     }

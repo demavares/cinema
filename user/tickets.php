@@ -135,7 +135,7 @@ require_once 'includes/header.php';
                                 <i class="far fa-clock mr-1"></i>Comprado: <?= htmlspecialchars(formatDateShort($p['purchase_date'])) ?> - <?= htmlspecialchars(strtolower(formatTimeVenezuela($p['purchase_date']))) ?>
                             </span>
                         </div>
-                        <div class="flex items-center gap-3">
+                        <div class="ticket-actions">
                             <span class="ticket-total"><?= formatCurrency($p['total_amount'], $siteConfig) ?></span>
                             <?php if ($completed): ?>
                                 <a href="ticket_pdf.php?purchase_id=<?= (int)$p['id'] ?>" class="btn-print" target="_blank" rel="noopener" title="Descargar comprobante en PDF">
